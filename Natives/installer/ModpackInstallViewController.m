@@ -5,6 +5,7 @@
 #import "UIKit+hook.h"
 #import "WFWorkflowProgressView.h"
 #import "modpack/ModrinthAPI.h"
+#import "modpack/CurseForgeAPI.h"
 #import "config.h"
 #import "ios_uikit_bridge.h"
 #import "utils.h"
@@ -18,8 +19,11 @@
 @property(nonatomic) UISearchController *searchController;
 @property(nonatomic) UIMenu *currentMenu;
 @property(nonatomic) NSMutableArray *list;
+@property(nonatomic) NSMutableArray *modrinthList;
+@property(nonatomic) NSMutableArray *curseList;
 @property(nonatomic) NSMutableDictionary *filters;
 @property ModrinthAPI *modrinth;
+@property CurseForgeAPI *curseforge;
 @end
 
 @implementation ModpackInstallViewController
@@ -33,6 +37,7 @@
     self.searchController.obscuresBackgroundDuringPresentation = NO;
     self.navigationItem.searchController = self.searchController;
     self.modrinth = [ModrinthAPI new];
+    self.curseforge = [CurseForgeAPI new];
     self.filters = @{
         @"isModpack": @(YES),
         @"name": @" "
@@ -50,13 +55,22 @@
     [self switchToLoadingState];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         self.filters[@"name"] = name;
-        self.list = [self.modrinth searchModWithFilters:self.filters previousPageResult:prevList ? self.list : nil];
+        self.modrinthList = [self.modrinth searchModWithFilters:self.filters previousPageResult:prevList ? self.modrinthList : nil];
+        self.curseList = [self.curseforge searchModWithFilters:self.filters previousPageResult:prevList ? self.curseList : nil];
+        BOOL ok = (self.modrinthList != nil) && (self.curseList != nil);
+        if (ok) {
+            NSMutableArray *merged = [NSMutableArray new];
+            [merged addObjectsFromArray:self.modrinthList];
+            [merged addObjectsFromArray:self.curseList];
+            self.list = merged;
+        }
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (self.list) {
+            if (ok) {
                 [self switchToReadyState];
                 [self.tableView reloadData];
             } else {
-                showDialog(localize(@"Error", nil), self.modrinth.lastError.localizedDescription);
+                NSString *err = self.modrinth.lastError.localizedDescription ?: self.curseforge.lastError.localizedDescription ?: @"Unknown error";
+                showDialog(localize(@"Error", nil), err);
                 [self actionClose];
             }
         });
@@ -132,7 +146,7 @@
     UIImage *fallbackImage = [UIImage imageNamed:@"DefaultProfile"];
     [cell.imageView setImageWithURL:[NSURL URLWithString:item[@"imageUrl"]] placeholderImage:fallbackImage];
 
-    if (!self.modrinth.reachedLastPage && indexPath.row == self.list.count-1) {
+    if (!(self.modrinth.reachedLastPage && self.curseforge.reachedLastPage) && indexPath.row == self.list.count-1) {
         [self loadSearchResultsWithPrevList:YES];
     }
 
@@ -157,7 +171,10 @@
             [self actionClose];
             NSString *tmpIconPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"icon.png"];
                 [UIImagePNGRepresentation([cell.imageView.image _imageWithSize:CGSizeMake(40, 40)]) writeToFile:tmpIconPath atomically:YES];
-            [self.modrinth installModpackFromDetail:self.list[indexPath.row] atIndex:i];
+            NSDictionary *item = self.list[indexPath.row];
+            NSNumber *apiSource = item[@"apiSource"];
+            ModpackAPI *api = (apiSource && apiSource.integerValue == 0) ? self.curseforge : self.modrinth;
+            [api installModpackFromDetail:item atIndex:i];
         }]];
     }];
 
@@ -176,13 +193,19 @@
     [tableView deselectRowAtIndexPath:indexPath animated:NO];
     [self switchToLoadingState];
 dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [self.modrinth loadDetailsOfMod:self.list[indexPath.row]];
+        NSNumber *apiSource = item[@"apiSource"];
+        if (apiSource && apiSource.integerValue == 0) {
+            [self.curseforge loadDetailsOfMod:self.list[indexPath.row]];
+        } else {
+            [self.modrinth loadDetailsOfMod:self.list[indexPath.row]];
+        }
         dispatch_async(dispatch_get_main_queue(), ^{
             [self switchToReadyState];
             if ([item[@"versionDetailsLoaded"] boolValue]) {
                 [self showDetails:item atIndexPath:indexPath];
             } else {
-                showDialog(localize(@"Error", nil), self.modrinth.lastError.localizedDescription);
+                NSString *err = self.modrinth.lastError.localizedDescription ?: self.curseforge.lastError.localizedDescription ?: @"Unknown error";
+                showDialog(localize(@"Error", nil), err);
             }
         });
     });
