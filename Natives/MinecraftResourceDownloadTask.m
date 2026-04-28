@@ -2,6 +2,7 @@
 
 #import "authenticator/BaseAuthenticator.h"
 #import "installer/modpack/ModpackAPI.h"
+#import "installer/modpack/ModpackUtils.h"
 #import "AFNetworking.h"
 #import "LauncherNavigationController.h"
 #import "LauncherPreferences.h"
@@ -40,16 +41,19 @@
     }
 
     NSString *name = altName ?: path.lastPathComponent;
-    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:url]];
+    NSURL *downloadURL = [url isKindOfClass:NSString.class] ? [NSURL URLWithString:url] : nil;
+    NSString *scheme = downloadURL.scheme.lowercaseString;
+    if (!downloadURL || (![scheme isEqualToString:@"http"] && ![scheme isEqualToString:@"https"])) {
+        [self finishDownloadWithErrorString:[NSString stringWithFormat:@"Invalid download URL for %@", name]];
+        return nil;
+    }
+
+    NSURLRequest *request = [NSURLRequest requestWithURL:downloadURL];
     __block NSProgress *progress;
     __block NSURLSessionDownloadTask *task = [self.manager downloadTaskWithRequest:request progress:nil
     destination:^NSURL * _Nonnull(NSURL * _Nonnull targetPath, NSURLResponse * _Nonnull response) {
         NSLog(@"[MCDL] Downloading %@", name);
         progress = [self.manager downloadProgressForTask:task];
-        if (!size && task) {
-            [self addDownloadTaskToProgress:task size:response.expectedContentLength];
-            [self.fileList addObject:name];
-        }
         [NSFileManager.defaultManager createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
         [NSFileManager.defaultManager removeItemAtPath:path error:nil];
         return [NSURL fileURLWithPath:path];
@@ -61,12 +65,15 @@
         } else if (![self checkSHA:sha forFile:path altName:altName]) {
             [self finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to verify file %@: SHA1 mismatch", path.lastPathComponent]];
         } else {
+            if (!progress) {
+                progress = [self.manager downloadProgressForTask:task];
+            }
             progress.totalUnitCount = progress.completedUnitCount;
             if (success) success();
         }
     }];
 
-    if (size && task) {
+    if (task) {
         [self addDownloadTaskToProgress:task size:size];
         [self.fileList addObject:name];
     }
@@ -89,6 +96,26 @@
     [self.progress addChild:progress withPendingUnitCount:fileSize];
     self.progress.totalUnitCount += fileSize;
     self.textProgress.totalUnitCount = self.progress.totalUnitCount;
+}
+
+- (void)finishAddingDownloadTasks {
+    // Remove the fake byte inserted by prepareForDownload once all real tasks are queued.
+    if (self.progress.totalUnitCount > 0) {
+        self.progress.totalUnitCount--;
+    }
+    if (self.textProgress.totalUnitCount > 0) {
+        self.textProgress.totalUnitCount--;
+    }
+
+    if (self.progress.totalUnitCount <= 0) {
+        self.progress.totalUnitCount = 1;
+        self.progress.completedUnitCount = 1;
+        self.textProgress.totalUnitCount = 1;
+        self.textProgress.completedUnitCount = 1;
+    } else if (self.progress.completedUnitCount >= self.progress.totalUnitCount) {
+        self.progress.completedUnitCount = self.progress.totalUnitCount;
+        self.textProgress.completedUnitCount = self.textProgress.totalUnitCount;
+    }
 }
 
 - (void)downloadVersionMetadata:(NSDictionary *)version success:(void (^)())success {
@@ -245,17 +272,7 @@
         [self downloadAssetMetadataWithSuccess:^{
             NSArray *libTasks = [self downloadClientLibraries];
             NSArray *assetTasks = [self downloadClientAssets];
-            // Drop the 1 byte we set initially
-            self.progress.totalUnitCount--;
-            self.textProgress.totalUnitCount--;
-            if (self.progress.totalUnitCount == 0) {
-                // We have nothing to download, invoke completion observer
-                self.progress.totalUnitCount = 1;
-                self.progress.completedUnitCount = 1;
-                self.textProgress.totalUnitCount = 1;
-                self.textProgress.completedUnitCount = 1;
-                return;
-            }
+            [self finishAddingDownloadTasks];
             [libTasks makeObjectsPerformSelector:@selector(resume)];
             [assetTasks makeObjectsPerformSelector:@selector(resume)];
             [self.metadata removeObjectForKey:@"assetIndexObj"];
@@ -268,18 +285,49 @@
 - (void)downloadModpackFromAPI:(ModpackAPI *)api detail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion {
     [self prepareForDownload];
 
-    NSString *url = modDetail[@"versionUrls"][selectedVersion];
-    NSUInteger size = [modDetail[@"versionSizes"][selectedVersion] unsignedLongLongValue];
-    NSString *sha = modDetail[@"versionHashes"][selectedVersion];
-    NSString *name = [[modDetail[@"title"] lowercaseString] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    NSString *url = [api downloadURLForModDetail:modDetail atIndex:selectedVersion];
+    if (url.length == 0) {
+        [self finishDownloadWithErrorString:@"Failed to get a download URL for the selected modpack file."];
+        return;
+    }
+
+    NSArray *sizes = [modDetail[@"versionSizes"] isKindOfClass:NSArray.class] ? modDetail[@"versionSizes"] : @[];
+    NSArray *hashes = [modDetail[@"versionHashes"] isKindOfClass:NSArray.class] ? modDetail[@"versionHashes"] : @[];
+    id sizeValue = selectedVersion < sizes.count ? sizes[selectedVersion] : nil;
+    NSUInteger size = [sizeValue respondsToSelector:@selector(unsignedLongLongValue)] ? [sizeValue unsignedLongLongValue] : 0;
+    NSString *sha = selectedVersion < hashes.count ? hashes[selectedVersion] : nil;
+    if (![sha isKindOfClass:NSString.class]) {
+        sha = nil;
+    }
+    NSString *rawName = modDetail[@"title"];
+    if (![rawName isKindOfClass:NSString.class] || rawName.length == 0) {
+        rawName = [NSString stringWithFormat:@"modpack_%@", modDetail[@"id"] ?: @"download"];
+    }
+    NSString *name = [rawName.lowercaseString stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
     name = [name stringByReplacingOccurrencesOfString:@" " withString:@"_"];
-    NSString *packagePath = [NSTemporaryDirectory() stringByAppendingFormat:@"/%@.zip", name];
+    NSMutableCharacterSet *unsafeNameCharacters = NSCharacterSet.alphanumericCharacterSet.invertedSet.mutableCopy;
+    [unsafeNameCharacters removeCharactersInString:@"-_."];
+    NSArray<NSString *> *nameParts = [name componentsSeparatedByCharactersInSet:unsafeNameCharacters];
+    name = [[nameParts filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"length > 0"]] componentsJoinedByString:@"_"];
+    if (![ModpackUtils isSafeRelativePath:name]) {
+        [self finishDownloadWithErrorString:@"Selected modpack has an invalid name."];
+        return;
+    }
+    NSString *packagePath = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.zip", name]];
+    [NSFileManager.defaultManager removeItemAtPath:packagePath error:nil];
 
     NSURLSessionDownloadTask *task = [self createDownloadTask:url size:size sha:sha altName:nil toPath:packagePath success:^{
         NSString *path = [NSString stringWithFormat:@"%s/custom_gamedir/%@", getenv("POJAV_GAME_DIR"), name];
-        [api downloader:self submitDownloadTasksFromPackage:packagePath toPath:path];
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            if (self.progress.cancelled) {
+                return;
+            }
+            [api downloader:self submitDownloadTasksFromPackage:packagePath toPath:path];
+        });
     }];
-    [task resume];
+    if (task) {
+        [task resume];
+    }
 }
 
 #pragma mark - Utilities
@@ -302,8 +350,12 @@
 - (void)finishDownloadWithErrorString:(NSString *)error {
     [self.progress cancel];
     [self.manager invalidateSessionCancelingTasks:YES resetSession:YES];
-    showDialog(localize(@"Error", nil), error);
-    self.handleError();
+    dispatch_async(dispatch_get_main_queue(), ^{
+        showDialog(localize(@"Error", nil), error);
+    });
+    if (self.handleError) {
+        self.handleError();
+    }
 }
 
 - (void)finishDownloadWithError:(NSError *)error file:(NSString *)file {

@@ -387,6 +387,11 @@ static void *ProgressObserverContext = &ProgressObserverContext;
             [self invokeAfterJITEnabled:^{
                 UIKit_launchMinecraftSurfaceVC(self.view.window, metadata);
             }];
+        } else if (self.task.postInstallInstallerPath) {
+            NSString *installerPath = self.task.postInstallInstallerPath;
+            BOOL hitEnter = self.task.postInstallHitEnter;
+            [self reloadProfileList];
+            [self enterModInstallerWithPath:installerPath hitEnterAfterWindowShown:hitEnter];
         } else {
             [self reloadProfileList];
         }

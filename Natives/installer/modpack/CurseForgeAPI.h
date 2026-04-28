@@ -2,4 +2,5 @@
 #import "ModpackAPI.h"
 
 @interface CurseForgeAPI : ModpackAPI
++ (BOOL)isConfigured;
 @end
