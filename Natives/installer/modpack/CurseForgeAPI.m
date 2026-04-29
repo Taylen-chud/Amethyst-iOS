@@ -635,6 +635,10 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         }
     }
     downloader.postInstallManualDownloads = manualDownloads.copy;
+    downloader.postInstallModpackMetadataPlan = @{
+        @"destPath": destPath,
+        @"records": modManagerRecords.copy
+    };
 
     NSMutableOrderedSet<NSString *> *overrideDirs = [NSMutableOrderedSet orderedSet];
     NSString *manifestOverrides = manifest[@"overrides"];
@@ -655,7 +659,6 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
             return;
         }
     }
-    [self saveModManagerMetadataRecords:modManagerRecords toPath:destPath];
 
     [NSFileManager.defaultManager removeItemAtPath:packagePath error:nil];
 

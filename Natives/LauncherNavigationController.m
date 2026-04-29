@@ -430,6 +430,7 @@ static void *ProgressObserverContext = &ProgressObserverContext;
             BOOL hitEnter = task.postInstallHitEnter;
             void (^finishInstall)(void) = ^{
                 [task finalizeModInstall];
+                [task finalizeModpackMetadata];
                 [self reloadProfileList];
                 if (installerPath) {
                     [self enterModInstallerWithPath:installerPath hitEnterAfterWindowShown:hitEnter];

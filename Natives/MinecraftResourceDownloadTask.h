@@ -10,6 +10,7 @@
 @property NSString *postInstallInstallerPath;
 @property BOOL postInstallHitEnter;
 @property NSArray<NSDictionary *> *postInstallManualDownloads;
+@property NSDictionary *postInstallModpackMetadataPlan;
 @property(nonatomic, copy) void(^handleError)(void);
 
 - (NSURLSessionDownloadTask *)createDownloadTask:(NSString *)url size:(NSUInteger)size sha:(NSString *)sha altName:(NSString *)altName toPath:(NSString *)path;
@@ -22,5 +23,6 @@
 - (void)downloadModpackFromAPI:(ModpackAPI *)api detail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion;
 - (void)downloadModsWithPlan:(NSDictionary *)plan store:(ModManagerStore *)store;
 - (void)finalizeModInstall;
+- (void)finalizeModpackMetadata;
 
 @end

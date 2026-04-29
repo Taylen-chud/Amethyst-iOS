@@ -568,6 +568,47 @@
     [NSNotificationCenter.defaultCenter postNotificationName:@"ModManagerModsChanged" object:self.postInstallModStore];
 }
 
+- (void)finalizeModpackMetadata {
+    NSDictionary *plan = self.postInstallModpackMetadataPlan;
+    if (![plan isKindOfClass:NSDictionary.class]) {
+        return;
+    }
+
+    NSString *destPath = plan[@"destPath"];
+    NSArray *records = [plan[@"records"] isKindOfClass:NSArray.class] ? plan[@"records"] : @[];
+    if (![destPath isKindOfClass:NSString.class] || destPath.length == 0 || records.count == 0) {
+        return;
+    }
+
+    NSString *modsDir = [destPath stringByAppendingPathComponent:@"mods"];
+    NSMutableDictionary *mods = [NSMutableDictionary new];
+    for (NSDictionary *record in records) {
+        if (![record isKindOfClass:NSDictionary.class]) {
+            continue;
+        }
+        NSString *fileName = record[@"fileName"];
+        if (![fileName isKindOfClass:NSString.class] || fileName.length == 0 ||
+            [fileName containsString:@"/"] || [fileName containsString:@"\\"] || [fileName containsString:@":"]) {
+            continue;
+        }
+
+        NSString *path = [modsDir stringByAppendingPathComponent:fileName];
+        if (![NSFileManager.defaultManager fileExistsAtPath:path]) {
+            NSLog(@"[ModManager] Skipping modpack metadata for missing mod %@", fileName);
+            continue;
+        }
+        mods[fileName] = record;
+    }
+
+    NSString *metadataPath = [destPath stringByAppendingPathComponent:@"amethyst_mods.json"];
+    NSError *error = saveJSONToFile(@{@"version": @1, @"mods": mods}, metadataPath);
+    if (error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            showDialog(localize(@"Error", nil), [NSString stringWithFormat:@"Modpack installed, but mod metadata could not be saved: %@", error.localizedDescription]);
+        });
+    }
+}
+
 #pragma mark - Utilities
 
 - (void)prepareForDownload {

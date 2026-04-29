@@ -137,8 +137,20 @@
 - (void)showVersionMenuForProject:(NSDictionary *)project versions:(NSArray<NSDictionary *> *)versions atIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:indexPath];
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:project[@"title"] message:@"Select a compatible version to install." preferredStyle:UIAlertControllerStyleActionSheet];
-    sheet.popoverPresentationController.sourceView = cell;
-    sheet.popoverPresentationController.sourceRect = cell.bounds;
+    UIPopoverPresentationController *popover = sheet.popoverPresentationController;
+    if (cell) {
+        popover.sourceView = cell;
+        popover.sourceRect = cell.bounds;
+    } else {
+        CGRect sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
+        if (indexPath.section < self.tableView.numberOfSections &&
+            indexPath.row < [self.tableView numberOfRowsInSection:indexPath.section]) {
+            CGRect rowRect = [self.tableView rectForRowAtIndexPath:indexPath];
+            sourceRect = [self.view convertRect:rowRect fromView:self.tableView];
+        }
+        popover.sourceView = self.view;
+        popover.sourceRect = sourceRect;
+    }
 
     NSUInteger count = MIN(versions.count, 12);
     for (NSUInteger i = 0; i < count; i++) {

@@ -89,10 +89,18 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
     }
 }
 
+- (void)updateBusyControls {
+    BOOL busy = self.checkingUpdates || self.checkingDependencies;
+    self.tableView.userInteractionEnabled = !busy;
+    self.searchController.searchBar.userInteractionEnabled = !busy;
+    for (UIBarButtonItem *item in self.navigationItem.rightBarButtonItems) {
+        item.enabled = !busy;
+    }
+}
+
 - (void)setCheckingUpdates:(BOOL)checkingUpdates {
     _checkingUpdates = checkingUpdates;
     UIBarButtonItem *updateItem = self.navigationItem.rightBarButtonItems.lastObject;
-    updateItem.enabled = !checkingUpdates;
     if (checkingUpdates) {
         UIActivityIndicatorView *indicator = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
         [indicator startAnimating];
@@ -101,80 +109,148 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
         updateItem.customView = nil;
         updateItem.image = [UIImage systemImageNamed:@"arrow.triangle.2.circlepath"];
     }
+    [self updateBusyControls];
     [self updateBusyPrompt];
 }
 
 - (void)setCheckingDependencies:(BOOL)checkingDependencies {
     _checkingDependencies = checkingDependencies;
-    self.tableView.userInteractionEnabled = !checkingDependencies;
+    [self updateBusyControls];
     [self updateBusyPrompt];
 }
 
 - (BOOL)modCanCheckForUpdate:(NSDictionary *)mod {
     NSString *source = mod[@"source"];
+    id projectID = mod[@"projectId"];
+    BOOL hasProjectID = projectID && projectID != NSNull.null && [[projectID description] length] > 0;
     return [source isKindOfClass:NSString.class] &&
         ![source isEqualToString:@"manual"] &&
-        mod[@"projectId"] &&
+        hasProjectID &&
         ![mod[@"missing"] boolValue];
+}
+
+- (NSArray<NSDictionary *> *)modsNeedingUpdateMetadataRefreshFromMods:(NSArray<NSDictionary *> *)mods {
+    NSMutableArray *result = [NSMutableArray new];
+    for (NSDictionary *mod in mods) {
+        NSString *source = mod[@"source"];
+        id projectID = mod[@"projectId"];
+        NSString *sha = [mod[@"sha1"] isKindOfClass:NSString.class] ? mod[@"sha1"] : nil;
+        NSString *path = [mod[@"path"] isKindOfClass:NSString.class] ? mod[@"path"] : nil;
+        if ([source isEqualToString:@"modrinth"] &&
+            ![mod[@"missing"] boolValue] &&
+            (!projectID || projectID == NSNull.null || [[projectID description] length] == 0) &&
+            (sha.length > 0 || path.length > 0)) {
+            [result addObject:mod];
+        }
+    }
+    return result;
+}
+
+- (NSString *)updateIdentityForMod:(NSDictionary *)mod {
+    NSString *source = mod[@"source"];
+    id projectID = mod[@"projectId"];
+    if ([source isKindOfClass:NSString.class] && projectID && projectID != NSNull.null && [[projectID description] length] > 0) {
+        return [NSString stringWithFormat:@"%@:%@", source, [[projectID description] lowercaseString]];
+    }
+
+    NSString *fileName = mod[@"fileName"];
+    if ([fileName isKindOfClass:NSString.class] && fileName.length > 0) {
+        return [@"file:" stringByAppendingString:fileName.lowercaseString];
+    }
+    return nil;
+}
+
+- (NSArray<NSMutableDictionary *> *)modsByMergingUpdateResults:(NSDictionary<NSString *, NSDictionary *> *)updatesByIdentity {
+    NSArray<NSMutableDictionary *> *freshMods = [self.store installedModsMatchingQuery:self.searchController.searchBar.text ?: @""];
+    NSMutableArray<NSMutableDictionary *> *mergedMods = [NSMutableArray arrayWithCapacity:freshMods.count];
+    for (NSDictionary *mod in freshMods) {
+        NSMutableDictionary *copy = mod.mutableCopy;
+        NSString *identity = [self updateIdentityForMod:mod];
+        NSDictionary *update = identity ? updatesByIdentity[identity] : nil;
+        if (update) {
+            copy[@"availableUpdate"] = update;
+        } else {
+            [copy removeObjectForKey:@"availableUpdate"];
+        }
+        [mergedMods addObject:copy];
+    }
+    return mergedMods;
 }
 
 - (void)actionCheckUpdates {
     if (self.checkingUpdates) {
         return;
     }
-    NSArray *mods = [self.store installedMods];
-    NSMutableArray *updatedMods = [NSMutableArray arrayWithCapacity:mods.count];
-    NSMutableArray<NSNumber *> *updateIndexes = [NSMutableArray new];
-    for (NSUInteger i = 0; i < mods.count; i++) {
-        NSDictionary *mod = mods[i];
-        [updatedMods addObject:mod.mutableCopy];
-        if ([self modCanCheckForUpdate:mod]) {
-            [updateIndexes addObject:@(i)];
-        }
-    }
     self.updateCheckCompleted = 0;
-    self.updateCheckTotal = updateIndexes.count;
+    self.updateCheckTotal = 0;
     self.checkingUpdates = YES;
-    if (updateIndexes.count == 0) {
-        self.checkingUpdates = NO;
-        self.mods = updatedMods;
-        [self.tableView reloadData];
-        return;
-    }
 
     dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
-    dispatch_group_t group = dispatch_group_create();
-    dispatch_semaphore_t limit = dispatch_semaphore_create(4);
     NSDictionary *profileInfo = self.store.profileInfo;
-    for (NSNumber *indexNumber in updateIndexes) {
-        dispatch_group_async(group, queue, ^{
-            dispatch_semaphore_wait(limit, DISPATCH_TIME_FOREVER);
-            NSUInteger index = indexNumber.unsignedIntegerValue;
-            NSDictionary *mod = mods[index];
+    dispatch_async(queue, ^{
+        NSArray *mods = [self.store installedMods];
+        NSArray *refreshCandidates = [self modsNeedingUpdateMetadataRefreshFromMods:mods];
+        if (refreshCandidates.count > 0) {
             ModManagerAPI *api = [ModManagerAPI new];
-            NSError *error = nil;
-            NSDictionary *update = [api latestVersionForInstalledMod:mod profileInfo:profileInfo error:&error];
-            NSMutableDictionary *copy = mod.mutableCopy;
-            if (update) {
-                copy[@"availableUpdate"] = update;
-            } else {
-                [copy removeObjectForKey:@"availableUpdate"];
+            NSArray *records = [api refreshedMetadataForInstalledMods:refreshCandidates profileInfo:profileInfo];
+            if (records.count > 0) {
+                NSError *saveError = [self.store saveMetadataRecords:records replacingFileNames:@[] replacements:@[]];
+                if (saveError) {
+                    NSLog(@"[ModManager] Failed to refresh update metadata: %@", saveError.localizedDescription);
+                } else {
+                    mods = [self.store installedMods];
+                }
             }
-            @synchronized (updatedMods) {
-                updatedMods[index] = copy;
-            }
-            dispatch_async(dispatch_get_main_queue(), ^{
-                self.updateCheckCompleted += 1;
-                [self updateBusyPrompt];
-            });
-            dispatch_semaphore_signal(limit);
-        });
-    }
+        }
 
-    dispatch_group_notify(group, dispatch_get_main_queue(), ^{
-        self.checkingUpdates = NO;
-        self.mods = updatedMods;
-        [self.tableView reloadData];
+        NSMutableArray<NSDictionary *> *checkMods = [NSMutableArray new];
+        for (NSDictionary *mod in mods) {
+            if ([self modCanCheckForUpdate:mod]) {
+                [checkMods addObject:mod];
+            }
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.updateCheckTotal = checkMods.count;
+            [self updateBusyPrompt];
+            if (checkMods.count == 0) {
+                self.mods = [self modsByMergingUpdateResults:@{}];
+                [self.tableView reloadData];
+                self.checkingUpdates = NO;
+            }
+        });
+        if (checkMods.count == 0) {
+            return;
+        }
+
+        NSMutableDictionary<NSString *, NSDictionary *> *updatesByIdentity = [NSMutableDictionary new];
+        dispatch_group_t group = dispatch_group_create();
+        dispatch_semaphore_t limit = dispatch_semaphore_create(4);
+        for (NSDictionary *mod in checkMods) {
+            dispatch_group_async(group, queue, ^{
+                dispatch_semaphore_wait(limit, DISPATCH_TIME_FOREVER);
+                ModManagerAPI *api = [ModManagerAPI new];
+                NSError *error = nil;
+                NSDictionary *update = [api latestVersionForInstalledMod:mod profileInfo:profileInfo error:&error];
+                NSString *identity = [self updateIdentityForMod:mod];
+                if (update && identity.length > 0) {
+                    @synchronized (updatesByIdentity) {
+                        updatesByIdentity[identity] = update;
+                    }
+                }
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    self.updateCheckCompleted += 1;
+                    [self updateBusyPrompt];
+                });
+                dispatch_semaphore_signal(limit);
+            });
+        }
+
+        dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+            self.mods = [self modsByMergingUpdateResults:updatesByIdentity];
+            [self.tableView reloadData];
+            self.checkingUpdates = NO;
+        });
     });
 }
 
