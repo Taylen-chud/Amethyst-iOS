@@ -9,4 +9,5 @@
 - (NSArray *)fileMetadataForFileIDs:(NSArray<NSNumber *> *)fileIDs;
 - (NSString *)manualDownloadPageURLForFile:(NSDictionary *)file projectID:(NSNumber *)projectID cache:(NSMutableDictionary *)cache;
 - (NSArray *)filesForModID:(id)modID;
+- (NSArray *)filesForModID:(id)modID gameVersion:(NSString *)gameVersion modLoaderType:(NSNumber *)modLoaderType;
 @end

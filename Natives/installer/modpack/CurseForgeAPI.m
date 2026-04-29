@@ -254,14 +254,25 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
 }
 
 - (NSArray *)filesForModID:(id)modID {
+    return [self filesForModID:modID gameVersion:nil modLoaderType:nil];
+}
+
+- (NSArray *)filesForModID:(id)modID gameVersion:(NSString *)gameVersion modLoaderType:(NSNumber *)modLoaderType {
     NSMutableArray *result = [NSMutableArray new];
     NSUInteger index = 0;
     while (true) {
+        NSMutableDictionary *params = @{
+            @"pageSize": @(kCurseForgePageSize),
+            @"index": @(index)
+        }.mutableCopy;
+        if ([gameVersion isKindOfClass:NSString.class] && gameVersion.length > 0) {
+            params[@"gameVersion"] = gameVersion;
+        }
+        if ([modLoaderType isKindOfClass:NSNumber.class]) {
+            params[@"modLoaderType"] = modLoaderType;
+        }
         NSDictionary *response = [self getEndpoint:[NSString stringWithFormat:@"mods/%@/files", modID]
-            params:@{
-                @"pageSize": @(kCurseForgePageSize),
-                @"index": @(index)
-            }];
+            params:params];
         if (!response) {
             return nil;
         }

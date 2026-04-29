@@ -280,7 +280,16 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
 
 - (NSArray<NSDictionary *> *)modrinthVersionsForProject:(NSDictionary *)project profileInfo:(NSDictionary *)profileInfo {
     NSString *projectID = [project[@"projectId"] description];
-    NSArray *versions = [self.modrinth getEndpoint:[NSString stringWithFormat:@"project/%@/version", projectID] params:nil];
+    NSMutableDictionary *params = @{@"include_changelog": @NO}.mutableCopy;
+    NSString *mcVersion = profileInfo[@"minecraftVersion"];
+    NSString *loader = profileInfo[@"loader"];
+    if ([mcVersion isKindOfClass:NSString.class] && mcVersion.length > 0) {
+        params[@"game_versions"] = [self jsonStringForArray:@[mcVersion]];
+    }
+    if ([loader isKindOfClass:NSString.class] && loader.length > 0 && ![loader isEqualToString:@"vanilla"]) {
+        params[@"loaders"] = [self jsonStringForArray:@[loader.lowercaseString]];
+    }
+    NSArray *versions = [self.modrinth getEndpoint:[NSString stringWithFormat:@"project/%@/version", projectID] params:params];
     if (![versions isKindOfClass:NSArray.class]) {
         self.lastError = self.modrinth.lastError ?: [self errorWithDescription:@"Modrinth returned an invalid version list."];
         return nil;
@@ -295,6 +304,15 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
         }
     }
     return result;
+}
+
+- (NSNumber *)curseForgeLoaderTypeForProfileInfo:(NSDictionary *)profileInfo {
+    NSString *loader = [profileInfo[@"loader"] isKindOfClass:NSString.class] ? [profileInfo[@"loader"] lowercaseString] : @"";
+    if ([loader isEqualToString:@"forge"]) return @1;
+    if ([loader isEqualToString:@"fabric"]) return @4;
+    if ([loader isEqualToString:@"quilt"]) return @5;
+    if ([loader isEqualToString:@"neoforge"]) return @6;
+    return nil;
 }
 
 - (BOOL)curseForgeFile:(NSDictionary *)file matchesProfileInfo:(NSDictionary *)profileInfo {
@@ -430,7 +448,12 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
         return nil;
     }
     NSNumber *projectID = [project[@"projectId"] isKindOfClass:NSNumber.class] ? project[@"projectId"] : @([[project[@"projectId"] description] integerValue]);
-    NSArray *files = [self.curseforge filesForModID:projectID];
+    NSString *mcVersion = [profileInfo[@"minecraftVersion"] isKindOfClass:NSString.class] ? profileInfo[@"minecraftVersion"] : nil;
+    NSNumber *loaderType = [self curseForgeLoaderTypeForProfileInfo:profileInfo];
+    NSArray *files = [self.curseforge filesForModID:projectID gameVersion:mcVersion modLoaderType:loaderType];
+    if (files.count == 0 && loaderType) {
+        files = [self.curseforge filesForModID:projectID gameVersion:mcVersion modLoaderType:nil];
+    }
     if (![files isKindOfClass:NSArray.class]) {
         self.lastError = self.curseforge.lastError ?: [self errorWithDescription:@"CurseForge returned an invalid file list."];
         return nil;

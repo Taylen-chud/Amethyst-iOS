@@ -19,6 +19,8 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
 @property(nonatomic) NSArray<NSMutableDictionary *> *mods;
 @property(nonatomic) BOOL checkingUpdates;
 @property(nonatomic) BOOL checkingDependencies;
+@property(nonatomic) NSInteger updateCheckCompleted;
+@property(nonatomic) NSInteger updateCheckTotal;
 @end
 
 @implementation ModManagerViewController
@@ -73,6 +75,20 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
     [self.navigationController pushViewController:vc animated:YES];
 }
 
+- (void)updateBusyPrompt {
+    if (self.checkingDependencies) {
+        self.navigationItem.prompt = @"Checking dependencies...";
+    } else if (self.checkingUpdates) {
+        if (self.updateCheckTotal > 0) {
+            self.navigationItem.prompt = [NSString stringWithFormat:@"Checking updates %ld/%ld...", (long)self.updateCheckCompleted, (long)self.updateCheckTotal];
+        } else {
+            self.navigationItem.prompt = @"Checking updates...";
+        }
+    } else {
+        self.navigationItem.prompt = nil;
+    }
+}
+
 - (void)setCheckingUpdates:(BOOL)checkingUpdates {
     _checkingUpdates = checkingUpdates;
     UIBarButtonItem *updateItem = self.navigationItem.rightBarButtonItems.lastObject;
@@ -85,12 +101,21 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
         updateItem.customView = nil;
         updateItem.image = [UIImage systemImageNamed:@"arrow.triangle.2.circlepath"];
     }
+    [self updateBusyPrompt];
 }
 
 - (void)setCheckingDependencies:(BOOL)checkingDependencies {
     _checkingDependencies = checkingDependencies;
     self.tableView.userInteractionEnabled = !checkingDependencies;
-    self.navigationItem.prompt = checkingDependencies ? @"Checking dependencies..." : nil;
+    [self updateBusyPrompt];
+}
+
+- (BOOL)modCanCheckForUpdate:(NSDictionary *)mod {
+    NSString *source = mod[@"source"];
+    return [source isKindOfClass:NSString.class] &&
+        ![source isEqualToString:@"manual"] &&
+        mod[@"projectId"] &&
+        ![mod[@"missing"] boolValue];
 }
 
 - (void)actionCheckUpdates {
@@ -98,23 +123,58 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
         return;
     }
     NSArray *mods = [self.store installedMods];
+    NSMutableArray *updatedMods = [NSMutableArray arrayWithCapacity:mods.count];
+    NSMutableArray<NSNumber *> *updateIndexes = [NSMutableArray new];
+    for (NSUInteger i = 0; i < mods.count; i++) {
+        NSDictionary *mod = mods[i];
+        [updatedMods addObject:mod.mutableCopy];
+        if ([self modCanCheckForUpdate:mod]) {
+            [updateIndexes addObject:@(i)];
+        }
+    }
+    self.updateCheckCompleted = 0;
+    self.updateCheckTotal = updateIndexes.count;
     self.checkingUpdates = YES;
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        NSMutableArray *updatedMods = [NSMutableArray new];
-        for (NSMutableDictionary *mod in mods) {
+    if (updateIndexes.count == 0) {
+        self.checkingUpdates = NO;
+        self.mods = updatedMods;
+        [self.tableView reloadData];
+        return;
+    }
+
+    dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+    dispatch_group_t group = dispatch_group_create();
+    dispatch_semaphore_t limit = dispatch_semaphore_create(4);
+    NSDictionary *profileInfo = self.store.profileInfo;
+    for (NSNumber *indexNumber in updateIndexes) {
+        dispatch_group_async(group, queue, ^{
+            dispatch_semaphore_wait(limit, DISPATCH_TIME_FOREVER);
+            NSUInteger index = indexNumber.unsignedIntegerValue;
+            NSDictionary *mod = mods[index];
+            ModManagerAPI *api = [ModManagerAPI new];
             NSError *error = nil;
-            NSDictionary *update = [self.api latestVersionForInstalledMod:mod profileInfo:self.store.profileInfo error:&error];
+            NSDictionary *update = [api latestVersionForInstalledMod:mod profileInfo:profileInfo error:&error];
             NSMutableDictionary *copy = mod.mutableCopy;
             if (update) {
                 copy[@"availableUpdate"] = update;
+            } else {
+                [copy removeObjectForKey:@"availableUpdate"];
             }
-            [updatedMods addObject:copy];
-        }
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self.checkingUpdates = NO;
-            self.mods = updatedMods;
-            [self.tableView reloadData];
+            @synchronized (updatedMods) {
+                updatedMods[index] = copy;
+            }
+            dispatch_async(dispatch_get_main_queue(), ^{
+                self.updateCheckCompleted += 1;
+                [self updateBusyPrompt];
+            });
+            dispatch_semaphore_signal(limit);
         });
+    }
+
+    dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+        self.checkingUpdates = NO;
+        self.mods = updatedMods;
+        [self.tableView reloadData];
     });
 }
 
