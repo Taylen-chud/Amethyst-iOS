@@ -1,6 +1,7 @@
 #import <UIKit/UIKit.h>
 
 @class ModpackAPI;
+@class ModManagerStore;
 
 @interface MinecraftResourceDownloadTask : NSObject
 @property NSProgress *progress, *textProgress;
@@ -19,5 +20,7 @@
 
 - (void)downloadVersion:(NSDictionary *)version;
 - (void)downloadModpackFromAPI:(ModpackAPI *)api detail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion;
+- (void)downloadModsWithPlan:(NSDictionary *)plan store:(ModManagerStore *)store;
+- (void)finalizeModInstall;
 
 @end

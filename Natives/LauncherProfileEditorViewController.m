@@ -2,6 +2,7 @@
 #import "LauncherPreferences.h"
 #import "LauncherProfileEditorViewController.h"
 #import "MinecraftResourceUtils.h"
+#import "installer/mods/ModManagerViewController.h"
 #import "PickTextField.h"
 #import "PLProfiles.h"
 #import "UIKit+hook.h"
@@ -144,11 +145,40 @@
               @"title": @"preference.title.java_args",
               @"type": self.typeTextField,
               @"placeholder": @"(default)"
+            },
+            @{@"key": @"manageMods",
+              @"icon": @"square.stack.3d.up",
+              @"title": @"Manage Mods",
+              @"type": self.typeButton,
+              @"enableCondition": ^BOOL{
+                  return weakSelf.oldName.length > 0 && PLProfiles.current.profiles[weakSelf.oldName] != nil;
+              }
             }
         ]
     ];
 
     [super viewDidLoad];
+}
+
+- (void)actionManageMods {
+    NSMutableDictionary *profile = PLProfiles.current.profiles[self.oldName];
+    if (!profile) {
+        showDialog(localize(@"Error", nil), @"Save this profile before managing mods.");
+        return;
+    }
+    ModManagerViewController *vc = [[ModManagerViewController alloc] initWithProfileName:self.oldName profile:profile];
+    UIViewController *presenting = self.navigationController.presentingViewController;
+    UINavigationController *targetNavigationController = presenting.navigationController;
+    if (!targetNavigationController && presenting.splitViewController.viewControllers.count > 1) {
+        targetNavigationController = (id)presenting.splitViewController.viewControllers[1];
+    }
+    if (!targetNavigationController) {
+        [self.navigationController pushViewController:vc animated:YES];
+        return;
+    }
+    [self.navigationController dismissViewControllerAnimated:YES completion:^{
+        [targetNavigationController pushViewController:vc animated:YES];
+    }];
 }
 
 - (void)actionClose {
@@ -198,6 +228,16 @@
 - (BOOL)isPickFieldAtSection:(NSString *)section key:(NSString *)key {
     NSDictionary *pref = [self.prefContents[0] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"(key == %@)", key]].firstObject;
     return pref[@"type"] == self.typePickField;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    NSDictionary *item = self.prefContents[indexPath.section][indexPath.row];
+    if ([item[@"key"] isEqualToString:@"manageMods"]) {
+        [tableView deselectRowAtIndexPath:indexPath animated:YES];
+        [self actionManageMods];
+        return;
+    }
+    [super tableView:tableView didSelectRowAtIndexPath:indexPath];
 }
 
 - (NSArray *)listFilesAtPath:(NSString *)path {

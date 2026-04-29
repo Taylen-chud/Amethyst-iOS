@@ -9,6 +9,10 @@
 #define kCurseForgeClassIDModpack 4471
 #define kCurseForgeClassIDMod 6
 #define kCurseForgePageSize 50
+#define kCurseForgeModLoaderForge 1
+#define kCurseForgeModLoaderFabric 4
+#define kCurseForgeModLoaderQuilt 5
+#define kCurseForgeModLoaderNeoForge 6
 
 @implementation CurseForgeAPI
 
@@ -239,6 +243,16 @@
     }
     if (mcVersion.length > 0) {
         params[@"gameVersion"] = mcVersion;
+    }
+    NSString *loader = [searchFilters[@"loader"] isKindOfClass:NSString.class] ? searchFilters[@"loader"].lowercaseString : @"";
+    if ([loader isEqualToString:@"forge"]) {
+        params[@"modLoaderType"] = @(kCurseForgeModLoaderForge);
+    } else if ([loader isEqualToString:@"fabric"]) {
+        params[@"modLoaderType"] = @(kCurseForgeModLoaderFabric);
+    } else if ([loader isEqualToString:@"quilt"]) {
+        params[@"modLoaderType"] = @(kCurseForgeModLoaderQuilt);
+    } else if ([loader isEqualToString:@"neoforge"]) {
+        params[@"modLoaderType"] = @(kCurseForgeModLoaderNeoForge);
     }
 
     NSDictionary *response = [self getEndpoint:@"mods/search" params:params];

@@ -9,6 +9,7 @@
 #import "LauncherPreferences.h"
 #import "MinecraftResourceDownloadTask.h"
 #import "MinecraftResourceUtils.h"
+#import "installer/mods/ModManagerStore.h"
 #import "ios_uikit_bridge.h"
 #import "utils.h"
 
@@ -16,6 +17,8 @@
 @property AFURLSessionManager* manager;
 @property(nonatomic) NSUInteger pendingDownloadTaskCount;
 @property(nonatomic) BOOL finishedAddingDownloadTasks;
+@property(nonatomic) NSDictionary *postInstallModPlan;
+@property(nonatomic) ModManagerStore *postInstallModStore;
 @end
 
 @implementation MinecraftResourceDownloadTask
@@ -445,6 +448,124 @@
     if (task) {
         [task resume];
     }
+}
+
+#pragma mark - Mod manager installation
+
+- (void)downloadModsWithPlan:(NSDictionary *)plan store:(ModManagerStore *)store {
+    [self prepareForDownload];
+    self.postInstallModPlan = plan;
+    self.postInstallModStore = store;
+
+    NSArray *downloads = [plan[@"downloads"] isKindOfClass:NSArray.class] ? plan[@"downloads"] : @[];
+    NSArray *manualDownloads = [plan[@"manualDownloads"] isKindOfClass:NSArray.class] ? plan[@"manualDownloads"] : @[];
+    self.postInstallManualDownloads = manualDownloads;
+
+    for (NSDictionary *download in downloads) {
+        if (![download isKindOfClass:NSDictionary.class]) {
+            continue;
+        }
+        NSString *url = download[@"url"];
+        NSString *destinationPath = download[@"destinationPath"];
+        NSString *fileName = download[@"fileName"] ?: destinationPath.lastPathComponent;
+        NSString *sha = [download[@"sha"] isKindOfClass:NSString.class] ? download[@"sha"] : nil;
+        NSUInteger size = [download[@"size"] respondsToSelector:@selector(unsignedLongLongValue)] ? [download[@"size"] unsignedLongLongValue] : 0;
+        if (![destinationPath isKindOfClass:NSString.class] || destinationPath.length == 0) {
+            [self finishDownloadWithErrorString:[NSString stringWithFormat:@"Invalid destination for %@", fileName ?: @"mod"]];
+            return;
+        }
+
+        if ([NSFileManager.defaultManager fileExistsAtPath:destinationPath] &&
+            [self checkSHA:sha forFile:destinationPath altName:fileName]) {
+            continue;
+        }
+
+        NSString *temporaryPath = [destinationPath stringByAppendingString:@".download"];
+        [NSFileManager.defaultManager removeItemAtPath:temporaryPath error:nil];
+        NSURLSessionDownloadTask *task = [self createDownloadTask:url size:size sha:sha altName:fileName toPath:temporaryPath success:^{
+            NSError *error = nil;
+            [NSFileManager.defaultManager createDirectoryAtPath:destinationPath.stringByDeletingLastPathComponent
+                withIntermediateDirectories:YES
+                attributes:nil
+                error:&error];
+            if (error) {
+                [self finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to create mods directory: %@", error.localizedDescription]];
+                return;
+            }
+            [NSFileManager.defaultManager removeItemAtPath:destinationPath error:nil];
+            if (![NSFileManager.defaultManager moveItemAtPath:temporaryPath toPath:destinationPath error:&error]) {
+                [self finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to install %@: %@", fileName, error.localizedDescription]];
+            }
+        }];
+        if (task) {
+            [task resume];
+        } else if (self.progress.cancelled) {
+            return;
+        }
+    }
+
+    [self finishAddingDownloadTasks];
+}
+
+- (void)finalizeModInstall {
+    if (!self.postInstallModPlan || !self.postInstallModStore) {
+        return;
+    }
+
+    NSArray *manualDownloads = [self.postInstallModPlan[@"manualDownloads"] isKindOfClass:NSArray.class] ? self.postInstallModPlan[@"manualDownloads"] : @[];
+    NSMutableSet *skippedManualFileNames = [NSMutableSet new];
+    for (NSDictionary *manualDownload in manualDownloads) {
+        NSString *temporaryPath = manualDownload[@"destinationPath"];
+        NSString *finalPath = manualDownload[@"finalDestinationPath"];
+        if (![temporaryPath isKindOfClass:NSString.class] ||
+            ![finalPath isKindOfClass:NSString.class] ||
+            temporaryPath.length == 0 ||
+            finalPath.length == 0) {
+            continue;
+        }
+        if (![NSFileManager.defaultManager fileExistsAtPath:temporaryPath]) {
+            [skippedManualFileNames addObject:finalPath.lastPathComponent];
+            continue;
+        }
+
+        NSError *moveError = nil;
+        [NSFileManager.defaultManager createDirectoryAtPath:finalPath.stringByDeletingLastPathComponent
+            withIntermediateDirectories:YES
+            attributes:nil
+            error:&moveError];
+        if (!moveError) {
+            [NSFileManager.defaultManager removeItemAtPath:finalPath error:nil];
+            [NSFileManager.defaultManager moveItemAtPath:temporaryPath toPath:finalPath error:&moveError];
+        }
+        if (moveError) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                showDialog(localize(@"Error", nil), [NSString stringWithFormat:@"Failed to install %@: %@", finalPath.lastPathComponent, moveError.localizedDescription]);
+            });
+            return;
+        }
+    }
+
+    NSArray *records = [self.postInstallModPlan[@"records"] isKindOfClass:NSArray.class] ? self.postInstallModPlan[@"records"] : @[];
+    if (skippedManualFileNames.count > 0) {
+        NSMutableArray *filteredRecords = [NSMutableArray new];
+        for (NSDictionary *record in records) {
+            NSString *fileName = record[@"fileName"];
+            if (![skippedManualFileNames containsObject:fileName]) {
+                [filteredRecords addObject:record];
+            }
+        }
+        records = filteredRecords;
+    }
+    NSArray *replaced = [self.postInstallModPlan[@"replacedFileNames"] isKindOfClass:NSArray.class] ? self.postInstallModPlan[@"replacedFileNames"] : @[];
+    NSArray *replacements = [self.postInstallModPlan[@"replacements"] isKindOfClass:NSArray.class] ? self.postInstallModPlan[@"replacements"] : @[];
+    NSError *error = [self.postInstallModStore saveMetadataRecords:records replacingFileNames:replaced replacements:replacements];
+    if (error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            showDialog(localize(@"Error", nil), [NSString stringWithFormat:@"Mods installed, but metadata could not be saved: %@", error.localizedDescription]);
+        });
+        return;
+    }
+    [NSNotificationCenter.defaultCenter postNotificationName:@"ModManagerModsChanged" object:self.postInstallModStore];
 }
 
 #pragma mark - Utilities

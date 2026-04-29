@@ -20,6 +20,10 @@
     if (mcVersion.length > 0) {
         [facetString appendFormat:@",[\"versions:%@\"]", mcVersion];
     }
+    NSString *loader = [searchFilters[@"loader"] isKindOfClass:NSString.class] ? searchFilters[@"loader"] : @"";
+    if (loader.length > 0) {
+        [facetString appendFormat:@",[\"categories:%@\"]", loader.lowercaseString];
+    }
     [facetString appendString:@"]"];
 
     NSString *query = [searchFilters[@"name"] isKindOfClass:NSString.class] ? searchFilters[@"name"] : @"";

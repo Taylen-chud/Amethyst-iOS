@@ -24,7 +24,7 @@
 - (instancetype)initWithDownloads:(NSArray<NSDictionary *> *)downloads completion:(void (^)(void))completion {
     return [self initWithDownloads:downloads
         introTitle:@"CurseForge Downloads"
-        introMessage:@"We are downloading the final few mods through CurseForge. Please do not close the app or this webpage until the downloads finish."
+        introMessage:@"We are downloading the final few mods. Please do not close the app or this webpage."
         completion:completion];
 }
 
@@ -35,7 +35,7 @@
     self = [super init];
     self.downloads = downloads ?: @[];
     self.introTitle = introTitle ?: @"CurseForge Downloads";
-    self.introMessage = introMessage ?: @"We are downloading the final few mods through CurseForge. Please do not close the app or this webpage until the downloads finish.";
+    self.introMessage = introMessage ?: @"We are downloading the final few mods. Please do not close the app or this webpage.";
     self.completion = completion;
     self.modalPresentationStyle = UIModalPresentationFormSheet;
     return self;
