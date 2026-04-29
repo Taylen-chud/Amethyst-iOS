@@ -1,6 +1,5 @@
 #import "LauncherPreferences.h"
 #import "ModManagerStore.h"
-#import "PLProfiles.h"
 #import "utils.h"
 
 static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
@@ -20,7 +19,7 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     self = [super init];
     self.profileName = profileName;
     self.profile = profile;
-    NSString *gameDir = [self modManagerGameDir];
+    NSString *gameDir = [self resolvedProfileValue:@"gameDir"];
     self.profileGameDir = [[NSString stringWithFormat:@"%s/instances/%@/%@",
         getenv("POJAV_HOME"),
         getPrefObject(@"general.game_directory"),
@@ -30,44 +29,6 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     self.metadataPath = [self.profileGameDir stringByAppendingPathComponent:kModManagerMetadataFileName];
     self.profileInfo = [self resolvedProfileInfoForVersionId:[self resolvedProfileValue:@"lastVersionId"]];
     return self;
-}
-
-- (NSString *)profileDirectoryIdentifier {
-    NSString *profileID = self.profile[@"amethystProfileId"];
-    if ([profileID isKindOfClass:NSString.class] && profileID.length > 0) {
-        return profileID;
-    }
-
-    NSString *gameDir = self.profile[@"gameDir"];
-    NSString *prefix = @"./profile_gamedirs/";
-    if ([gameDir isKindOfClass:NSString.class] && [gameDir hasPrefix:prefix]) {
-        NSString *existingID = [gameDir substringFromIndex:prefix.length];
-        if (existingID.length > 0 &&
-            ![existingID containsString:@"/"] &&
-            ![existingID containsString:@"\\"] &&
-            ![existingID containsString:@":"]) {
-            self.profile[@"amethystProfileId"] = existingID;
-            [PLProfiles.current save];
-            return existingID;
-        }
-    }
-
-    profileID = NSUUID.UUID.UUIDString.lowercaseString;
-    self.profile[@"amethystProfileId"] = profileID;
-    [PLProfiles.current save];
-    return profileID;
-}
-
-- (NSString *)modManagerGameDir {
-    NSString *value = self.profile[@"gameDir"];
-    if ([value isKindOfClass:NSString.class] && value.length > 0 && ![value isEqualToString:@"."]) {
-        return value;
-    }
-
-    NSString *profileGameDir = [NSString stringWithFormat:@"./profile_gamedirs/%@", [self profileDirectoryIdentifier]];
-    self.profile[@"gameDir"] = profileGameDir;
-    [PLProfiles.current save];
-    return profileGameDir;
 }
 
 - (NSString *)resolvedProfileValue:(NSString *)key {
