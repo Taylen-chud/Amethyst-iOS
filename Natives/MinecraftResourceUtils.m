@@ -44,8 +44,12 @@
 
 + (void)insertSafety:(NSMutableDictionary *)targetVer from:(NSDictionary *)fromVer arr:(NSArray *)arr {
     for (NSString *key in arr) {
-        if (([fromVer[key] isKindOfClass:NSString.class] && [fromVer[key] length] > 0) || targetVer[key] == nil) {
-            targetVer[key] = fromVer[key];
+        id value = fromVer[key];
+        if (!value || value == NSNull.null) {
+            continue;
+        }
+        if (([value isKindOfClass:NSString.class] && [value length] > 0) || targetVer[key] == nil) {
+            targetVer[key] = value;
         } else {
             NSLog(@"[MCDL] insertSafety: how to insert %@?", key);
         }

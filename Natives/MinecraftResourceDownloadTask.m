@@ -202,12 +202,20 @@
         }
 
         if (localInheritedVersion) {
+            id inheritedJavaVersion = metadata[@"javaVersion"];
             [MinecraftResourceUtils processVersion:localInheritedVersion inheritsFrom:metadata];
+            if ([inheritedJavaVersion isKindOfClass:NSDictionary.class]) {
+                metadata[@"javaVersion"] = inheritedJavaVersion;
+            }
             self.metadata = metadata;
         } else if (metadata[@"inheritsFrom"]) {
             NSMutableDictionary *inheritsFromDict = parseJSONFromFile([NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), metadata[@"inheritsFrom"]]);
             if (inheritsFromDict) {
+                id inheritedJavaVersion = inheritsFromDict[@"javaVersion"];
                 [MinecraftResourceUtils processVersion:metadata inheritsFrom:inheritsFromDict];
+                if ([inheritedJavaVersion isKindOfClass:NSDictionary.class]) {
+                    inheritsFromDict[@"javaVersion"] = inheritedJavaVersion;
+                }
                 self.metadata = inheritsFromDict;
             } else {
                 self.metadata = metadata;
