@@ -1,6 +1,7 @@
 #include <CommonCrypto/CommonDigest.h>
 
 #import "authenticator/BaseAuthenticator.h"
+#import "installer/modpack/CurseForgeManualDownloadViewController.h"
 #import "installer/modpack/ModpackAPI.h"
 #import "installer/modpack/ModpackUtils.h"
 #import "AFNetworking.h"
@@ -285,12 +286,6 @@
 - (void)downloadModpackFromAPI:(ModpackAPI *)api detail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion {
     [self prepareForDownload];
 
-    NSString *url = [api downloadURLForModDetail:modDetail atIndex:selectedVersion];
-    if (url.length == 0) {
-        [self finishDownloadWithErrorString:@"Failed to get a download URL for the selected modpack file."];
-        return;
-    }
-
     NSArray *sizes = [modDetail[@"versionSizes"] isKindOfClass:NSArray.class] ? modDetail[@"versionSizes"] : @[];
     NSArray *hashes = [modDetail[@"versionHashes"] isKindOfClass:NSArray.class] ? modDetail[@"versionHashes"] : @[];
     id sizeValue = selectedVersion < sizes.count ? sizes[selectedVersion] : nil;
@@ -315,9 +310,47 @@
     }
     NSString *packagePath = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.zip", name]];
     [NSFileManager.defaultManager removeItemAtPath:packagePath error:nil];
+    NSString *path = [NSString stringWithFormat:@"%s/custom_gamedir/%@", getenv("POJAV_GAME_DIR"), name];
+
+    NSString *url = [api downloadURLForModDetail:modDetail atIndex:selectedVersion];
+    if (url.length == 0) {
+        NSString *manualURL = [api manualDownloadPageURLForModDetail:modDetail atIndex:selectedVersion];
+        if (manualURL.length == 0) {
+            [self finishDownloadWithErrorString:@"Failed to get a download URL for the selected modpack file."];
+            return;
+        }
+
+        NSDictionary *manualDownload = @{
+            @"title": rawName,
+            @"fileName": packagePath.lastPathComponent,
+            @"url": manualURL,
+            @"destinationPath": packagePath,
+            @"sha": sha ?: @""
+        };
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 500 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+            CurseForgeManualDownloadViewController *vc = [[CurseForgeManualDownloadViewController alloc]
+                initWithDownloads:@[manualDownload]
+                introTitle:@"CurseForge Modpack Download"
+                introMessage:@"CurseForge did not provide a direct download for this modpack. We are downloading it through CurseForge. Please do not close the app or this webpage until the download finishes."
+                completion:^{
+                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                        if (self.progress.cancelled) {
+                            return;
+                        }
+                        if (![NSFileManager.defaultManager fileExistsAtPath:packagePath]) {
+                            [self finishDownloadWithErrorString:@"The CurseForge modpack download was not completed."];
+                            return;
+                        }
+                        [api downloader:self submitDownloadTasksFromPackage:packagePath toPath:path];
+                    });
+                }];
+            UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
+            [currentVC() presentViewController:nav animated:YES completion:nil];
+        });
+        return;
+    }
 
     NSURLSessionDownloadTask *task = [self createDownloadTask:url size:size sha:sha altName:nil toPath:packagePath success:^{
-        NSString *path = [NSString stringWithFormat:@"%s/custom_gamedir/%@", getenv("POJAV_GAME_DIR"), name];
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
             if (self.progress.cancelled) {
                 return;

@@ -86,6 +86,10 @@
     return url;
 }
 
+- (NSString *)manualDownloadPageURLForModDetail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion {
+    return nil;
+}
+
 - (void)installModpackFromDetail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion {
     // Pass details to LauncherNavigationController
     NSDictionary* userInfo = @{

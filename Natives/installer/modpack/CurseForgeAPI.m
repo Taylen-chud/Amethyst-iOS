@@ -394,6 +394,21 @@
     return url;
 }
 
+- (NSString *)manualDownloadPageURLForModDetail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion {
+    NSArray *fileIds = modDetail[@"versionFileIds"];
+    if (![fileIds isKindOfClass:NSArray.class] || selectedVersion >= fileIds.count) {
+        return nil;
+    }
+
+    NSNumber *fileID = [fileIds[selectedVersion] isKindOfClass:NSNumber.class] ? fileIds[selectedVersion] : nil;
+    NSNumber *projectID = [modDetail[@"id"] isKindOfClass:NSNumber.class] ? modDetail[@"id"] : nil;
+    if (!fileID || !projectID) {
+        return nil;
+    }
+
+    return [self manualDownloadPageURLForFile:@{@"id": fileID} projectID:projectID cache:[NSMutableDictionary new]];
+}
+
 - (void)downloader:(MinecraftResourceDownloadTask *)downloader submitDownloadTasksFromPackage:(NSString *)packagePath toPath:(NSString *)destPath {
     NSError *error = nil;
     UZKArchive *archive = [[UZKArchive alloc] initWithPath:packagePath error:&error];

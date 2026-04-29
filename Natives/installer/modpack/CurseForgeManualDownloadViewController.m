@@ -8,6 +8,8 @@
 @interface CurseForgeManualDownloadViewController ()<WKNavigationDelegate, WKUIDelegate>
 @property(nonatomic) NSArray<NSDictionary *> *downloads;
 @property(nonatomic, copy) void (^completion)(void);
+@property(nonatomic) NSString *introTitle;
+@property(nonatomic) NSString *introMessage;
 @property(nonatomic) WKWebView *webView;
 @property(nonatomic) UIProgressView *progressView;
 @property(nonatomic) NSURLSessionDownloadTask *downloadTask;
@@ -20,8 +22,20 @@
 @implementation CurseForgeManualDownloadViewController
 
 - (instancetype)initWithDownloads:(NSArray<NSDictionary *> *)downloads completion:(void (^)(void))completion {
+    return [self initWithDownloads:downloads
+        introTitle:@"CurseForge Downloads"
+        introMessage:@"We are downloading the final few mods through CurseForge. Please do not close the app or this webpage until the downloads finish."
+        completion:completion];
+}
+
+- (instancetype)initWithDownloads:(NSArray<NSDictionary *> *)downloads
+    introTitle:(NSString *)introTitle
+    introMessage:(NSString *)introMessage
+    completion:(void (^)(void))completion {
     self = [super init];
     self.downloads = downloads ?: @[];
+    self.introTitle = introTitle ?: @"CurseForge Downloads";
+    self.introMessage = introMessage ?: @"We are downloading the final few mods through CurseForge. Please do not close the app or this webpage until the downloads finish.";
     self.completion = completion;
     self.modalPresentationStyle = UIModalPresentationFormSheet;
     return self;
@@ -61,8 +75,8 @@
         return;
     }
     self.shownIntro = YES;
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Manual CurseForge Downloads"
-        message:@"Some mods block direct API downloads. Tap Download on each CurseForge page; the app will save the file into this modpack and then open the next page."
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:self.introTitle
+        message:self.introMessage
         preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:localize(@"OK", nil) style:UIAlertActionStyleDefault handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
@@ -118,13 +132,20 @@
 
     NSString *expectedExtension = expectedFileName.pathExtension.lowercaseString;
     NSString *urlExtension = url.pathExtension.lowercaseString;
-    if (expectedExtension.length > 0 && [expectedExtension isEqualToString:urlExtension]) {
+    NSString *suggestedExtension = suggestedFilename.pathExtension.lowercaseString;
+    if (expectedExtension.length > 0 &&
+        ([expectedExtension isEqualToString:urlExtension] || [expectedExtension isEqualToString:suggestedExtension])) {
         return YES;
     }
 
     NSString *lowerMIMEType = MIMEType.lowercaseString;
-    return [expectedExtension isEqualToString:@"jar"] &&
-        ([lowerMIMEType containsString:@"java-archive"] || [lowerMIMEType containsString:@"octet-stream"]);
+    if ([expectedExtension isEqualToString:@"jar"]) {
+        return [lowerMIMEType containsString:@"java-archive"] || [lowerMIMEType containsString:@"octet-stream"];
+    }
+    if ([expectedExtension isEqualToString:@"zip"]) {
+        return [lowerMIMEType containsString:@"zip"] || [lowerMIMEType containsString:@"octet-stream"];
+    }
+    return NO;
 }
 
 - (void)startDownloadWithRequest:(NSURLRequest *)request {
@@ -271,8 +292,8 @@
 }
 
 - (void)actionCancel {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Skip Manual Downloads?"
-        message:@"The modpack profile will be created, but missing mods must be added before launching."
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Skip CurseForge Downloads?"
+        message:@"The install may be incomplete until the missing downloads are added."
         preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:localize(@"Cancel", nil) style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"Skip Remaining" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
