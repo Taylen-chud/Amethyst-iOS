@@ -394,7 +394,11 @@ static void *ProgressObserverContext = &ProgressObserverContext;
         lastMsTime = currentTime;
     }
 
-    BOOL finished = downloadProgress.finished || progress.finished;
+    BOOL queueFinished = [task allDownloadTasksFinished];
+    if (queueFinished) {
+        [task markAllDownloadTasksComplete];
+    }
+    BOOL finished = queueFinished || downloadProgress.finished || progress.finished;
     if (finished && progress.totalUnitCount > 0) {
         progress.completedUnitCount = progress.totalUnitCount;
     }

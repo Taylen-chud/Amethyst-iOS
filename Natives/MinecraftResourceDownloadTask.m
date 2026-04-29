@@ -14,6 +14,8 @@
 
 @interface MinecraftResourceDownloadTask ()
 @property AFURLSessionManager* manager;
+@property(nonatomic) NSUInteger pendingDownloadTaskCount;
+@property(nonatomic) BOOL finishedAddingDownloadTasks;
 @end
 
 @implementation MinecraftResourceDownloadTask
@@ -35,6 +37,36 @@
     }
     progress.totalUnitCount = total;
     progress.completedUnitCount = completed;
+}
+
+- (void)noteDownloadTaskAdded {
+    @synchronized (self) {
+        self.pendingDownloadTaskCount++;
+    }
+}
+
+- (void)noteDownloadTaskFinished {
+    BOOL shouldComplete = NO;
+    @synchronized (self) {
+        if (self.pendingDownloadTaskCount > 0) {
+            self.pendingDownloadTaskCount--;
+        }
+        shouldComplete = self.finishedAddingDownloadTasks && self.pendingDownloadTaskCount == 0 && !self.progress.cancelled;
+    }
+    if (shouldComplete) {
+        [self markAllDownloadTasksComplete];
+    }
+}
+
+- (BOOL)allDownloadTasksFinished {
+    @synchronized (self) {
+        return self.finishedAddingDownloadTasks && self.pendingDownloadTaskCount == 0 && !self.progress.cancelled;
+    }
+}
+
+- (void)markAllDownloadTasksComplete {
+    [self markProgressComplete:self.progress];
+    [self markProgressComplete:self.textProgress];
 }
 
 - (instancetype)init {
@@ -90,6 +122,7 @@
             }
             [self markProgressComplete:progress];
             if (success) success();
+            [self noteDownloadTaskFinished];
         }
     }];
 
@@ -116,6 +149,7 @@
     [self.progress addChild:progress withPendingUnitCount:fileSize];
     self.progress.totalUnitCount += fileSize;
     self.textProgress.totalUnitCount = self.progress.totalUnitCount;
+    [self noteDownloadTaskAdded];
 }
 
 - (void)finishAddingDownloadTasks {
@@ -127,6 +161,10 @@
         self.textProgress.totalUnitCount--;
     }
 
+    @synchronized (self) {
+        self.finishedAddingDownloadTasks = YES;
+    }
+
     if (self.progress.totalUnitCount <= 0) {
         self.progress.totalUnitCount = 1;
         self.progress.completedUnitCount = 1;
@@ -135,6 +173,10 @@
     } else if (self.progress.completedUnitCount >= self.progress.totalUnitCount) {
         self.progress.completedUnitCount = self.progress.totalUnitCount;
         self.textProgress.completedUnitCount = self.textProgress.totalUnitCount;
+    }
+
+    if ([self allDownloadTasksFinished]) {
+        [self markAllDownloadTasksComplete];
     }
 }
 
@@ -150,19 +192,28 @@
     NSString *path = [NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), versionStr];
     // Find it again to resolve latest-*
     version = (id)[MinecraftResourceUtils findVersion:versionStr inList:remoteVersionList];
+    __block NSMutableDictionary *localInheritedVersion = nil;
 
     void(^completionBlock)(void) = ^{
-        self.metadata = parseJSONFromFile(path);
-        if (self.metadata[@"NSErrorObject"]) {
-            [self finishDownloadWithErrorString:[self.metadata[@"NSErrorObject"] localizedDescription]];
+        NSMutableDictionary *metadata = parseJSONFromFile(path);
+        if (metadata[@"NSErrorObject"]) {
+            [self finishDownloadWithErrorString:[metadata[@"NSErrorObject"] localizedDescription]];
             return;
         }
-        if (self.metadata[@"inheritsFrom"]) {
-            NSMutableDictionary *inheritsFromDict = parseJSONFromFile([NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), self.metadata[@"inheritsFrom"]]);
+
+        if (localInheritedVersion) {
+            [MinecraftResourceUtils processVersion:localInheritedVersion inheritsFrom:metadata];
+            self.metadata = metadata;
+        } else if (metadata[@"inheritsFrom"]) {
+            NSMutableDictionary *inheritsFromDict = parseJSONFromFile([NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), metadata[@"inheritsFrom"]]);
             if (inheritsFromDict) {
-                [MinecraftResourceUtils processVersion:self.metadata inheritsFrom:inheritsFromDict];
+                [MinecraftResourceUtils processVersion:metadata inheritsFrom:inheritsFromDict];
                 self.metadata = inheritsFromDict;
+            } else {
+                self.metadata = metadata;
             }
+        } else {
+            self.metadata = metadata;
         }
         [MinecraftResourceUtils tweakVersionJson:self.metadata];
         success();
@@ -175,12 +226,18 @@
             [self finishDownloadWithErrorString:[json[@"NSErrorObject"] localizedDescription]];
             return;
         } else if (json[@"inheritsFrom"]) {
+            localInheritedVersion = json;
             version = (id)[MinecraftResourceUtils findVersion:json[@"inheritsFrom"] inList:remoteVersionList];
             path = [NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), json[@"inheritsFrom"]];
         } else {
             completionBlock();
             return;
         }
+    }
+
+    if (!version) {
+        [self finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to find inherited Minecraft version for %@.", versionStr]];
+        return;
     }
 
     versionStr = version[@"id"];
@@ -395,6 +452,10 @@
     self.progress = [NSProgress new];
     // Push 1 byte so it won't accidentally finish after downloading assets index
     self.progress.totalUnitCount = 1;
+    @synchronized (self) {
+        self.pendingDownloadTaskCount = 0;
+        self.finishedAddingDownloadTasks = NO;
+    }
     [self.fileList removeAllObjects];
     [self.progressList removeAllObjects];
 }
