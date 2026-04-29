@@ -13,6 +13,7 @@
 #define kCurseForgeModLoaderFabric 4
 #define kCurseForgeModLoaderQuilt 5
 #define kCurseForgeModLoaderNeoForge 6
+static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
 
 @implementation CurseForgeAPI
 
@@ -88,6 +89,71 @@
     }
 
     return @"";
+}
+
+- (NSArray *)normalizedCurseForgeDependencies:(NSArray *)dependencies {
+    NSMutableArray *result = [NSMutableArray new];
+    for (NSDictionary *dependency in dependencies) {
+        if (![dependency isKindOfClass:NSDictionary.class]) continue;
+        NSNumber *modID = [dependency[@"modId"] isKindOfClass:NSNumber.class] ? dependency[@"modId"] : nil;
+        if (!modID) continue;
+        NSInteger relationType = [dependency[@"relationType"] respondsToSelector:@selector(integerValue)] ? [dependency[@"relationType"] integerValue] : 3;
+        NSString *type = @"required";
+        if (relationType == 1) type = @"embedded";
+        else if (relationType == 2) type = @"optional";
+        else if (relationType == 4) type = @"tool";
+        else if (relationType == 5) type = @"incompatible";
+        else if (relationType == 3 || relationType == 6) type = @"required";
+        [result addObject:@{
+            @"source": @"curseforge",
+            @"type": type,
+            @"projectId": modID
+        }];
+    }
+    return result;
+}
+
+- (NSDictionary *)modManagerRecordForFile:(NSDictionary *)file projectID:(NSNumber *)projectID fileName:(NSString *)fileName projectCache:(NSMutableDictionary *)projectCache {
+    NSDictionary *project = [self projectInfoForProjectID:projectID cache:projectCache];
+    NSDictionary *logo = [project[@"logo"] isKindOfClass:NSDictionary.class] ? project[@"logo"] : nil;
+    NSString *iconUrl = [logo[@"thumbnailUrl"] isKindOfClass:NSString.class] ? logo[@"thumbnailUrl"] : logo[@"url"];
+    NSString *title = project[@"name"] ?: file[@"displayName"] ?: fileName;
+    NSNumber *size = [file[@"fileLength"] isKindOfClass:NSNumber.class] ? file[@"fileLength"] : file[@"fileSizeOnDisk"];
+    if (![size isKindOfClass:NSNumber.class]) {
+        size = @0;
+    }
+    return @{
+        @"source": @"curseforge",
+        @"projectId": projectID ?: @0,
+        @"fileId": file[@"id"] ?: @0,
+        @"title": title ?: fileName ?: @"",
+        @"versionName": file[@"displayName"] ?: fileName ?: @"",
+        @"summary": project[@"summary"] ?: @"",
+        @"iconUrl": iconUrl ?: @"",
+        @"fileName": fileName ?: @"",
+        @"sha1": [self sha1HashForFile:file] ?: @"",
+        @"size": size,
+        @"gameVersion": [self minecraftVersionForFile:file],
+        @"dependencies": [self normalizedCurseForgeDependencies:([file[@"dependencies"] isKindOfClass:NSArray.class] ? file[@"dependencies"] : @[])],
+        @"enabled": @YES
+    };
+}
+
+- (void)saveModManagerMetadataRecords:(NSArray<NSDictionary *> *)records toPath:(NSString *)destPath {
+    if (records.count == 0) {
+        return;
+    }
+    NSMutableDictionary *mods = [NSMutableDictionary new];
+    for (NSDictionary *record in records) {
+        NSString *fileName = record[@"fileName"];
+        if ([fileName isKindOfClass:NSString.class] && fileName.length > 0) {
+            mods[fileName] = record;
+        }
+    }
+    NSError *error = saveJSONToFile(@{@"version": @1, @"mods": mods}, [destPath stringByAppendingPathComponent:kModManagerMetadataFileName]);
+    if (error) {
+        NSLog(@"[CurseForge] Failed to save mod manager metadata: %@", error.localizedDescription);
+    }
 }
 
 - (NSString *)downloadURLForFile:(NSDictionary *)file projectID:(NSNumber *)projectID {
@@ -499,6 +565,7 @@
     [NSFileManager.defaultManager removeItemAtPath:[destPath stringByAppendingPathComponent:@"mods"] error:nil];
 
     NSMutableArray *manualDownloads = [NSMutableArray new];
+    NSMutableArray *modManagerRecords = [NSMutableArray new];
     NSMutableDictionary *projectCache = [NSMutableDictionary new];
     for (NSDictionary *manifestFile in requiredManifestFiles) {
         NSNumber *fileID = manifestFile[@"fileID"];
@@ -528,6 +595,7 @@
             size = [file[@"fileSizeOnDisk"] respondsToSelector:@selector(unsignedLongLongValue)] ? [file[@"fileSizeOnDisk"] unsignedLongLongValue] : 0;
         }
         NSString *sha = [self sha1HashForFile:file];
+        [modManagerRecords addObject:[self modManagerRecordForFile:file projectID:projectID fileName:fileName projectCache:projectCache]];
         NSString *url = [self downloadURLForFile:file projectID:projectID];
         if (url.length == 0) {
             NSString *manualURL = [self manualDownloadPageURLForFile:file projectID:projectID cache:projectCache];
@@ -575,6 +643,7 @@
             return;
         }
     }
+    [self saveModManagerMetadataRecords:modManagerRecords toPath:destPath];
 
     [NSFileManager.defaultManager removeItemAtPath:packagePath error:nil];
 

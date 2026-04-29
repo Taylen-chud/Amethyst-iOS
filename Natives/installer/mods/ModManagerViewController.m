@@ -238,7 +238,47 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
     if (completion) completion(ok);
 }
 
-- (void)disableModWithDependents:(NSDictionary *)mod completion:(void (^)(BOOL success))completion {
+- (NSDictionary *)currentInstalledModMatchingMod:(NSDictionary *)mod {
+    NSString *fileName = mod[@"fileName"];
+    if (![fileName isKindOfClass:NSString.class] || fileName.length == 0) {
+        return mod;
+    }
+    for (NSDictionary *installed in [self.store installedMods]) {
+        if ([installed[@"fileName"] isEqualToString:fileName]) {
+            return installed;
+        }
+    }
+    return mod;
+}
+
+- (void)refreshProviderMetadataForMod:(NSDictionary *)mod completion:(void (^)(NSDictionary *currentMod))completion {
+    NSArray *installedMods = [self.store installedMods];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSArray *records = [self.api refreshedMetadataForInstalledMods:installedMods profileInfo:self.store.profileInfo];
+        NSError *error = self.api.lastError;
+        if (records.count > 0) {
+            NSError *saveError = [self.store saveMetadataRecords:records replacingFileNames:@[] replacements:@[]];
+            if (saveError) {
+                error = saveError;
+            }
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (error) {
+                [self presentError:error];
+                if (completion) {
+                    completion(nil);
+                }
+                return;
+            }
+            [self reloadMods];
+            if (completion) {
+                completion([self currentInstalledModMatchingMod:mod]);
+            }
+        });
+    });
+}
+
+- (void)confirmDisableModWithDependents:(NSDictionary *)mod completion:(void (^)(BOOL success))completion {
     NSArray *dependents = [self.store dependentModsForMod:mod includeDisabled:NO];
     NSArray *mods = [self operationModsForMod:mod dependents:dependents];
     if (dependents.count == 0) {
@@ -258,7 +298,17 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-- (void)removeModWithDependents:(NSDictionary *)mod completion:(void (^)(BOOL success))completion {
+- (void)disableModWithDependents:(NSDictionary *)mod completion:(void (^)(BOOL success))completion {
+    [self refreshProviderMetadataForMod:mod completion:^(NSDictionary *currentMod) {
+        if (!currentMod) {
+            if (completion) completion(NO);
+            return;
+        }
+        [self confirmDisableModWithDependents:currentMod completion:completion];
+    }];
+}
+
+- (void)confirmRemoveModWithDependents:(NSDictionary *)mod completion:(void (^)(BOOL success))completion {
     NSArray *dependents = [self.store dependentModsForMod:mod includeDisabled:YES];
     NSArray *mods = [self operationModsForMod:mod dependents:dependents];
     if (dependents.count == 0) {
@@ -276,6 +326,16 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
         [self removeMods:mods completion:completion];
     }]];
     [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)removeModWithDependents:(NSDictionary *)mod completion:(void (^)(BOOL success))completion {
+    [self refreshProviderMetadataForMod:mod completion:^(NSDictionary *currentMod) {
+        if (!currentMod) {
+            if (completion) completion(NO);
+            return;
+        }
+        [self confirmRemoveModWithDependents:currentMod completion:completion];
+    }];
 }
 
 - (void)installUpdateForMod:(NSDictionary *)mod {

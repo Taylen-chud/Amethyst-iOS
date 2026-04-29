@@ -2,6 +2,7 @@
 #import "installer/modpack/ModrinthAPI.h"
 #import "ModManagerAPI.h"
 #import "ModManagerStore.h"
+#import <CommonCrypto/CommonDigest.h>
 
 static NSString * const kModSourceModrinth = @"modrinth";
 static NSString * const kModSourceCurseForge = @"curseforge";
@@ -141,6 +142,33 @@ static NSString * const kModSourceCurseForge = @"curseforge";
     }
     NSDictionary *version = [self.modrinth getEndpoint:[NSString stringWithFormat:@"version/%@", versionID] params:nil];
     return [version isKindOfClass:NSDictionary.class] ? version : nil;
+}
+
+- (NSString *)jsonStringForArray:(NSArray *)array {
+    if (![array isKindOfClass:NSArray.class]) {
+        return @"[]";
+    }
+    NSData *data = [NSJSONSerialization dataWithJSONObject:array options:0 error:nil];
+    return data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"[]";
+}
+
+- (NSArray *)modrinthVersionsForIDs:(NSArray<NSString *> *)versionIDs {
+    if (versionIDs.count == 0) {
+        return @[];
+    }
+    NSArray *versions = [self.modrinth getEndpoint:@"versions" params:@{@"ids": [self jsonStringForArray:versionIDs]}];
+    return [versions isKindOfClass:NSArray.class] ? versions : nil;
+}
+
+- (NSDictionary *)modrinthVersionsForFileHashes:(NSArray<NSString *> *)hashes {
+    if (hashes.count == 0) {
+        return @{};
+    }
+    NSDictionary *versions = [self.modrinth postEndpoint:@"version_files" body:@{
+        @"hashes": hashes,
+        @"algorithm": @"sha1"
+    }];
+    return [versions isKindOfClass:NSDictionary.class] ? versions : nil;
 }
 
 - (NSDictionary *)primaryModrinthFileForVersion:(NSDictionary *)version {
@@ -297,7 +325,8 @@ static NSString * const kModSourceCurseForge = @"curseforge";
         NSInteger relationType = [dependency[@"relationType"] respondsToSelector:@selector(integerValue)] ? [dependency[@"relationType"] integerValue] : 3;
         NSString *type = @"required";
         if (relationType == 1) type = @"embedded";
-        else if (relationType == 2 || relationType == 4) type = @"optional";
+        else if (relationType == 2) type = @"optional";
+        else if (relationType == 4) type = @"tool";
         else if (relationType == 5) type = @"incompatible";
         else if (relationType == 3 || relationType == 6) type = @"required";
         [result addObject:@{
@@ -407,6 +436,235 @@ static NSString * const kModSourceCurseForge = @"curseforge";
     return versions;
 }
 
+- (NSString *)sha1ForFileAtPath:(NSString *)path {
+    if (![path isKindOfClass:NSString.class] || path.length == 0) {
+        return nil;
+    }
+    NSInputStream *stream = [NSInputStream inputStreamWithFileAtPath:path];
+    [stream open];
+    if (stream.streamStatus == NSStreamStatusError) {
+        return nil;
+    }
+
+    CC_SHA1_CTX context;
+    CC_SHA1_Init(&context);
+    uint8_t buffer[16384];
+    while (stream.hasBytesAvailable) {
+        NSInteger read = [stream read:buffer maxLength:sizeof(buffer)];
+        if (read < 0) {
+            [stream close];
+            return nil;
+        }
+        if (read == 0) {
+            break;
+        }
+        CC_SHA1_Update(&context, buffer, (CC_LONG)read);
+    }
+    [stream close];
+
+    unsigned char digest[CC_SHA1_DIGEST_LENGTH];
+    CC_SHA1_Final(digest, &context);
+    NSMutableString *sha = [NSMutableString stringWithCapacity:CC_SHA1_DIGEST_LENGTH * 2];
+    for (int i = 0; i < CC_SHA1_DIGEST_LENGTH; i++) {
+        [sha appendFormat:@"%02x", digest[i]];
+    }
+    return sha;
+}
+
+- (NSMutableDictionary *)recordFromNormalizedVersion:(NSDictionary *)version localMod:(NSDictionary *)mod {
+    if (![version isKindOfClass:NSDictionary.class]) {
+        return nil;
+    }
+
+    NSMutableDictionary *record = [NSMutableDictionary new];
+    NSArray *recordKeys = @[@"source", @"projectId", @"versionId", @"fileId", @"title", @"versionName", @"summary", @"iconUrl", @"fileName", @"sha1", @"size", @"gameVersion", @"loaders", @"dependencies", @"datePublished"];
+    for (NSString *key in recordKeys) {
+        id value = version[key];
+        if (value && value != NSNull.null &&
+            !([value isKindOfClass:NSString.class] && [value length] == 0)) {
+            record[key] = value;
+        } else if (mod[key] && mod[key] != NSNull.null) {
+            record[key] = mod[key];
+        }
+    }
+
+    NSString *localFileName = mod[@"fileName"];
+    if ([localFileName isKindOfClass:NSString.class] && localFileName.length > 0) {
+        record[@"fileName"] = localFileName;
+    }
+    if (mod[@"enabled"]) {
+        record[@"enabled"] = mod[@"enabled"];
+    }
+    if (!record[@"installedAt"] && mod[@"installedAt"]) {
+        record[@"installedAt"] = mod[@"installedAt"];
+    }
+    return record;
+}
+
+- (NSArray<NSDictionary *> *)refreshedMetadataForInstalledMods:(NSArray<NSDictionary *> *)mods profileInfo:(NSDictionary *)profileInfo {
+    self.lastError = nil;
+    NSMutableArray *records = [NSMutableArray new];
+
+    NSMutableDictionary<NSString *, NSMutableArray<NSDictionary *> *> *curseForgeModsByFileID = [NSMutableDictionary new];
+    NSMutableArray<NSNumber *> *curseForgeFileIDs = [NSMutableArray new];
+    NSMutableSet<NSString *> *seenCurseForgeFileIDs = [NSMutableSet new];
+
+    NSMutableDictionary<NSString *, NSMutableArray<NSDictionary *> *> *modrinthModsByVersionID = [NSMutableDictionary new];
+    NSMutableArray<NSString *> *modrinthVersionIDs = [NSMutableArray new];
+    NSMutableSet<NSString *> *seenModrinthVersionIDs = [NSMutableSet new];
+
+    NSMutableDictionary<NSString *, NSMutableArray<NSDictionary *> *> *modrinthModsByHash = [NSMutableDictionary new];
+    NSMutableArray<NSString *> *modrinthHashes = [NSMutableArray new];
+    NSMutableSet<NSString *> *seenModrinthHashes = [NSMutableSet new];
+
+    for (NSDictionary *mod in mods) {
+        if (![mod isKindOfClass:NSDictionary.class] || [mod[@"missing"] boolValue]) {
+            continue;
+        }
+
+        NSString *source = mod[@"source"];
+        BOOL queued = NO;
+        if ([source isEqualToString:kModSourceCurseForge] && mod[@"fileId"] && mod[@"projectId"]) {
+            NSNumber *fileID = [mod[@"fileId"] isKindOfClass:NSNumber.class] ? mod[@"fileId"] : @([[mod[@"fileId"] description] integerValue]);
+            NSString *key = [fileID description];
+            if (key.length > 0) {
+                NSMutableArray *bucket = curseForgeModsByFileID[key];
+                if (!bucket) {
+                    bucket = [NSMutableArray new];
+                    curseForgeModsByFileID[key] = bucket;
+                }
+                [bucket addObject:mod];
+                if (![seenCurseForgeFileIDs containsObject:key]) {
+                    [seenCurseForgeFileIDs addObject:key];
+                    [curseForgeFileIDs addObject:fileID];
+                }
+                queued = YES;
+            }
+        } else if ([source isEqualToString:kModSourceModrinth] && [mod[@"versionId"] isKindOfClass:NSString.class]) {
+            NSString *versionID = mod[@"versionId"];
+            if (versionID.length > 0) {
+                NSMutableArray *bucket = modrinthModsByVersionID[versionID];
+                if (!bucket) {
+                    bucket = [NSMutableArray new];
+                    modrinthModsByVersionID[versionID] = bucket;
+                }
+                [bucket addObject:mod];
+                if (![seenModrinthVersionIDs containsObject:versionID]) {
+                    [seenModrinthVersionIDs addObject:versionID];
+                    [modrinthVersionIDs addObject:versionID];
+                }
+                queued = YES;
+            }
+        }
+
+        if (!queued) {
+            NSString *sha = [mod[@"sha1"] isKindOfClass:NSString.class] ? mod[@"sha1"] : nil;
+            if (sha.length == 0) {
+                sha = [self sha1ForFileAtPath:mod[@"path"]];
+            }
+            if (sha.length > 0) {
+                NSMutableArray *bucket = modrinthModsByHash[sha];
+                if (!bucket) {
+                    bucket = [NSMutableArray new];
+                    modrinthModsByHash[sha] = bucket;
+                }
+                [bucket addObject:mod];
+                if (![seenModrinthHashes containsObject:sha]) {
+                    [seenModrinthHashes addObject:sha];
+                    [modrinthHashes addObject:sha];
+                }
+            }
+        }
+    }
+
+    if (curseForgeFileIDs.count > 0) {
+        if (![CurseForgeAPI isConfigured]) {
+            self.lastError = [self errorWithDescription:@"CurseForge API key is not configured, so CurseForge mod dependencies could not be refreshed."];
+        } else {
+            NSArray *files = [self.curseforge fileMetadataForFileIDs:curseForgeFileIDs];
+            if (![files isKindOfClass:NSArray.class]) {
+                self.lastError = self.curseforge.lastError ?: [self errorWithDescription:@"Failed to refresh CurseForge mod dependencies."];
+            } else {
+                NSMutableDictionary *filesByID = [NSMutableDictionary new];
+                for (NSDictionary *file in files) {
+                    NSString *key = [file[@"id"] description];
+                    if (key.length > 0) {
+                        filesByID[key] = file;
+                    }
+                }
+                for (NSString *key in curseForgeModsByFileID) {
+                    NSDictionary *file = [filesByID[key] isKindOfClass:NSDictionary.class] ? filesByID[key] : nil;
+                    if (!file) {
+                        continue;
+                    }
+                    for (NSDictionary *mod in curseForgeModsByFileID[key]) {
+                        NSNumber *projectID = [mod[@"projectId"] isKindOfClass:NSNumber.class] ? mod[@"projectId"] : @([[mod[@"projectId"] description] integerValue]);
+                        NSDictionary *project = [self curseForgeProjectInfoForID:projectID fallback:mod];
+                        NSDictionary *normalized = [self normalizedCurseForgeFile:file project:project profileInfo:profileInfo];
+                        NSDictionary *record = [self recordFromNormalizedVersion:normalized localMod:mod];
+                        if (record) {
+                            [records addObject:record];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (modrinthVersionIDs.count > 0) {
+        NSArray *versions = [self modrinthVersionsForIDs:modrinthVersionIDs];
+        if (![versions isKindOfClass:NSArray.class]) {
+            self.lastError = self.modrinth.lastError ?: [self errorWithDescription:@"Failed to refresh Modrinth mod dependencies."];
+        } else {
+            NSMutableDictionary *versionsByID = [NSMutableDictionary new];
+            for (NSDictionary *version in versions) {
+                NSString *key = [version[@"id"] description];
+                if (key.length > 0) {
+                    versionsByID[key] = version;
+                }
+            }
+            for (NSString *versionID in modrinthModsByVersionID) {
+                NSDictionary *version = [versionsByID[versionID] isKindOfClass:NSDictionary.class] ? versionsByID[versionID] : nil;
+                if (!version) {
+                    continue;
+                }
+                NSDictionary *project = [self modrinthProjectInfoForID:version[@"project_id"]];
+                for (NSDictionary *mod in modrinthModsByVersionID[versionID]) {
+                    NSDictionary *normalized = [self normalizedModrinthVersion:version project:project profileInfo:profileInfo];
+                    NSDictionary *record = [self recordFromNormalizedVersion:normalized localMod:mod];
+                    if (record) {
+                        [records addObject:record];
+                    }
+                }
+            }
+        }
+    }
+
+    if (modrinthHashes.count > 0) {
+        NSDictionary *versionsByHash = [self modrinthVersionsForFileHashes:modrinthHashes];
+        if (![versionsByHash isKindOfClass:NSDictionary.class]) {
+            self.lastError = self.modrinth.lastError ?: [self errorWithDescription:@"Failed to refresh Modrinth mod dependencies."];
+        } else {
+            for (NSString *sha in modrinthModsByHash) {
+                NSDictionary *version = [versionsByHash[sha] isKindOfClass:NSDictionary.class] ? versionsByHash[sha] : nil;
+                if (!version) {
+                    continue;
+                }
+                NSDictionary *project = [self modrinthProjectInfoForID:version[@"project_id"]];
+                for (NSDictionary *mod in modrinthModsByHash[sha]) {
+                    NSDictionary *normalized = [self normalizedModrinthVersion:version project:project profileInfo:profileInfo];
+                    NSDictionary *record = [self recordFromNormalizedVersion:normalized localMod:mod];
+                    if (record) {
+                        [records addObject:record];
+                    }
+                }
+            }
+        }
+    }
+
+    return records;
+}
+
 - (NSDictionary *)projectForDependency:(NSDictionary *)dependency {
     NSString *source = dependency[@"source"];
     id projectID = dependency[@"projectId"];
@@ -466,7 +724,7 @@ static NSString * const kModSourceCurseForge = @"curseforge";
             continue;
         }
         NSString *key = [NSString stringWithFormat:@"%@:%@", source, projectID];
-        if ([type isEqualToString:@"embedded"]) {
+        if ([type isEqualToString:@"embedded"] || [type isEqualToString:@"tool"]) {
             continue;
         }
         if ([type isEqualToString:@"incompatible"]) {

@@ -2,6 +2,9 @@
 #import "ModrinthAPI.h"
 #import "ModpackUtils.h"
 #import "PLProfiles.h"
+#import "utils.h"
+
+static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
 
 @implementation ModrinthAPI
 
@@ -121,6 +124,23 @@
     item[@"versionDetailsLoaded"] = @(YES);
 }
 
+- (void)saveModManagerMetadataRecords:(NSArray<NSDictionary *> *)records toPath:(NSString *)destPath {
+    if (records.count == 0) {
+        return;
+    }
+    NSMutableDictionary *mods = [NSMutableDictionary new];
+    for (NSDictionary *record in records) {
+        NSString *fileName = record[@"fileName"];
+        if ([fileName isKindOfClass:NSString.class] && fileName.length > 0) {
+            mods[fileName] = record;
+        }
+    }
+    NSError *error = saveJSONToFile(@{@"version": @1, @"mods": mods}, [destPath stringByAppendingPathComponent:kModManagerMetadataFileName]);
+    if (error) {
+        NSLog(@"[Modrinth] Failed to save mod manager metadata: %@", error.localizedDescription);
+    }
+}
+
 - (void)downloader:(MinecraftResourceDownloadTask *)downloader submitDownloadTasksFromPackage:(NSString *)packagePath toPath:(NSString *)destPath {
     NSError *error = nil;
     UZKArchive *archive = [[UZKArchive alloc] initWithPath:packagePath error:&error];
@@ -156,6 +176,7 @@
 
     [NSFileManager.defaultManager removeItemAtPath:[destPath stringByAppendingPathComponent:@"mods"] error:nil];
 
+    NSMutableArray *modManagerRecords = [NSMutableArray new];
     for (NSDictionary *indexFile in indexFiles) {
         if (![indexFile isKindOfClass:NSDictionary.class]) {
             [downloader finishDownloadWithErrorString:@"modrinth.index.json contains an invalid file entry."];
@@ -183,6 +204,16 @@
         if (![sha isKindOfClass:NSString.class]) {
             sha = nil;
         }
+        NSString *fileName = relativePath.lastPathComponent;
+        if ([relativePath hasPrefix:@"mods/"] && [fileName.lowercaseString hasSuffix:@".jar"]) {
+            [modManagerRecords addObject:@{
+                @"source": @"modrinth",
+                @"fileName": fileName,
+                @"sha1": sha ?: @"",
+                @"size": [indexFile[@"fileSize"] respondsToSelector:@selector(unsignedLongLongValue)] ? indexFile[@"fileSize"] : @0,
+                @"enabled": @YES
+            }];
+        }
         NSString *path = [destPath stringByAppendingPathComponent:relativePath];
         NSUInteger size = [indexFile[@"fileSize"] respondsToSelector:@selector(unsignedLongLongValue)] ? [indexFile[@"fileSize"] unsignedLongLongValue] : 0;
         NSURLSessionDownloadTask *task = [downloader createDownloadTask:url size:size sha:sha altName:relativePath toPath:path];
@@ -192,7 +223,6 @@
             return; // cancelled
         }
     }
-
     [ModpackUtils archive:archive extractDirectory:@"overrides" toPath:destPath error:&error];
     if (error) {
         [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to extract overrides from modpack package: %@", error.localizedDescription]];
@@ -204,6 +234,7 @@
         [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to extract client-overrides from modpack package: %@", error.localizedDescription]];
         return;
     }
+    [self saveModManagerMetadataRecords:modManagerRecords toPath:destPath];
 
     // Delete package cache
     [NSFileManager.defaultManager removeItemAtPath:packagePath error:nil];
