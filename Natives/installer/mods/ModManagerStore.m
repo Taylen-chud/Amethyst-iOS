@@ -456,7 +456,7 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         NSString *title = [file[@"title"] isKindOfClass:NSString.class] ? file[@"title"] : fileName;
 
         NSMutableDictionary *record = [NSMutableDictionary new];
-        NSArray *recordKeys = @[@"source", @"projectId", @"versionId", @"fileId", @"title", @"versionName", @"summary", @"iconUrl", @"fileName", @"sha1", @"size", @"gameVersion", @"loaders", @"dependencies", @"datePublished"];
+        NSArray *recordKeys = @[@"source", @"projectId", @"versionId", @"fileId", @"title", @"versionName", @"summary", @"iconUrl", @"fileName", @"sha1", @"size", @"gameVersion", @"loaders", @"dependencies", @"datePublished", @"dependencyMetadataCheckedAt"];
         for (NSString *key in recordKeys) {
             id value = file[key];
             if (value && value != NSNull.null) {

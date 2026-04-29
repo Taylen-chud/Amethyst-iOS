@@ -6,6 +6,8 @@
 
 static NSString * const kModSourceModrinth = @"modrinth";
 static NSString * const kModSourceCurseForge = @"curseforge";
+static NSString * const kDependencyMetadataCheckedAtKey = @"dependencyMetadataCheckedAt";
+static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 60.0;
 
 @interface ModManagerAPI ()
 @property(nonatomic) ModrinthAPI *modrinth;
@@ -142,6 +144,38 @@ static NSString * const kModSourceCurseForge = @"curseforge";
     }
     NSDictionary *version = [self.modrinth getEndpoint:[NSString stringWithFormat:@"version/%@", versionID] params:nil];
     return [version isKindOfClass:NSDictionary.class] ? version : nil;
+}
+
+- (NSNumber *)currentTimestamp {
+    return @([[NSDate date] timeIntervalSince1970]);
+}
+
+- (BOOL)modNeedsDependencyMetadataRefresh:(NSDictionary *)mod {
+    if (![mod isKindOfClass:NSDictionary.class] || [mod[@"missing"] boolValue]) {
+        return NO;
+    }
+
+    NSArray *dependencies = [mod[@"dependencies"] isKindOfClass:NSArray.class] ? mod[@"dependencies"] : nil;
+    if (dependencies) {
+        NSNumber *checkedAt = [mod[kDependencyMetadataCheckedAtKey] respondsToSelector:@selector(doubleValue)] ? mod[kDependencyMetadataCheckedAtKey] : nil;
+        if (!checkedAt) {
+            return NO;
+        }
+        return [[NSDate date] timeIntervalSince1970] - checkedAt.doubleValue > kDependencyMetadataRefreshInterval;
+    }
+
+    NSString *source = mod[@"source"];
+    if ([source isEqualToString:kModSourceCurseForge]) {
+        return mod[@"fileId"] && mod[@"projectId"];
+    }
+    if ([source isEqualToString:kModSourceModrinth]) {
+        NSString *versionID = mod[@"versionId"];
+        NSString *sha = mod[@"sha1"];
+        return ([versionID isKindOfClass:NSString.class] && versionID.length > 0) ||
+            ([sha isKindOfClass:NSString.class] && sha.length > 0) ||
+            [mod[@"path"] isKindOfClass:NSString.class];
+    }
+    return NO;
 }
 
 - (NSString *)jsonStringForArray:(NSArray *)array {
@@ -498,6 +532,7 @@ static NSString * const kModSourceCurseForge = @"curseforge";
     if (!record[@"installedAt"] && mod[@"installedAt"]) {
         record[@"installedAt"] = mod[@"installedAt"];
     }
+    record[kDependencyMetadataCheckedAtKey] = [self currentTimestamp];
     return record;
 }
 
@@ -518,7 +553,7 @@ static NSString * const kModSourceCurseForge = @"curseforge";
     NSMutableSet<NSString *> *seenModrinthHashes = [NSMutableSet new];
 
     for (NSDictionary *mod in mods) {
-        if (![mod isKindOfClass:NSDictionary.class] || [mod[@"missing"] boolValue]) {
+        if (![self modNeedsDependencyMetadataRefresh:mod]) {
             continue;
         }
 

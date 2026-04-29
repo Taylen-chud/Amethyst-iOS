@@ -18,6 +18,7 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
 @property(nonatomic) UISearchController *searchController;
 @property(nonatomic) NSArray<NSMutableDictionary *> *mods;
 @property(nonatomic) BOOL checkingUpdates;
+@property(nonatomic) BOOL checkingDependencies;
 @end
 
 @implementation ModManagerViewController
@@ -84,6 +85,12 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
         updateItem.customView = nil;
         updateItem.image = [UIImage systemImageNamed:@"arrow.triangle.2.circlepath"];
     }
+}
+
+- (void)setCheckingDependencies:(BOOL)checkingDependencies {
+    _checkingDependencies = checkingDependencies;
+    self.tableView.userInteractionEnabled = !checkingDependencies;
+    self.navigationItem.prompt = checkingDependencies ? @"Checking dependencies..." : nil;
 }
 
 - (void)actionCheckUpdates {
@@ -253,6 +260,7 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
 
 - (void)refreshProviderMetadataForMod:(NSDictionary *)mod completion:(void (^)(NSDictionary *currentMod))completion {
     NSArray *installedMods = [self.store installedMods];
+    self.checkingDependencies = YES;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSArray *records = [self.api refreshedMetadataForInstalledMods:installedMods profileInfo:self.store.profileInfo];
         NSError *error = self.api.lastError;
@@ -263,6 +271,7 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
             }
         }
         dispatch_async(dispatch_get_main_queue(), ^{
+            self.checkingDependencies = NO;
             if (error) {
                 [self presentError:error];
                 if (completion) {

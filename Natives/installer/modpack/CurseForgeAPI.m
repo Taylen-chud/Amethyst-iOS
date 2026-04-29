@@ -135,6 +135,7 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         @"size": size,
         @"gameVersion": [self minecraftVersionForFile:file],
         @"dependencies": [self normalizedCurseForgeDependencies:([file[@"dependencies"] isKindOfClass:NSArray.class] ? file[@"dependencies"] : @[])],
+        @"dependencyMetadataCheckedAt": @([[NSDate date] timeIntervalSince1970]),
         @"enabled": @YES
     };
 }
