@@ -4,6 +4,7 @@
 #import "ModInstallConfirmViewController.h"
 #import "ModSearchViewController.h"
 #import "UIKit+AFNetworking.h"
+#import "ios_uikit_bridge.h"
 #import "utils.h"
 
 typedef NS_ENUM(NSUInteger, ModManagerSection) {

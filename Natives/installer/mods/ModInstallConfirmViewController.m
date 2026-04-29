@@ -1,6 +1,7 @@
 #import "ModInstallConfirmViewController.h"
 #import "ModManagerAPI.h"
 #import "ModManagerStore.h"
+#import "ios_uikit_bridge.h"
 #import "utils.h"
 
 typedef NS_ENUM(NSUInteger, ModInstallConfirmSection) {
