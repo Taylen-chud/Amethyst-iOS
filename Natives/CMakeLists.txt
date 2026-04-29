@@ -130,6 +130,7 @@ add_executable(AngelAuraAmethyst
   installer/modpack/ModpackUtils.m
   installer/modpack/ModpackAPI.m
   installer/modpack/CurseForgeAPI.m
+  installer/modpack/CurseForgeManualDownloadViewController.m
   installer/modpack/ModrinthAPI.m
 
   input/ControllerInput.m

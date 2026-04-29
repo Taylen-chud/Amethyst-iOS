@@ -106,6 +106,51 @@
     return [url isKindOfClass:NSString.class] && url.length > 0 ? url : nil;
 }
 
+- (NSDictionary *)projectInfoForProjectID:(NSNumber *)projectID cache:(NSMutableDictionary *)cache {
+    if (![projectID isKindOfClass:NSNumber.class]) {
+        return nil;
+    }
+
+    id cached = cache[projectID];
+    if (cached == NSNull.null) {
+        return nil;
+    }
+    if ([cached isKindOfClass:NSDictionary.class]) {
+        return cached;
+    }
+
+    NSDictionary *response = [self getEndpoint:[NSString stringWithFormat:@"mods/%@", projectID] params:nil];
+    NSDictionary *project = [response[@"data"] isKindOfClass:NSDictionary.class] ? response[@"data"] : nil;
+    cache[projectID] = project ?: (id)NSNull.null;
+    return project;
+}
+
+- (NSString *)manualDownloadPageURLForFile:(NSDictionary *)file projectID:(NSNumber *)projectID cache:(NSMutableDictionary *)cache {
+    NSNumber *fileID = [file[@"id"] isKindOfClass:NSNumber.class] ? file[@"id"] : nil;
+    if (!fileID) {
+        return nil;
+    }
+
+    NSDictionary *project = [self projectInfoForProjectID:projectID cache:cache];
+    NSDictionary *links = [project[@"links"] isKindOfClass:NSDictionary.class] ? project[@"links"] : nil;
+    NSString *websiteURL = links[@"websiteUrl"];
+    if ([websiteURL isKindOfClass:NSString.class] && websiteURL.length > 0) {
+        while ([websiteURL hasSuffix:@"/"]) {
+            websiteURL = [websiteURL substringToIndex:websiteURL.length - 1];
+        }
+        return [websiteURL stringByAppendingFormat:@"/download/%@", fileID];
+    }
+
+    NSString *slug = project[@"slug"];
+    if ([slug isKindOfClass:NSString.class] && slug.length > 0) {
+        NSInteger classID = [project[@"classId"] respondsToSelector:@selector(integerValue)] ? [project[@"classId"] integerValue] : kCurseForgeClassIDMod;
+        NSString *section = classID == kCurseForgeClassIDModpack ? @"modpacks" : @"mc-mods";
+        return [NSString stringWithFormat:@"https://www.curseforge.com/minecraft/%@/%@/download/%@", section, slug, fileID];
+    }
+
+    return [NSString stringWithFormat:@"https://www.curseforge.com/projects/%@/files/%@", projectID, fileID];
+}
+
 - (NSArray *)fileMetadataForFileIDs:(NSArray<NSNumber *> *)fileIDs {
     if (fileIDs.count == 0) {
         return @[];
@@ -424,22 +469,20 @@
 
     [NSFileManager.defaultManager removeItemAtPath:[destPath stringByAppendingPathComponent:@"mods"] error:nil];
 
+    NSMutableArray *manualDownloads = [NSMutableArray new];
+    NSMutableDictionary *projectCache = [NSMutableDictionary new];
     for (NSDictionary *manifestFile in requiredManifestFiles) {
         NSNumber *fileID = manifestFile[@"fileID"];
+        NSNumber *projectID = manifestFile[@"projectID"];
         NSDictionary *file = filesByID[fileID];
         if (!file) {
             [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"CurseForge file %@ was not returned by the API.", fileID]];
             return;
         }
 
-        NSString *url = [self downloadURLForFile:file projectID:manifestFile[@"projectID"]];
         NSString *fileName = file[@"fileName"];
         if (![fileName isKindOfClass:NSString.class]) {
             fileName = nil;
-        }
-        if (url.length == 0) {
-            [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"CurseForge did not provide a download URL for %@. The project may disable third-party distribution.", fileName ?: fileID.stringValue]];
-            return;
         }
         if (fileName.length == 0) {
             fileName = [NSString stringWithFormat:@"%@.jar", fileID];
@@ -455,9 +498,25 @@
         if (size == 0) {
             size = [file[@"fileSizeOnDisk"] respondsToSelector:@selector(unsignedLongLongValue)] ? [file[@"fileSizeOnDisk"] unsignedLongLongValue] : 0;
         }
+        NSString *sha = [self sha1HashForFile:file];
+        NSString *url = [self downloadURLForFile:file projectID:projectID];
+        if (url.length == 0) {
+            NSString *manualURL = [self manualDownloadPageURLForFile:file projectID:projectID cache:projectCache];
+            NSString *title = [file[@"displayName"] isKindOfClass:NSString.class] ? file[@"displayName"] : fileName;
+            [manualDownloads addObject:@{
+                @"title": title ?: fileName,
+                @"fileName": fileName,
+                @"url": manualURL ?: @"https://www.curseforge.com",
+                @"destinationPath": path,
+                @"sha": sha ?: @""
+            }];
+            NSLog(@"[CurseForge] Queued manual download for %@", fileName);
+            continue;
+        }
+
         NSURLSessionDownloadTask *task = [downloader createDownloadTask:url
             size:size
-            sha:[self sha1HashForFile:file]
+            sha:sha
             altName:relativePath
             toPath:path];
         if (task) {
@@ -466,6 +525,7 @@
             return;
         }
     }
+    downloader.postInstallManualDownloads = manualDownloads.copy;
 
     NSMutableOrderedSet<NSString *> *overrideDirs = [NSMutableOrderedSet orderedSet];
     NSString *manifestOverrides = manifest[@"overrides"];

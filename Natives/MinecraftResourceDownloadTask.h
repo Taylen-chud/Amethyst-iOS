@@ -8,6 +8,7 @@
 @property NSMutableDictionary* metadata;
 @property NSString *postInstallInstallerPath;
 @property BOOL postInstallHitEnter;
+@property NSArray<NSDictionary *> *postInstallManualDownloads;
 @property(nonatomic, copy) void(^handleError)(void);
 
 - (NSURLSessionDownloadTask *)createDownloadTask:(NSString *)url size:(NSUInteger)size sha:(NSString *)sha altName:(NSString *)altName toPath:(NSString *)path;

@@ -3,6 +3,7 @@
 #import "AFNetworking.h"
 #import "ALTServerConnection.h"
 #import "CustomControlsViewController.h"
+#import "installer/modpack/CurseForgeManualDownloadViewController.h"
 #import "DownloadProgressViewController.h"
 #import "JavaGUIViewController.h"
 #import "LauncherMenuViewController.h"
@@ -387,13 +388,30 @@ static void *ProgressObserverContext = &ProgressObserverContext;
             [self invokeAfterJITEnabled:^{
                 UIKit_launchMinecraftSurfaceVC(self.view.window, metadata);
             }];
-        } else if (self.task.postInstallInstallerPath) {
+        } else {
+            NSArray *manualDownloads = self.task.postInstallManualDownloads;
             NSString *installerPath = self.task.postInstallInstallerPath;
             BOOL hitEnter = self.task.postInstallHitEnter;
-            [self reloadProfileList];
-            [self enterModInstallerWithPath:installerPath hitEnterAfterWindowShown:hitEnter];
-        } else {
-            [self reloadProfileList];
+            void (^finishInstall)(void) = ^{
+                [self reloadProfileList];
+                if (installerPath) {
+                    [self enterModInstallerWithPath:installerPath hitEnterAfterWindowShown:hitEnter];
+                }
+                self.task = nil;
+                [self setInteractionEnabled:YES forDownloading:YES];
+            };
+
+            if (manualDownloads.count > 0) {
+                CurseForgeManualDownloadViewController *vc = [[CurseForgeManualDownloadViewController alloc]
+                    initWithDownloads:manualDownloads
+                    completion:finishInstall];
+                UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
+                [self presentViewController:nav animated:YES completion:nil];
+                return;
+            }
+
+            finishInstall();
+            return;
         }
         self.task = nil;
         [self setInteractionEnabled:YES forDownloading:YES];
