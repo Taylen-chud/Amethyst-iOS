@@ -189,7 +189,7 @@
         versionStr = getPrefObject(@"internal.latest_version.snapshot");
     }
 
-    NSString *path = [NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), versionStr];
+    __block NSString *path = [NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), versionStr];
     // Find it again to resolve latest-*
     version = (id)[MinecraftResourceUtils findVersion:versionStr inList:remoteVersionList];
     __block NSMutableDictionary *localInheritedVersion = nil;

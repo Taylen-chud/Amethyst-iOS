@@ -119,8 +119,9 @@
     } else {
         client[@"downloads"][@"artifact"] = json[@"downloads"][@"client"];
     }
-    client[@"downloads"][@"artifact"][@"path"] = [NSString stringWithFormat:@"../versions/%1$@/%1$@.jar", json[@"id"]];
-    client[@"name"] = [NSString stringWithFormat:@"%@.jar", json[@"id"]];
+    NSString *clientVersionID = [json[@"inheritsFrom"] isKindOfClass:NSString.class] ? json[@"inheritsFrom"] : json[@"id"];
+    client[@"downloads"][@"artifact"][@"path"] = [NSString stringWithFormat:@"../versions/%1$@/%1$@.jar", clientVersionID];
+    client[@"name"] = [NSString stringWithFormat:@"%@.jar", clientVersionID];
     [json[@"libraries"] addObject:client];
 
     // Parse Forge 1.17+ additional JVM Arguments
