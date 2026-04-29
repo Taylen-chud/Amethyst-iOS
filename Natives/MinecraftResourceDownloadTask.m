@@ -18,6 +18,25 @@
 
 @implementation MinecraftResourceDownloadTask
 
+- (void)markProgressComplete:(NSProgress *)progress {
+    if (!progress) {
+        return;
+    }
+
+    int64_t completed = progress.completedUnitCount;
+    int64_t total = progress.totalUnitCount;
+    if (completed <= 0 && total <= 0) {
+        completed = 1;
+        total = 1;
+    } else if (total <= 0 || completed > total) {
+        total = completed;
+    } else if (completed < total) {
+        completed = total;
+    }
+    progress.totalUnitCount = total;
+    progress.completedUnitCount = completed;
+}
+
 - (instancetype)init {
     self = [super init];
     // TODO: implement background download
@@ -69,7 +88,7 @@
             if (!progress) {
                 progress = [self.manager downloadProgressForTask:task];
             }
-            progress.totalUnitCount = progress.completedUnitCount;
+            [self markProgressComplete:progress];
             if (success) success();
         }
     }];

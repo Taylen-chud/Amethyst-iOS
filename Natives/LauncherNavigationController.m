@@ -358,46 +358,72 @@ static void *ProgressObserverContext = &ProgressObserverContext;
         return;
     }
 
+    MinecraftResourceDownloadTask *task = self.task;
+    if (!task || !task.progress || !task.textProgress) {
+        return;
+    }
+
     // Calculate download speed and ETA
     static CGFloat lastMsTime;
-    static NSUInteger lastSecTime, lastCompletedUnitCount;
-    NSProgress *progress = self.task.textProgress;
+    static NSInteger lastSecTime;
+    static int64_t lastCompletedUnitCount;
+    NSProgress *downloadProgress = task.progress;
+    NSProgress *progress = task.textProgress;
     struct timeval tv;
     gettimeofday(&tv, NULL); 
-    NSInteger completedUnitCount = self.task.progress.totalUnitCount * self.task.progress.fractionCompleted;
+    int64_t completedUnitCount = downloadProgress.totalUnitCount * downloadProgress.fractionCompleted;
+    if (downloadProgress.finished && progress.totalUnitCount > 0) {
+        completedUnitCount = progress.totalUnitCount;
+    } else if (progress.totalUnitCount > 0) {
+        completedUnitCount = MAX(0, MIN(completedUnitCount, progress.totalUnitCount));
+    }
     progress.completedUnitCount = completedUnitCount;
     if (lastSecTime < tv.tv_sec) {
         CGFloat currentTime = tv.tv_sec + tv.tv_usec / 1000000.0;
-        NSInteger throughput = (completedUnitCount - lastCompletedUnitCount) / (currentTime - lastMsTime);
+        CGFloat elapsedTime = currentTime - lastMsTime;
+        int64_t completedDelta = completedUnitCount - lastCompletedUnitCount;
+        NSInteger throughput = (elapsedTime > 0 && completedDelta > 0) ? completedDelta / elapsedTime : 0;
         progress.throughput = @(throughput);
-        progress.estimatedTimeRemaining = @((progress.totalUnitCount - completedUnitCount) / throughput);
+        if (throughput > 0 && progress.totalUnitCount > completedUnitCount) {
+            progress.estimatedTimeRemaining = @((progress.totalUnitCount - completedUnitCount) / throughput);
+        } else {
+            progress.estimatedTimeRemaining = nil;
+        }
         lastCompletedUnitCount = completedUnitCount;
         lastSecTime = tv.tv_sec;
         lastMsTime = currentTime;
     }
 
+    BOOL finished = downloadProgress.finished || progress.finished;
+    if (finished && progress.totalUnitCount > 0) {
+        progress.completedUnitCount = progress.totalUnitCount;
+    }
+
     dispatch_async(dispatch_get_main_queue(), ^{
         self.progressText.text = progress.localizedAdditionalDescription;
 
-        if (!progress.finished) return;
+        if (!finished || self.task != task) return;
+        @try {
+            [downloadProgress removeObserver:self forKeyPath:@"fractionCompleted" context:ProgressObserverContext];
+        } @catch(id exception) {}
         [self.progressVC dismissModalViewControllerAnimated:NO];
 
         self.progressViewMain.observedProgress = nil;
-        if (self.task.metadata) {
-            __block NSDictionary *metadata = self.task.metadata;
+        self.task = nil;
+        if (task.metadata) {
+            __block NSDictionary *metadata = task.metadata;
             [self invokeAfterJITEnabled:^{
                 UIKit_launchMinecraftSurfaceVC(self.view.window, metadata);
             }];
         } else {
-            NSArray *manualDownloads = self.task.postInstallManualDownloads;
-            NSString *installerPath = self.task.postInstallInstallerPath;
-            BOOL hitEnter = self.task.postInstallHitEnter;
+            NSArray *manualDownloads = task.postInstallManualDownloads;
+            NSString *installerPath = task.postInstallInstallerPath;
+            BOOL hitEnter = task.postInstallHitEnter;
             void (^finishInstall)(void) = ^{
                 [self reloadProfileList];
                 if (installerPath) {
                     [self enterModInstallerWithPath:installerPath hitEnterAfterWindowShown:hitEnter];
                 }
-                self.task = nil;
                 [self setInteractionEnabled:YES forDownloading:YES];
             };
 
@@ -413,7 +439,6 @@ static void *ProgressObserverContext = &ProgressObserverContext;
             finishInstall();
             return;
         }
-        self.task = nil;
         [self setInteractionEnabled:YES forDownloading:YES];
     });
 }
