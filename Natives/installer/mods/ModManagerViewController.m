@@ -176,6 +176,108 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
     showDialog(localize(@"Error", nil), error.localizedDescription ?: @"The mod operation failed.");
 }
 
+- (NSString *)displayTitleForMod:(NSDictionary *)mod {
+    NSString *title = mod[@"title"];
+    if ([title isKindOfClass:NSString.class] && title.length > 0) {
+        return title;
+    }
+    title = mod[@"fileName"];
+    return [title isKindOfClass:NSString.class] && title.length > 0 ? title : @"Mod";
+}
+
+- (NSArray<NSDictionary *> *)operationModsForMod:(NSDictionary *)mod dependents:(NSArray<NSDictionary *> *)dependents {
+    NSMutableArray *mods = [NSMutableArray arrayWithObject:mod];
+    [mods addObjectsFromArray:dependents ?: @[]];
+    return mods;
+}
+
+- (NSString *)dependentMessageForMod:(NSDictionary *)mod dependents:(NSArray<NSDictionary *> *)dependents action:(NSString *)action {
+    NSMutableArray<NSString *> *names = [NSMutableArray new];
+    NSUInteger limit = MIN(dependents.count, 8);
+    for (NSUInteger i = 0; i < limit; i++) {
+        [names addObject:[NSString stringWithFormat:@"- %@", [self displayTitleForMod:dependents[i]]]];
+    }
+    if (dependents.count > limit) {
+        [names addObject:[NSString stringWithFormat:@"- %lu more", (unsigned long)(dependents.count - limit)]];
+    }
+    return [NSString stringWithFormat:@"These mods depend on %@ and will also be %@:\n\n%@",
+        [self displayTitleForMod:mod],
+        action,
+        [names componentsJoinedByString:@"\n"]];
+}
+
+- (void)disableMods:(NSArray<NSDictionary *> *)mods completion:(void (^)(BOOL success))completion {
+    NSError *error = nil;
+    BOOL ok = YES;
+    for (NSDictionary *mod in mods) {
+        if (![self.store disableMod:mod error:&error]) {
+            ok = NO;
+            break;
+        }
+    }
+    if (!ok) {
+        [self presentError:error];
+    }
+    [self reloadMods];
+    if (completion) completion(ok);
+}
+
+- (void)removeMods:(NSArray<NSDictionary *> *)mods completion:(void (^)(BOOL success))completion {
+    NSError *error = nil;
+    BOOL ok = YES;
+    for (NSDictionary *mod in mods) {
+        if (![self.store removeMod:mod error:&error]) {
+            ok = NO;
+            break;
+        }
+    }
+    if (!ok) {
+        [self presentError:error];
+    }
+    [self reloadMods];
+    if (completion) completion(ok);
+}
+
+- (void)disableModWithDependents:(NSDictionary *)mod completion:(void (^)(BOOL success))completion {
+    NSArray *dependents = [self.store dependentModsForMod:mod includeDisabled:NO];
+    NSArray *mods = [self operationModsForMod:mod dependents:dependents];
+    if (dependents.count == 0) {
+        [self disableMods:mods completion:completion];
+        return;
+    }
+
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Disable Dependent Mods?"
+        message:[self dependentMessageForMod:mod dependents:dependents action:@"disabled"]
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:localize(@"Cancel", nil) style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+        if (completion) completion(NO);
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Disable All" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+        [self disableMods:mods completion:completion];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)removeModWithDependents:(NSDictionary *)mod completion:(void (^)(BOOL success))completion {
+    NSArray *dependents = [self.store dependentModsForMod:mod includeDisabled:YES];
+    NSArray *mods = [self operationModsForMod:mod dependents:dependents];
+    if (dependents.count == 0) {
+        [self removeMods:mods completion:completion];
+        return;
+    }
+
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Remove Dependent Mods?"
+        message:[self dependentMessageForMod:mod dependents:dependents action:@"removed"]
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:localize(@"Cancel", nil) style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+        if (completion) completion(NO);
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Remove All" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+        [self removeMods:mods completion:completion];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
 - (void)installUpdateForMod:(NSDictionary *)mod {
     NSDictionary *update = mod[@"availableUpdate"];
     if (!update) {
@@ -225,19 +327,19 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
     BOOL missing = [mod[@"missing"] boolValue];
     if (!missing) {
         [sheet addAction:[UIAlertAction actionWithTitle:(enabled ? @"Disable" : @"Enable") style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-            NSError *error = nil;
-            BOOL ok = enabled ? [self.store disableMod:mod error:&error] : [self.store enableMod:mod error:&error];
-            if (!ok) {
-                [self presentError:error];
+            if (enabled) {
+                [self disableModWithDependents:mod completion:nil];
+            } else {
+                NSError *error = nil;
+                BOOL ok = [self.store enableMod:mod error:&error];
+                if (!ok) {
+                    [self presentError:error];
+                }
+                [self reloadMods];
             }
-            [self reloadMods];
         }]];
         [sheet addAction:[UIAlertAction actionWithTitle:@"Remove" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
-            NSError *error = nil;
-            if (![self.store removeMod:mod error:&error]) {
-                [self presentError:error];
-            }
-            [self reloadMods];
+            [self removeModWithDependents:mod completion:nil];
         }]];
     }
 
@@ -258,24 +360,22 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
     }
     BOOL enabled = [mod[@"enabled"] boolValue];
     UIContextualAction *toggle = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:(enabled ? @"Disable" : @"Enable") handler:^(UIContextualAction *action, UIView *sourceView, void (^completionHandler)(BOOL)) {
-        NSError *error = nil;
-        BOOL ok = enabled ? [self.store disableMod:mod error:&error] : [self.store enableMod:mod error:&error];
-        if (!ok) {
-            [self presentError:error];
+        if (enabled) {
+            [self disableModWithDependents:mod completion:completionHandler];
+        } else {
+            NSError *error = nil;
+            BOOL ok = [self.store enableMod:mod error:&error];
+            if (!ok) {
+                [self presentError:error];
+            }
+            [self reloadMods];
+            completionHandler(ok);
         }
-        [self reloadMods];
-        completionHandler(ok);
     }];
     toggle.backgroundColor = UIColor.systemBlueColor;
 
     UIContextualAction *remove = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Remove" handler:^(UIContextualAction *action, UIView *sourceView, void (^completionHandler)(BOOL)) {
-        NSError *error = nil;
-        BOOL ok = [self.store removeMod:mod error:&error];
-        if (!ok) {
-            [self presentError:error];
-        }
-        [self reloadMods];
-        completionHandler(ok);
+        [self removeModWithDependents:mod completion:completionHandler];
     }];
     return [UISwipeActionsConfiguration configurationWithActions:@[remove, toggle]];
 }

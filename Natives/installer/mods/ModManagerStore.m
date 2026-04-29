@@ -225,6 +225,100 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     return result;
 }
 
+- (BOOL)dependency:(NSDictionary *)dependency matchesMod:(NSDictionary *)mod {
+    NSString *dependencySource = dependency[@"source"];
+    NSString *modSource = mod[@"source"];
+    if (![dependencySource isKindOfClass:NSString.class] ||
+        ![modSource isKindOfClass:NSString.class] ||
+        ![dependencySource isEqualToString:modSource]) {
+        return NO;
+    }
+
+    id dependencyProjectId = dependency[@"projectId"];
+    id modProjectId = mod[@"projectId"];
+    if (dependencyProjectId && modProjectId &&
+        [[[dependencyProjectId description] lowercaseString] isEqualToString:[[modProjectId description] lowercaseString]]) {
+        return YES;
+    }
+
+    id dependencyVersionId = dependency[@"versionId"];
+    id modVersionId = mod[@"versionId"];
+    if (dependencyVersionId && modVersionId &&
+        [[[dependencyVersionId description] lowercaseString] isEqualToString:[[modVersionId description] lowercaseString]]) {
+        return YES;
+    }
+    return NO;
+}
+
+- (BOOL)mod:(NSDictionary *)candidate dependsOnAnyModInArray:(NSArray<NSDictionary *> *)mods {
+    NSArray *dependencies = [candidate[@"dependencies"] isKindOfClass:NSArray.class] ? candidate[@"dependencies"] : @[];
+    for (NSDictionary *dependency in dependencies) {
+        if (![dependency isKindOfClass:NSDictionary.class]) {
+            continue;
+        }
+        NSString *type = dependency[@"type"];
+        if ([type isKindOfClass:NSString.class] &&
+            ![type isEqualToString:@"required"] &&
+            ![type isEqualToString:@"dependency"]) {
+            continue;
+        }
+        for (NSDictionary *mod in mods) {
+            if ([self dependency:dependency matchesMod:mod]) {
+                return YES;
+            }
+        }
+    }
+    return NO;
+}
+
+- (NSString *)identityForInstalledMod:(NSDictionary *)mod {
+    NSString *fileName = mod[@"fileName"];
+    if ([fileName isKindOfClass:NSString.class] && fileName.length > 0) {
+        return [@"file:" stringByAppendingString:fileName.lowercaseString];
+    }
+    NSString *source = mod[@"source"];
+    id projectId = mod[@"projectId"];
+    if ([source isKindOfClass:NSString.class] && projectId) {
+        return [NSString stringWithFormat:@"%@:%@", source, [[projectId description] lowercaseString]];
+    }
+    return [NSString stringWithFormat:@"object:%p", mod];
+}
+
+- (NSArray<NSDictionary *> *)dependentModsForMod:(NSDictionary *)mod includeDisabled:(BOOL)includeDisabled {
+    if (![mod isKindOfClass:NSDictionary.class]) {
+        return @[];
+    }
+
+    NSMutableArray<NSDictionary *> *affected = [NSMutableArray arrayWithObject:mod];
+    NSMutableArray<NSDictionary *> *dependents = [NSMutableArray new];
+    NSMutableSet<NSString *> *seen = [NSMutableSet setWithObject:[self identityForInstalledMod:mod]];
+    BOOL added = YES;
+
+    while (added) {
+        added = NO;
+        for (NSDictionary *candidate in [self installedMods]) {
+            if ([candidate[@"missing"] boolValue]) {
+                continue;
+            }
+            if (!includeDisabled && ![candidate[@"enabled"] boolValue]) {
+                continue;
+            }
+            NSString *identity = [self identityForInstalledMod:candidate];
+            if ([seen containsObject:identity]) {
+                continue;
+            }
+            if ([self mod:candidate dependsOnAnyModInArray:affected]) {
+                [seen addObject:identity];
+                [affected addObject:candidate];
+                [dependents addObject:candidate];
+                added = YES;
+            }
+        }
+    }
+
+    return dependents;
+}
+
 - (BOOL)moveMod:(NSDictionary *)mod toEnabled:(BOOL)enabled error:(NSError **)error {
     NSString *actualFileName = mod[@"actualFileName"];
     NSString *fileName = mod[@"fileName"];
@@ -362,7 +456,7 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         NSString *title = [file[@"title"] isKindOfClass:NSString.class] ? file[@"title"] : fileName;
 
         NSMutableDictionary *record = [NSMutableDictionary new];
-        NSArray *recordKeys = @[@"source", @"projectId", @"versionId", @"fileId", @"title", @"summary", @"iconUrl", @"fileName", @"sha1", @"size", @"gameVersion", @"loaders", @"datePublished"];
+        NSArray *recordKeys = @[@"source", @"projectId", @"versionId", @"fileId", @"title", @"versionName", @"summary", @"iconUrl", @"fileName", @"sha1", @"size", @"gameVersion", @"loaders", @"dependencies", @"datePublished"];
         for (NSString *key in recordKeys) {
             id value = file[key];
             if (value && value != NSNull.null) {

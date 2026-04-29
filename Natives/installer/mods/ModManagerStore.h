@@ -18,6 +18,7 @@
 - (NSArray<NSMutableDictionary *> *)installedMods;
 - (NSArray<NSMutableDictionary *> *)installedModsMatchingQuery:(NSString *)query;
 - (BOOL)containsInstalledProjectWithSource:(NSString *)source projectId:(id)projectId;
+- (NSArray<NSDictionary *> *)dependentModsForMod:(NSDictionary *)mod includeDisabled:(BOOL)includeDisabled;
 
 - (BOOL)enableMod:(NSDictionary *)mod error:(NSError **)error;
 - (BOOL)disableMod:(NSDictionary *)mod error:(NSError **)error;
