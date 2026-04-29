@@ -1,5 +1,6 @@
 #import "LauncherPreferences.h"
 #import "ModManagerStore.h"
+#import "PLProfiles.h"
 #import "utils.h"
 
 static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
@@ -19,7 +20,7 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     self = [super init];
     self.profileName = profileName;
     self.profile = profile;
-    NSString *gameDir = [self resolvedProfileValue:@"gameDir"];
+    NSString *gameDir = [self modManagerGameDir];
     self.profileGameDir = [[NSString stringWithFormat:@"%s/instances/%@/%@",
         getenv("POJAV_HOME"),
         getPrefObject(@"general.game_directory"),
@@ -29,6 +30,34 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     self.metadataPath = [self.profileGameDir stringByAppendingPathComponent:kModManagerMetadataFileName];
     self.profileInfo = [self resolvedProfileInfoForVersionId:[self resolvedProfileValue:@"lastVersionId"]];
     return self;
+}
+
+- (NSString *)safeProfileDirectoryName {
+    NSString *name = self.profileName.length > 0 ? self.profileName : self.profile[@"name"];
+    if (![name isKindOfClass:NSString.class] || name.length == 0) {
+        name = self.profile[@"lastVersionId"] ?: @"profile";
+    }
+
+    NSMutableCharacterSet *unsafeCharacters = NSCharacterSet.alphanumericCharacterSet.invertedSet.mutableCopy;
+    [unsafeCharacters removeCharactersInString:@"-_"];
+    NSArray<NSString *> *parts = [name.lowercaseString componentsSeparatedByCharactersInSet:unsafeCharacters];
+    NSString *safeName = [[parts filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"length > 0"]] componentsJoinedByString:@"_"];
+    if (safeName.length == 0) {
+        safeName = @"profile";
+    }
+    return safeName;
+}
+
+- (NSString *)modManagerGameDir {
+    NSString *value = self.profile[@"gameDir"];
+    if ([value isKindOfClass:NSString.class] && value.length > 0 && ![value isEqualToString:@"."]) {
+        return value;
+    }
+
+    NSString *profileGameDir = [NSString stringWithFormat:@"./profile_gamedirs/%@", [self safeProfileDirectoryName]];
+    self.profile[@"gameDir"] = profileGameDir;
+    [PLProfiles.current save];
+    return profileGameDir;
 }
 
 - (NSString *)resolvedProfileValue:(NSString *)key {
