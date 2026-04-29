@@ -421,7 +421,8 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
     BOOL enabled = [mod[@"enabled"] boolValue];
     UIContextualAction *toggle = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:(enabled ? @"Disable" : @"Enable") handler:^(UIContextualAction *action, UIView *sourceView, void (^completionHandler)(BOOL)) {
         if (enabled) {
-            [self disableModWithDependents:mod completion:completionHandler];
+            completionHandler(YES);
+            [self disableModWithDependents:mod completion:nil];
         } else {
             NSError *error = nil;
             BOOL ok = [self.store enableMod:mod error:&error];
@@ -435,7 +436,8 @@ typedef NS_ENUM(NSUInteger, ModManagerSection) {
     toggle.backgroundColor = UIColor.systemBlueColor;
 
     UIContextualAction *remove = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Remove" handler:^(UIContextualAction *action, UIView *sourceView, void (^completionHandler)(BOOL)) {
-        [self removeModWithDependents:mod completion:completionHandler];
+        completionHandler(YES);
+        [self removeModWithDependents:mod completion:nil];
     }];
     return [UISwipeActionsConfiguration configurationWithActions:@[remove, toggle]];
 }
