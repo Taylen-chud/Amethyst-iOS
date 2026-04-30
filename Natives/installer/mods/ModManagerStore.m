@@ -151,6 +151,67 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     return [lower hasSuffix:@".jar"];
 }
 
+- (NSString *)normalizedProviderSource:(id)value {
+    if (![value isKindOfClass:NSString.class]) {
+        return nil;
+    }
+    NSString *source = [[value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] lowercaseString];
+    if ([source isEqualToString:@"modrinth"] ||
+        [source isEqualToString:@"curseforge"] ||
+        [source isEqualToString:@"manual"]) {
+        return source;
+    }
+    return nil;
+}
+
+- (NSString *)providerSourceForURLString:(id)value {
+    if (![value isKindOfClass:NSString.class] || [value length] == 0) {
+        return nil;
+    }
+    NSURL *url = [NSURL URLWithString:value];
+    NSString *host = url.host.lowercaseString ?: @"";
+    NSString *urlString = [value lowercaseString];
+    if ([host containsString:@"modrinth.com"] || [urlString containsString:@"modrinth.com/"]) {
+        return @"modrinth";
+    }
+    if ([host containsString:@"curseforge.com"] ||
+        [host containsString:@"forgecdn.net"] ||
+        [host containsString:@"cursecdn.com"] ||
+        [urlString containsString:@"curseforge.com/"] ||
+        [urlString containsString:@"forgecdn.net/"] ||
+        [urlString containsString:@"cursecdn.com/"]) {
+        return @"curseforge";
+    }
+    return nil;
+}
+
+- (NSString *)inferredProviderSourceForRecord:(NSDictionary *)record {
+    NSString *source = [self normalizedProviderSource:record[@"source"]];
+    NSString *downloadSource = [self providerSourceForURLString:record[@"downloadUrl"]];
+    NSString *manualSource = [self providerSourceForURLString:record[@"manualUrl"]];
+    NSString *urlSource = downloadSource ?: manualSource;
+    if (urlSource && (!source || [source isEqualToString:@"manual"] || ![urlSource isEqualToString:source])) {
+        return urlSource;
+    }
+    if (source) {
+        return source;
+    }
+
+    NSString *iconSource = [self providerSourceForURLString:record[@"iconUrl"]];
+    if (iconSource) {
+        return iconSource;
+    }
+
+    if (record[@"fileId"] || [record[@"projectId"] isKindOfClass:NSNumber.class]) {
+        return @"curseforge";
+    }
+    if ([record[@"versionId"] isKindOfClass:NSString.class] ||
+        [record[@"projectId"] isKindOfClass:NSString.class]) {
+        return @"modrinth";
+    }
+    return @"manual";
+}
+
 - (NSArray<NSString *> *)modFileNames {
     NSArray *contents = [NSFileManager.defaultManager contentsOfDirectoryAtPath:self.modsDir error:nil] ?: @[];
     NSMutableArray *files = [NSMutableArray new];
@@ -177,9 +238,7 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         if (mod[@"title"] == nil) {
             mod[@"title"] = fileName.stringByDeletingPathExtension;
         }
-        if (mod[@"source"] == nil) {
-            mod[@"source"] = @"manual";
-        }
+        mod[@"source"] = [self inferredProviderSourceForRecord:mod];
         mod[@"fileName"] = fileName;
         mod[@"actualFileName"] = actualFileName;
         mod[@"path"] = [self.modsDir stringByAppendingPathComponent:actualFileName];
@@ -438,7 +497,7 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         }
 
         NSString *destination = [self.modsDir stringByAppendingPathComponent:fileName];
-        NSString *source = file[@"source"] ?: @"manual";
+        NSString *source = [self inferredProviderSourceForRecord:file];
         id projectId = file[@"projectId"];
         NSString *existingFileName = [self existingFileNameForSource:source projectId:projectId];
         if (existingFileName.length > 0 && ![existingFileName isEqualToString:fileName]) {
@@ -463,6 +522,7 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
                 record[key] = value;
             }
         }
+        record[@"source"] = source;
         record[@"installedAt"] = installedAt;
         record[@"enabled"] = @YES;
         [records addObject:record];

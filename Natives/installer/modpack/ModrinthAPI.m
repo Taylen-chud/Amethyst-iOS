@@ -141,6 +141,29 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     }
 }
 
+- (NSString *)modManagerSourceForDownloadURLs:(NSArray *)downloads {
+    for (NSString *download in downloads) {
+        if (![download isKindOfClass:NSString.class] || download.length == 0) {
+            continue;
+        }
+        NSURL *url = [NSURL URLWithString:download];
+        NSString *host = url.host.lowercaseString ?: @"";
+        NSString *urlString = download.lowercaseString;
+        if ([host containsString:@"modrinth.com"] || [urlString containsString:@"modrinth.com/"]) {
+            return @"modrinth";
+        }
+        if ([host containsString:@"curseforge.com"] ||
+            [host containsString:@"forgecdn.net"] ||
+            [host containsString:@"cursecdn.com"] ||
+            [urlString containsString:@"curseforge.com/"] ||
+            [urlString containsString:@"forgecdn.net/"] ||
+            [urlString containsString:@"cursecdn.com/"]) {
+            return @"curseforge";
+        }
+    }
+    return @"manual";
+}
+
 - (void)downloader:(MinecraftResourceDownloadTask *)downloader submitDownloadTasksFromPackage:(NSString *)packagePath toPath:(NSString *)destPath {
     NSError *error = nil;
     UZKArchive *archive = [[UZKArchive alloc] initWithPath:packagePath error:&error];
@@ -206,9 +229,11 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         }
         NSString *fileName = relativePath.lastPathComponent;
         if ([relativePath hasPrefix:@"mods/"] && [fileName.lowercaseString hasSuffix:@".jar"]) {
+            NSString *source = [self modManagerSourceForDownloadURLs:downloads];
             [modManagerRecords addObject:@{
-                @"source": @"modrinth",
+                @"source": source,
                 @"fileName": fileName,
+                @"downloadUrl": url,
                 @"sha1": sha ?: @"",
                 @"size": [indexFile[@"fileSize"] respondsToSelector:@selector(unsignedLongLongValue)] ? indexFile[@"fileSize"] : @0,
                 @"enabled": @YES
