@@ -280,7 +280,7 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
 
 - (NSArray<NSDictionary *> *)modrinthVersionsForProject:(NSDictionary *)project profileInfo:(NSDictionary *)profileInfo {
     NSString *projectID = [project[@"projectId"] description];
-    NSMutableDictionary *params = @{@"include_changelog": @NO}.mutableCopy;
+    NSMutableDictionary *params = @{@"include_changelog": @"false"}.mutableCopy;
     NSString *mcVersion = profileInfo[@"minecraftVersion"];
     NSString *loader = profileInfo[@"loader"];
     if ([mcVersion isKindOfClass:NSString.class] && mcVersion.length > 0) {
