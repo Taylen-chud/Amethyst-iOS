@@ -648,9 +648,11 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
                 @"fileName": fileName,
                 @"url": manualURL ?: @"https://www.curseforge.com",
                 @"destinationPath": path,
+                @"finalDestinationPath": path,
+                @"installDirectory": installDirectory,
                 @"sha": sha ?: @""
             }];
-            NSLog(@"[CurseForge] Queued manual download for %@", fileName);
+            NSLog(@"[CurseForge] Queued manual download for %@", relativePath);
             continue;
         }
 

@@ -543,8 +543,14 @@
             continue;
         }
         if (![NSFileManager.defaultManager fileExistsAtPath:temporaryPath]) {
-            [skippedManualFileNames addObject:finalPath.lastPathComponent];
-            continue;
+            NSString *sha = [manualDownload[@"sha"] isKindOfClass:NSString.class] ? manualDownload[@"sha"] : nil;
+            if ([NSFileManager.defaultManager fileExistsAtPath:finalPath] &&
+                [self checkSHA:sha forFile:finalPath altName:finalPath.lastPathComponent]) {
+                continue;
+            } else {
+                [skippedManualFileNames addObject:finalPath.lastPathComponent];
+                continue;
+            }
         }
 
         NSError *moveError = nil;

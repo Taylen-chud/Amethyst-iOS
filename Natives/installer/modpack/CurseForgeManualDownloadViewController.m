@@ -90,6 +90,19 @@
     return [download isKindOfClass:NSDictionary.class] ? download : nil;
 }
 
+- (NSString *)stagingDestinationPathForDownload:(NSDictionary *)download {
+    NSString *path = download[@"destinationPath"];
+    return [path isKindOfClass:NSString.class] && path.length > 0 ? path : nil;
+}
+
+- (NSString *)finalDestinationPathForDownload:(NSDictionary *)download {
+    NSString *path = download[@"finalDestinationPath"];
+    if ([path isKindOfClass:NSString.class] && path.length > 0) {
+        return path;
+    }
+    return [self stagingDestinationPathForDownload:download];
+}
+
 - (void)loadCurrentDownload {
     NSDictionary *download = [self currentDownload];
     if (!download) {
@@ -122,7 +135,7 @@
     NSDictionary *download = [self currentDownload];
     NSString *expectedFileName = download[@"fileName"];
     if (![expectedFileName isKindOfClass:NSString.class] || expectedFileName.length == 0) {
-        expectedFileName = [download[@"destinationPath"] lastPathComponent];
+        expectedFileName = [self finalDestinationPathForDownload:download].lastPathComponent;
     }
 
     NSString *urlFileName = url.lastPathComponent;
@@ -154,7 +167,8 @@
     }
 
     NSDictionary *download = [self currentDownload];
-    NSString *destinationPath = download[@"destinationPath"];
+    NSString *destinationPath = [self stagingDestinationPathForDownload:download];
+    NSString *finalDestinationPath = [self finalDestinationPathForDownload:download];
     if (![destinationPath isKindOfClass:NSString.class] || destinationPath.length == 0) {
         [self showDownloadError:@"Manual download destination is missing."];
         return;
@@ -163,7 +177,7 @@
     self.preparingDownload = YES;
     self.navigationItem.rightBarButtonItem.enabled = NO;
     self.progressView.progress = 0.25;
-    self.title = [NSString stringWithFormat:@"Downloading %@", destinationPath.lastPathComponent];
+    self.title = [NSString stringWithFormat:@"Downloading %@", finalDestinationPath.lastPathComponent ?: destinationPath.lastPathComponent];
 
     NSMutableURLRequest *downloadRequest = request.mutableCopy;
     [self.webView.configuration.websiteDataStore.httpCookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *cookies) {
@@ -183,11 +197,11 @@
         for (NSString *header in cookieHeaders) {
             [downloadRequest setValue:cookieHeaders[header] forHTTPHeaderField:header];
         }
-        [self beginDownloadWithRequest:downloadRequest destinationPath:destinationPath];
+        [self beginDownloadWithRequest:downloadRequest destinationPath:destinationPath finalDestinationPath:finalDestinationPath];
     }];
 }
 
-- (void)beginDownloadWithRequest:(NSURLRequest *)request destinationPath:(NSString *)destinationPath {
+- (void)beginDownloadWithRequest:(NSURLRequest *)request destinationPath:(NSString *)destinationPath finalDestinationPath:(NSString *)finalDestinationPath {
     self.preparingDownload = NO;
     __weak CurseForgeManualDownloadViewController *weakSelf = self;
     self.downloadTask = [NSURLSession.sharedSession downloadTaskWithRequest:request
@@ -198,7 +212,7 @@
         }
         NSError *storeError = error;
         if (!storeError) {
-            storeError = [strongSelf storeDownloadedFile:location toPath:destinationPath];
+            storeError = [strongSelf storeDownloadedFile:location toPath:destinationPath finalPath:finalDestinationPath];
         }
         dispatch_async(dispatch_get_main_queue(), ^{
             strongSelf.downloadTask = nil;
@@ -216,7 +230,7 @@
     [self.downloadTask resume];
 }
 
-- (NSError *)storeDownloadedFile:(NSURL *)location toPath:(NSString *)destinationPath {
+- (NSError *)storeDownloadedFile:(NSURL *)location toPath:(NSString *)destinationPath finalPath:(NSString *)finalDestinationPath {
     if (!location) {
         return [NSError errorWithDomain:@"CurseForgeManualDownload"
             code:2
@@ -239,13 +253,34 @@
         return error;
     }
 
+    NSString *validationPath = destinationPath;
+    if ([finalDestinationPath isKindOfClass:NSString.class] &&
+        finalDestinationPath.length > 0 &&
+        ![finalDestinationPath isEqualToString:destinationPath]) {
+        NSURL *finalURL = [NSURL fileURLWithPath:finalDestinationPath];
+        [NSFileManager.defaultManager createDirectoryAtURL:finalURL.URLByDeletingLastPathComponent
+            withIntermediateDirectories:YES
+            attributes:nil
+            error:&error];
+        if (error) {
+            [NSFileManager.defaultManager removeItemAtPath:destinationPath error:nil];
+            return error;
+        }
+        [NSFileManager.defaultManager removeItemAtURL:finalURL error:nil];
+        if (![NSFileManager.defaultManager moveItemAtURL:destinationURL toURL:finalURL error:&error]) {
+            [NSFileManager.defaultManager removeItemAtPath:destinationPath error:nil];
+            return error;
+        }
+        validationPath = finalDestinationPath;
+    }
+
     NSString *sha = [self currentDownload][@"sha"];
-    if ([sha isKindOfClass:NSString.class] && sha.length > 0 && ![self validateSHA:sha forFile:destinationPath]) {
-        [NSFileManager.defaultManager removeItemAtPath:destinationPath error:nil];
+    if ([sha isKindOfClass:NSString.class] && sha.length > 0 && ![self validateSHA:sha forFile:validationPath]) {
+        [NSFileManager.defaultManager removeItemAtPath:validationPath error:nil];
         return [NSError errorWithDomain:@"CurseForgeManualDownload"
             code:1
             userInfo:@{NSLocalizedDescriptionKey:
-                [NSString stringWithFormat:@"SHA1 mismatch for %@.", destinationPath.lastPathComponent]}];
+                [NSString stringWithFormat:@"SHA1 mismatch for %@.", validationPath.lastPathComponent]}];
     }
 
     return nil;
