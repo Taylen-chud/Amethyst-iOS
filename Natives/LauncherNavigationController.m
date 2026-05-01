@@ -403,7 +403,8 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     if (queueFinished) {
         [task markAllDownloadTasksComplete];
     }
-    BOOL finished = queueFinished || downloadProgress.finished || progress.finished;
+    // Byte progress can finish before completion handlers move temp files into place.
+    BOOL finished = queueFinished;
     if (finished && progress.totalUnitCount > 0) {
         progress.completedUnitCount = progress.totalUnitCount;
     }
