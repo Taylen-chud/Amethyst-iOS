@@ -8,6 +8,8 @@
 #define kCurseForgeGameIDMinecraft 432
 #define kCurseForgeClassIDModpack 4471
 #define kCurseForgeClassIDMod 6
+#define kCurseForgeClassIDResourcePack 12
+#define kCurseForgeClassIDShader 6552
 #define kCurseForgePageSize 50
 #define kCurseForgeModLoaderForge 1
 #define kCurseForgeModLoaderFabric 4
@@ -113,6 +115,19 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     return result;
 }
 
+- (NSString *)installDirectoryForProject:(NSDictionary *)project {
+    NSInteger classID = [project[@"classId"] respondsToSelector:@selector(integerValue)] ? [project[@"classId"] integerValue] : kCurseForgeClassIDMod;
+    NSDictionary *links = [project[@"links"] isKindOfClass:NSDictionary.class] ? project[@"links"] : nil;
+    NSString *websiteURL = [links[@"websiteUrl"] isKindOfClass:NSString.class] ? [links[@"websiteUrl"] lowercaseString] : @"";
+    if (classID == kCurseForgeClassIDResourcePack || [websiteURL containsString:@"/texture-packs/"]) {
+        return @"resourcepacks";
+    }
+    if (classID == kCurseForgeClassIDShader || [websiteURL containsString:@"/shaders/"]) {
+        return @"shaderpacks";
+    }
+    return @"mods";
+}
+
 - (NSDictionary *)modManagerRecordForFile:(NSDictionary *)file projectID:(NSNumber *)projectID fileName:(NSString *)fileName projectCache:(NSMutableDictionary *)projectCache {
     NSDictionary *project = [self projectInfoForProjectID:projectID cache:projectCache];
     NSDictionary *logo = [project[@"logo"] isKindOfClass:NSDictionary.class] ? project[@"logo"] : nil;
@@ -136,6 +151,8 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         @"gameVersion": [self minecraftVersionForFile:file],
         @"dependencies": [self normalizedCurseForgeDependencies:([file[@"dependencies"] isKindOfClass:NSArray.class] ? file[@"dependencies"] : @[])],
         @"dependencyMetadataCheckedAt": @([[NSDate date] timeIntervalSince1970]),
+        @"artifactType": @"mod",
+        @"installDirectory": @"mods",
         @"enabled": @YES
     };
 }
@@ -215,7 +232,14 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     NSString *slug = project[@"slug"];
     if ([slug isKindOfClass:NSString.class] && slug.length > 0) {
         NSInteger classID = [project[@"classId"] respondsToSelector:@selector(integerValue)] ? [project[@"classId"] integerValue] : kCurseForgeClassIDMod;
-        NSString *section = classID == kCurseForgeClassIDModpack ? @"modpacks" : @"mc-mods";
+        NSString *section = @"mc-mods";
+        if (classID == kCurseForgeClassIDModpack) {
+            section = @"modpacks";
+        } else if (classID == kCurseForgeClassIDResourcePack) {
+            section = @"texture-packs";
+        } else if (classID == kCurseForgeClassIDShader) {
+            section = @"shaders";
+        }
         return [NSString stringWithFormat:@"https://www.curseforge.com/minecraft/%@/%@/download/%@", section, slug, fileID];
     }
 
@@ -368,7 +392,8 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
             @"id": modID,
             @"title": title,
             @"description": description,
-            @"imageUrl": imageUrl
+            @"imageUrl": imageUrl,
+            @"classId": mod[@"classId"] ?: @0
         }.mutableCopy];
     }
 
@@ -574,7 +599,9 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         return;
     }
 
-    [NSFileManager.defaultManager removeItemAtPath:[destPath stringByAppendingPathComponent:@"mods"] error:nil];
+    for (NSString *managedDirectory in @[@"mods", @"resourcepacks", @"shaderpacks"]) {
+        [NSFileManager.defaultManager removeItemAtPath:[destPath stringByAppendingPathComponent:managedDirectory] error:nil];
+    }
 
     NSMutableArray *manualDownloads = [NSMutableArray new];
     NSMutableArray *modManagerRecords = [NSMutableArray new];
@@ -600,14 +627,18 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
             return;
         }
 
-        NSString *relativePath = [@"mods" stringByAppendingPathComponent:fileName];
+        NSDictionary *project = [self projectInfoForProjectID:projectID cache:projectCache];
+        NSString *installDirectory = [self installDirectoryForProject:project];
+        NSString *relativePath = [installDirectory stringByAppendingPathComponent:fileName];
         NSString *path = [destPath stringByAppendingPathComponent:relativePath];
         NSUInteger size = [file[@"fileLength"] respondsToSelector:@selector(unsignedLongLongValue)] ? [file[@"fileLength"] unsignedLongLongValue] : 0;
         if (size == 0) {
             size = [file[@"fileSizeOnDisk"] respondsToSelector:@selector(unsignedLongLongValue)] ? [file[@"fileSizeOnDisk"] unsignedLongLongValue] : 0;
         }
         NSString *sha = [self sha1HashForFile:file];
-        [modManagerRecords addObject:[self modManagerRecordForFile:file projectID:projectID fileName:fileName projectCache:projectCache]];
+        if ([installDirectory isEqualToString:@"mods"]) {
+            [modManagerRecords addObject:[self modManagerRecordForFile:file projectID:projectID fileName:fileName projectCache:projectCache]];
+        }
         NSString *url = [self downloadURLForFile:file projectID:projectID];
         if (url.length == 0) {
             NSString *manualURL = [self manualDownloadPageURLForFile:file projectID:projectID cache:projectCache];

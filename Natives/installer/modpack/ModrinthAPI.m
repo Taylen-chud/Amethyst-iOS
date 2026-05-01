@@ -65,7 +65,8 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
             @"id": projectID,
             @"title": title,
             @"description": description,
-            @"imageUrl": imageUrl
+            @"imageUrl": imageUrl,
+            @"projectType": hit[@"project_type"] ?: @""
         }.mutableCopy];
     }
     NSUInteger totalHits = [response[@"total_hits"] respondsToSelector:@selector(unsignedLongValue)] ? [response[@"total_hits"] unsignedLongValue] : result.count;
@@ -197,7 +198,9 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         return;
     }
 
-    [NSFileManager.defaultManager removeItemAtPath:[destPath stringByAppendingPathComponent:@"mods"] error:nil];
+    for (NSString *managedDirectory in @[@"mods", @"resourcepacks", @"shaderpacks"]) {
+        [NSFileManager.defaultManager removeItemAtPath:[destPath stringByAppendingPathComponent:managedDirectory] error:nil];
+    }
 
     NSMutableArray *modManagerRecords = [NSMutableArray new];
     for (NSDictionary *indexFile in indexFiles) {
@@ -228,7 +231,9 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
             sha = nil;
         }
         NSString *fileName = relativePath.lastPathComponent;
-        if ([relativePath hasPrefix:@"mods/"] && [fileName.lowercaseString hasSuffix:@".jar"]) {
+        NSString *lowerFileName = fileName.lowercaseString;
+        if ([relativePath hasPrefix:@"mods/"] &&
+            ([lowerFileName hasSuffix:@".jar"] || [lowerFileName hasSuffix:@".zip"])) {
             NSString *source = [self modManagerSourceForDownloadURLs:downloads];
             [modManagerRecords addObject:@{
                 @"source": source,
@@ -236,6 +241,8 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
                 @"downloadUrl": url,
                 @"sha1": sha ?: @"",
                 @"size": [indexFile[@"fileSize"] respondsToSelector:@selector(unsignedLongLongValue)] ? indexFile[@"fileSize"] : @0,
+                @"artifactType": @"mod",
+                @"installDirectory": @"mods",
                 @"enabled": @YES
             }];
         }

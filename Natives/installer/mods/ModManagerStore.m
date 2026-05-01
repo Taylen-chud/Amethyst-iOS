@@ -3,6 +3,9 @@
 #import "utils.h"
 
 static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
+static NSString * const kModInstallDirectoryMods = @"mods";
+static NSString * const kModInstallDirectoryResourcePacks = @"resourcepacks";
+static NSString * const kModInstallDirectoryShaderPacks = @"shaderpacks";
 
 @interface ModManagerStore ()
 @property(nonatomic) NSString *profileName;
@@ -140,7 +143,7 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     return metadata;
 }
 
-- (BOOL)isSafeModFileName:(NSString *)fileName {
+- (BOOL)isSafeInstallableFileName:(NSString *)fileName {
     if (![fileName isKindOfClass:NSString.class] || fileName.length == 0) {
         return NO;
     }
@@ -148,7 +151,57 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         return NO;
     }
     NSString *lower = fileName.lowercaseString;
-    return [lower hasSuffix:@".jar"];
+    return [lower hasSuffix:@".jar"] || [lower hasSuffix:@".zip"];
+}
+
+- (BOOL)isSafeModFileName:(NSString *)fileName {
+    return [self isSafeInstallableFileName:fileName];
+}
+
+- (NSString *)baseModFileNameForActualFileName:(NSString *)actualFileName {
+    if (![actualFileName isKindOfClass:NSString.class] || actualFileName.length == 0) {
+        return nil;
+    }
+    if ([self isSafeModFileName:actualFileName]) {
+        return actualFileName;
+    }
+    NSString *lower = actualFileName.lowercaseString;
+    if (![lower hasSuffix:@".disabled"] || actualFileName.length <= @".disabled".length) {
+        return nil;
+    }
+    NSString *baseFileName = [actualFileName substringToIndex:actualFileName.length - @".disabled".length];
+    return [self isSafeModFileName:baseFileName] ? baseFileName : nil;
+}
+
+- (NSString *)installDirectoryForRecord:(NSDictionary *)record error:(NSError **)error {
+    NSString *installDirectory = record[@"installDirectory"];
+    if (![installDirectory isKindOfClass:NSString.class] || installDirectory.length == 0) {
+        return kModInstallDirectoryMods;
+    }
+
+    installDirectory = installDirectory.lowercaseString;
+    if ([installDirectory isEqualToString:kModInstallDirectoryMods] ||
+        [installDirectory isEqualToString:kModInstallDirectoryResourcePacks] ||
+        [installDirectory isEqualToString:kModInstallDirectoryShaderPacks]) {
+        return installDirectory;
+    }
+
+    if (error) {
+        *error = [NSError errorWithDomain:@"ModManagerStore"
+            code:6
+            userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Unsupported install directory: %@", installDirectory]}];
+    }
+    return nil;
+}
+
+- (NSString *)targetDirectoryForInstallDirectory:(NSString *)installDirectory {
+    if ([installDirectory isEqualToString:kModInstallDirectoryResourcePacks]) {
+        return [self.profileGameDir stringByAppendingPathComponent:kModInstallDirectoryResourcePacks];
+    }
+    if ([installDirectory isEqualToString:kModInstallDirectoryShaderPacks]) {
+        return [self.profileGameDir stringByAppendingPathComponent:kModInstallDirectoryShaderPacks];
+    }
+    return self.modsDir;
 }
 
 - (NSString *)normalizedProviderSource:(id)value {
@@ -216,8 +269,7 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     NSArray *contents = [NSFileManager.defaultManager contentsOfDirectoryAtPath:self.modsDir error:nil] ?: @[];
     NSMutableArray *files = [NSMutableArray new];
     for (NSString *fileName in contents) {
-        NSString *lower = fileName.lowercaseString;
-        if ([lower hasSuffix:@".jar"] || [lower hasSuffix:@".jar.disabled"]) {
+        if ([self baseModFileNameForActualFileName:fileName]) {
             [files addObject:fileName];
         }
     }
@@ -231,8 +283,11 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
     NSMutableSet *seen = [NSMutableSet new];
 
     for (NSString *actualFileName in [self modFileNames]) {
-        BOOL enabled = [actualFileName.lowercaseString hasSuffix:@".jar"];
-        NSString *fileName = enabled ? actualFileName : [actualFileName substringToIndex:actualFileName.length - @".disabled".length];
+        NSString *fileName = [self baseModFileNameForActualFileName:actualFileName];
+        if (![fileName isKindOfClass:NSString.class]) {
+            continue;
+        }
+        BOOL enabled = [actualFileName isEqualToString:fileName];
         NSDictionary *record = [records[fileName] isKindOfClass:NSDictionary.class] ? records[fileName] : nil;
         NSMutableDictionary *mod = record ? record.mutableCopy : [NSMutableDictionary new];
         if (mod[@"title"] == nil) {
@@ -487,26 +542,21 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
 
     for (NSDictionary *file in files) {
         NSString *fileName = file[@"fileName"];
-        if (![self isSafeModFileName:fileName]) {
+        if (![self isSafeInstallableFileName:fileName]) {
             if (error) {
                 *error = [NSError errorWithDomain:@"ModManagerStore"
                     code:4
-                    userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Invalid mod file name: %@", fileName ?: @""]}];
+                    userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Invalid install file name: %@", fileName ?: @""]}];
             }
             return nil;
         }
 
-        NSString *destination = [self.modsDir stringByAppendingPathComponent:fileName];
-        NSString *source = [self inferredProviderSourceForRecord:file];
-        id projectId = file[@"projectId"];
-        NSString *existingFileName = [self existingFileNameForSource:source projectId:projectId];
-        if (existingFileName.length > 0 && ![existingFileName isEqualToString:fileName]) {
-            [replaced addObject:existingFileName];
-            [replacements addObject:@{
-                @"oldFileName": existingFileName,
-                @"newFileName": fileName
-            }];
+        NSString *installDirectory = [self installDirectoryForRecord:file error:error];
+        if (!installDirectory) {
+            return nil;
         }
+        BOOL tracksAsMod = [installDirectory isEqualToString:kModInstallDirectoryMods];
+        NSString *destination = [[self targetDirectoryForInstallDirectory:installDirectory] stringByAppendingPathComponent:fileName];
 
         NSString *downloadURL = file[@"downloadUrl"];
         NSString *manualURL = file[@"manualUrl"];
@@ -514,18 +564,32 @@ static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
         NSNumber *size = [file[@"size"] isKindOfClass:NSNumber.class] ? file[@"size"] : @0;
         NSString *title = [file[@"title"] isKindOfClass:NSString.class] ? file[@"title"] : fileName;
 
-        NSMutableDictionary *record = [NSMutableDictionary new];
-        NSArray *recordKeys = @[@"source", @"projectId", @"versionId", @"fileId", @"title", @"versionName", @"summary", @"iconUrl", @"fileName", @"downloadUrl", @"manualUrl", @"sha1", @"size", @"gameVersion", @"loaders", @"dependencies", @"datePublished", @"dependencyMetadataCheckedAt"];
-        for (NSString *key in recordKeys) {
-            id value = file[key];
-            if (value && value != NSNull.null) {
-                record[key] = value;
+        if (tracksAsMod) {
+            NSString *source = [self inferredProviderSourceForRecord:file];
+            id projectId = file[@"projectId"];
+            NSString *existingFileName = [self existingFileNameForSource:source projectId:projectId];
+            if (existingFileName.length > 0 && ![existingFileName isEqualToString:fileName]) {
+                [replaced addObject:existingFileName];
+                [replacements addObject:@{
+                    @"oldFileName": existingFileName,
+                    @"newFileName": fileName
+                }];
             }
+
+            NSMutableDictionary *record = [NSMutableDictionary new];
+            NSArray *recordKeys = @[@"source", @"projectId", @"versionId", @"fileId", @"title", @"versionName", @"summary", @"iconUrl", @"fileName", @"downloadUrl", @"manualUrl", @"sha1", @"size", @"gameVersion", @"loaders", @"dependencies", @"datePublished", @"dependencyMetadataCheckedAt", @"artifactType", @"installDirectory", @"fileType"];
+            for (NSString *key in recordKeys) {
+                id value = file[key];
+                if (value && value != NSNull.null) {
+                    record[key] = value;
+                }
+            }
+            record[@"source"] = source;
+            record[@"installDirectory"] = kModInstallDirectoryMods;
+            record[@"installedAt"] = installedAt;
+            record[@"enabled"] = @YES;
+            [records addObject:record];
         }
-        record[@"source"] = source;
-        record[@"installedAt"] = installedAt;
-        record[@"enabled"] = @YES;
-        [records addObject:record];
 
         if ([downloadURL isKindOfClass:NSString.class] && downloadURL.length > 0) {
             [downloads addObject:@{

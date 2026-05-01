@@ -6,6 +6,12 @@
 
 static NSString * const kModSourceModrinth = @"modrinth";
 static NSString * const kModSourceCurseForge = @"curseforge";
+static NSString * const kInstallDirectoryMods = @"mods";
+static NSString * const kInstallDirectoryResourcePacks = @"resourcepacks";
+static NSString * const kInstallDirectoryShaderPacks = @"shaderpacks";
+static NSInteger const kCurseForgeClassIDMod = 6;
+static NSInteger const kCurseForgeClassIDResourcePack = 12;
+static NSInteger const kCurseForgeClassIDShader = 6552;
 static NSString * const kDependencyMetadataCheckedAtKey = @"dependencyMetadataCheckedAt";
 static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 60.0;
 
@@ -56,6 +62,8 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
     project[@"title"] = item[@"title"] ?: @"";
     project[@"summary"] = item[@"description"] ?: @"";
     project[@"iconUrl"] = item[@"imageUrl"] ?: @"";
+    if (item[@"projectType"]) project[@"projectType"] = item[@"projectType"];
+    if (item[@"classId"]) project[@"classId"] = item[@"classId"];
     return project;
 }
 
@@ -119,6 +127,70 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
         }
     }
     return NO;
+}
+
+- (BOOL)isSupportedInstallableFileName:(NSString *)fileName {
+    if (![fileName isKindOfClass:NSString.class] || fileName.length == 0) {
+        return NO;
+    }
+    NSString *lower = fileName.lowercaseString;
+    return [lower hasSuffix:@".jar"] || [lower hasSuffix:@".zip"];
+}
+
+- (NSString *)modrinthProjectTypeForProject:(NSDictionary *)project {
+    NSString *projectType = project[@"project_type"];
+    if (![projectType isKindOfClass:NSString.class] || projectType.length == 0) {
+        projectType = project[@"projectType"];
+    }
+    if (![projectType isKindOfClass:NSString.class] || projectType.length == 0) {
+        return @"mod";
+    }
+    return projectType.lowercaseString;
+}
+
+- (NSString *)artifactTypeForInstallDirectory:(NSString *)installDirectory {
+    if ([installDirectory isEqualToString:kInstallDirectoryResourcePacks]) {
+        return @"resourcepack";
+    }
+    if ([installDirectory isEqualToString:kInstallDirectoryShaderPacks]) {
+        return @"shader";
+    }
+    return @"mod";
+}
+
+- (NSString *)installDirectoryForModrinthProjectType:(NSString *)projectType fileType:(NSString *)fileType {
+    fileType = [fileType isKindOfClass:NSString.class] ? fileType.lowercaseString : @"";
+    projectType = [projectType isKindOfClass:NSString.class] ? projectType.lowercaseString : @"mod";
+    if ([fileType isEqualToString:@"required-resource-pack"] ||
+        [fileType isEqualToString:@"optional-resource-pack"] ||
+        [projectType isEqualToString:@"resourcepack"]) {
+        return kInstallDirectoryResourcePacks;
+    }
+    if ([projectType isEqualToString:@"shader"]) {
+        return kInstallDirectoryShaderPacks;
+    }
+    return kInstallDirectoryMods;
+}
+
+- (BOOL)isPrimaryModrinthArtifactFile:(NSDictionary *)file projectType:(NSString *)projectType {
+    NSString *fileName = file[@"filename"];
+    if (![self isSupportedInstallableFileName:fileName]) {
+        return NO;
+    }
+
+    NSString *fileType = [file[@"file_type"] isKindOfClass:NSString.class] ? [file[@"file_type"] lowercaseString] : @"";
+    if ([fileType isEqualToString:@"sources-jar"] ||
+        [fileType isEqualToString:@"dev-jar"] ||
+        [fileType isEqualToString:@"javadoc-jar"] ||
+        [fileType isEqualToString:@"signature"]) {
+        return NO;
+    }
+
+    NSString *installDirectory = [self installDirectoryForModrinthProjectType:projectType fileType:fileType];
+    if ([projectType isEqualToString:@"mod"]) {
+        return [installDirectory isEqualToString:kInstallDirectoryMods];
+    }
+    return ![installDirectory isEqualToString:kInstallDirectoryMods];
 }
 
 - (NSDictionary *)modrinthProjectInfoForID:(NSString *)projectID {
@@ -205,13 +277,12 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
     return [versions isKindOfClass:NSDictionary.class] ? versions : nil;
 }
 
-- (NSDictionary *)primaryModrinthFileForVersion:(NSDictionary *)version {
+- (NSDictionary *)primaryModrinthFileForVersion:(NSDictionary *)version projectType:(NSString *)projectType {
     NSArray *files = [version[@"files"] isKindOfClass:NSArray.class] ? version[@"files"] : @[];
     NSDictionary *fallback = nil;
     for (NSDictionary *file in files) {
         if (![file isKindOfClass:NSDictionary.class]) continue;
-        NSString *fileName = file[@"filename"];
-        if (![fileName isKindOfClass:NSString.class] || ![fileName.lowercaseString hasSuffix:@".jar"]) {
+        if (![self isPrimaryModrinthArtifactFile:file projectType:projectType]) {
             continue;
         }
         if (!fallback) fallback = file;
@@ -222,24 +293,69 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
     return fallback;
 }
 
+- (NSDictionary *)normalizedModrinthArtifactFile:(NSDictionary *)file
+                                         version:(NSDictionary *)version
+                                         project:(NSDictionary *)project
+                                     profileInfo:(NSDictionary *)profileInfo
+                                    dependencies:(NSArray *)dependencies {
+    (void)profileInfo;
+    NSString *fileName = file[@"filename"];
+    if (![self isSupportedInstallableFileName:fileName]) {
+        return nil;
+    }
+
+    NSArray *gameVersions = [version[@"game_versions"] isKindOfClass:NSArray.class] ? version[@"game_versions"] : @[];
+    NSArray *loaders = [version[@"loaders"] isKindOfClass:NSArray.class] ? version[@"loaders"] : @[];
+    NSString *projectType = [self modrinthProjectTypeForProject:project];
+    NSString *fileType = [file[@"file_type"] isKindOfClass:NSString.class] ? [file[@"file_type"] lowercaseString] : @"";
+    NSString *installDirectory = [self installDirectoryForModrinthProjectType:projectType fileType:fileType];
+    NSDictionary *hashes = [file[@"hashes"] isKindOfClass:NSDictionary.class] ? file[@"hashes"] : nil;
+    NSString *projectID = project[@"project_id"] ?: project[@"projectId"] ?: project[@"id"] ?: version[@"project_id"];
+    NSString *title = project[@"title"] ?: project[@"name"] ?: version[@"name"] ?: fileName;
+    NSString *summary = project[@"description"] ?: project[@"summary"] ?: @"";
+    NSString *iconUrl = project[@"icon_url"] ?: project[@"iconUrl"] ?: @"";
+
+    return @{
+        @"source": kModSourceModrinth,
+        @"projectId": projectID ?: @"",
+        @"versionId": version[@"id"] ?: @"",
+        @"title": title ?: @"",
+        @"versionName": version[@"name"] ?: @"",
+        @"summary": summary,
+        @"iconUrl": iconUrl,
+        @"fileName": fileName ?: @"",
+        @"downloadUrl": file[@"url"] ?: @"",
+        @"sha1": hashes[@"sha1"] ?: @"",
+        @"size": file[@"size"] ?: @0,
+        @"gameVersion": gameVersions.firstObject ?: @"",
+        @"loaders": loaders ?: @[],
+        @"datePublished": version[@"date_published"] ?: @"",
+        @"dependencies": dependencies ?: @[],
+        @"artifactType": [self artifactTypeForInstallDirectory:installDirectory],
+        @"installDirectory": installDirectory,
+        @"fileType": fileType ?: @""
+    };
+}
+
 - (NSDictionary *)normalizedModrinthVersion:(NSDictionary *)version project:(NSDictionary *)project profileInfo:(NSDictionary *)profileInfo {
     NSArray *gameVersions = [version[@"game_versions"] isKindOfClass:NSArray.class] ? version[@"game_versions"] : @[];
     NSArray *loaders = [version[@"loaders"] isKindOfClass:NSArray.class] ? version[@"loaders"] : @[];
     NSString *mcVersion = profileInfo[@"minecraftVersion"];
     NSString *loader = profileInfo[@"loader"];
+    NSString *projectType = [self modrinthProjectTypeForProject:project];
+    BOOL isModProject = [projectType isEqualToString:@"mod"];
     if (mcVersion.length > 0 && ![self array:gameVersions containsString:mcVersion caseInsensitive:NO]) {
         return nil;
     }
-    if (loader.length > 0 && ![loader isEqualToString:@"vanilla"] && ![self array:loaders containsString:loader caseInsensitive:YES]) {
+    if (isModProject && loader.length > 0 && ![loader isEqualToString:@"vanilla"] && ![self array:loaders containsString:loader caseInsensitive:YES]) {
         return nil;
     }
 
-    NSDictionary *file = [self primaryModrinthFileForVersion:version];
+    NSDictionary *file = [self primaryModrinthFileForVersion:version projectType:projectType];
     if (!file) {
         return nil;
     }
 
-    NSDictionary *hashes = [file[@"hashes"] isKindOfClass:NSDictionary.class] ? file[@"hashes"] : nil;
     NSMutableArray *dependencies = [NSMutableArray new];
     NSArray *versionDependencies = [version[@"dependencies"] isKindOfClass:NSArray.class] ? version[@"dependencies"] : @[];
     for (NSDictionary *dependency in versionDependencies) {
@@ -257,25 +373,41 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
         [dependencies addObject:normalized];
     }
 
-    NSString *projectID = project[@"project_id"] ?: project[@"id"] ?: version[@"project_id"];
-    NSString *title = project[@"title"] ?: project[@"name"] ?: version[@"name"] ?: file[@"filename"];
-    return @{
-        @"source": kModSourceModrinth,
-        @"projectId": projectID ?: @"",
-        @"versionId": version[@"id"] ?: @"",
-        @"title": title ?: @"",
-        @"versionName": version[@"name"] ?: @"",
-        @"summary": project[@"description"] ?: project[@"summary"] ?: @"",
-        @"iconUrl": project[@"icon_url"] ?: @"",
-        @"fileName": file[@"filename"] ?: @"",
-        @"downloadUrl": file[@"url"] ?: @"",
-        @"sha1": hashes[@"sha1"] ?: @"",
-        @"size": file[@"size"] ?: @0,
-        @"gameVersion": gameVersions.firstObject ?: @"",
-        @"loaders": loaders ?: @[],
-        @"datePublished": version[@"date_published"] ?: @"",
-        @"dependencies": dependencies
-    };
+    NSString *projectID = project[@"project_id"] ?: project[@"projectId"] ?: project[@"id"] ?: version[@"project_id"];
+    NSArray *files = [version[@"files"] isKindOfClass:NSArray.class] ? version[@"files"] : @[];
+    for (NSDictionary *extraFile in files) {
+        if (![extraFile isKindOfClass:NSDictionary.class] || [extraFile isEqual:file]) {
+            continue;
+        }
+        NSString *fileType = [extraFile[@"file_type"] isKindOfClass:NSString.class] ? [extraFile[@"file_type"] lowercaseString] : @"";
+        BOOL requiredResourcePack = [fileType isEqualToString:@"required-resource-pack"];
+        BOOL optionalResourcePack = [fileType isEqualToString:@"optional-resource-pack"];
+        if (!requiredResourcePack && !optionalResourcePack) {
+            continue;
+        }
+
+        NSMutableDictionary *resourcePack = [[self normalizedModrinthArtifactFile:extraFile
+                                                                           version:version
+                                                                           project:project
+                                                                       profileInfo:profileInfo
+                                                                      dependencies:@[]] mutableCopy];
+        if (!resourcePack) {
+            continue;
+        }
+        resourcePack[@"type"] = optionalResourcePack ? @"optional" : @"required";
+        resourcePack[@"title"] = [NSString stringWithFormat:@"%@ Resource Pack", project[@"title"] ?: version[@"name"] ?: @"Required"];
+        if (projectID) resourcePack[@"parentProjectId"] = projectID;
+        if (version[@"id"]) resourcePack[@"parentVersionId"] = version[@"id"];
+        [resourcePack removeObjectForKey:@"projectId"];
+        [resourcePack removeObjectForKey:@"versionId"];
+        [dependencies addObject:resourcePack];
+    }
+
+    return [self normalizedModrinthArtifactFile:file
+                                        version:version
+                                        project:project
+                                    profileInfo:profileInfo
+                                   dependencies:dependencies];
 }
 
 - (NSArray<NSDictionary *> *)modrinthVersionsForProject:(NSDictionary *)project profileInfo:(NSDictionary *)profileInfo {
@@ -283,10 +415,14 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
     NSMutableDictionary *params = @{@"include_changelog": @"false"}.mutableCopy;
     NSString *mcVersion = profileInfo[@"minecraftVersion"];
     NSString *loader = profileInfo[@"loader"];
+    NSString *projectType = [self modrinthProjectTypeForProject:project];
     if ([mcVersion isKindOfClass:NSString.class] && mcVersion.length > 0) {
         params[@"game_versions"] = [self jsonStringForArray:@[mcVersion]];
     }
-    if ([loader isKindOfClass:NSString.class] && loader.length > 0 && ![loader isEqualToString:@"vanilla"]) {
+    if ([projectType isEqualToString:@"mod"] &&
+        [loader isKindOfClass:NSString.class] &&
+        loader.length > 0 &&
+        ![loader isEqualToString:@"vanilla"]) {
         params[@"loaders"] = [self jsonStringForArray:@[loader.lowercaseString]];
     }
     NSArray *versions = [self.modrinth getEndpoint:[NSString stringWithFormat:@"project/%@/version", projectID] params:params];
@@ -320,7 +456,7 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
     id available = file[@"isAvailable"];
     BOOL isUnavailable = [available isKindOfClass:NSNumber.class] && ![available boolValue];
     NSString *fileName = file[@"fileName"];
-    if (isServerPack || isUnavailable || ![fileName isKindOfClass:NSString.class] || ![fileName.lowercaseString hasSuffix:@".jar"]) {
+    if (isServerPack || isUnavailable || ![self isSupportedInstallableFileName:fileName]) {
         return NO;
     }
 
@@ -354,6 +490,18 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
             [self array:gameVersions containsString:@"Neo Forge" caseInsensitive:YES];
     }
     return [self array:gameVersions containsString:[ModManagerStore displayNameForLoader:loader] caseInsensitive:YES];
+}
+
+- (NSString *)installDirectoryForCurseForgeProject:(NSDictionary *)project {
+    NSInteger classID = [project[@"classId"] respondsToSelector:@selector(integerValue)] ? [project[@"classId"] integerValue] : kCurseForgeClassIDMod;
+    NSString *websiteURL = [project[@"websiteUrl"] isKindOfClass:NSString.class] ? [project[@"websiteUrl"] lowercaseString] : @"";
+    if (classID == kCurseForgeClassIDResourcePack || [websiteURL containsString:@"/texture-packs/"]) {
+        return kInstallDirectoryResourcePacks;
+    }
+    if (classID == kCurseForgeClassIDShader || [websiteURL containsString:@"/shaders/"]) {
+        return kInstallDirectoryShaderPacks;
+    }
+    return kInstallDirectoryMods;
 }
 
 - (NSString *)curseForgeMinecraftVersionForFile:(NSDictionary *)file {
@@ -405,6 +553,7 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
     NSString *title = project[@"title"] ?: project[@"name"] ?: file[@"displayName"] ?: fileName;
     NSNumber *size = [file[@"fileLength"] isKindOfClass:NSNumber.class] ? file[@"fileLength"] : file[@"fileSizeOnDisk"];
     if (![size isKindOfClass:NSNumber.class]) size = @0;
+    NSString *installDirectory = [self installDirectoryForCurseForgeProject:project];
 
     return @{
         @"source": kModSourceCurseForge,
@@ -422,7 +571,9 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
         @"gameVersion": [self curseForgeMinecraftVersionForFile:file],
         @"loaders": @[profileInfo[@"loader"] ?: @""],
         @"datePublished": file[@"fileDate"] ?: @"",
-        @"dependencies": [self normalizedCurseForgeDependencies:([file[@"dependencies"] isKindOfClass:NSArray.class] ? file[@"dependencies"] : @[])]
+        @"dependencies": [self normalizedCurseForgeDependencies:([file[@"dependencies"] isKindOfClass:NSArray.class] ? file[@"dependencies"] : @[])],
+        @"artifactType": [self artifactTypeForInstallDirectory:installDirectory],
+        @"installDirectory": installDirectory
     };
 }
 
@@ -433,12 +584,15 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
     }
     NSDictionary *logo = [project[@"logo"] isKindOfClass:NSDictionary.class] ? project[@"logo"] : nil;
     NSString *imageUrl = [logo[@"thumbnailUrl"] isKindOfClass:NSString.class] ? logo[@"thumbnailUrl"] : logo[@"url"];
+    NSDictionary *links = [project[@"links"] isKindOfClass:NSDictionary.class] ? project[@"links"] : nil;
     return @{
         @"source": kModSourceCurseForge,
         @"projectId": projectID ?: @0,
         @"title": project[@"name"] ?: fallback[@"title"] ?: @"",
         @"summary": project[@"summary"] ?: fallback[@"summary"] ?: @"",
-        @"iconUrl": imageUrl ?: fallback[@"iconUrl"] ?: @""
+        @"iconUrl": imageUrl ?: fallback[@"iconUrl"] ?: @"",
+        @"classId": project[@"classId"] ?: fallback[@"classId"] ?: @0,
+        @"websiteUrl": links[@"websiteUrl"] ?: fallback[@"websiteUrl"] ?: @""
     };
 }
 
@@ -449,7 +603,8 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
     }
     NSNumber *projectID = [project[@"projectId"] isKindOfClass:NSNumber.class] ? project[@"projectId"] : @([[project[@"projectId"] description] integerValue]);
     NSString *mcVersion = [profileInfo[@"minecraftVersion"] isKindOfClass:NSString.class] ? profileInfo[@"minecraftVersion"] : nil;
-    NSNumber *loaderType = [self curseForgeLoaderTypeForProfileInfo:profileInfo];
+    NSInteger classID = [project[@"classId"] respondsToSelector:@selector(integerValue)] ? [project[@"classId"] integerValue] : kCurseForgeClassIDMod;
+    NSNumber *loaderType = classID == kCurseForgeClassIDMod ? [self curseForgeLoaderTypeForProfileInfo:profileInfo] : nil;
     NSArray *files = [self.curseforge filesForModID:projectID gameVersion:mcVersion modLoaderType:loaderType];
     if (files.count == 0 && loaderType) {
         files = [self.curseforge filesForModID:projectID gameVersion:mcVersion modLoaderType:nil];
@@ -534,7 +689,7 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
     }
 
     NSMutableDictionary *record = [NSMutableDictionary new];
-    NSArray *recordKeys = @[@"source", @"projectId", @"versionId", @"fileId", @"title", @"versionName", @"summary", @"iconUrl", @"fileName", @"sha1", @"size", @"gameVersion", @"loaders", @"dependencies", @"datePublished"];
+    NSArray *recordKeys = @[@"source", @"projectId", @"versionId", @"fileId", @"title", @"versionName", @"summary", @"iconUrl", @"fileName", @"sha1", @"size", @"gameVersion", @"loaders", @"dependencies", @"datePublished", @"artifactType", @"installDirectory", @"fileType"];
     for (NSString *key in recordKeys) {
         id value = version[key];
         if (value && value != NSNull.null &&
@@ -733,7 +888,8 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
             @"projectId": projectID ?: @"",
             @"title": project[@"title"] ?: @"Dependency",
             @"summary": project[@"description"] ?: @"",
-            @"iconUrl": project[@"icon_url"] ?: @""
+            @"iconUrl": project[@"icon_url"] ?: @"",
+            @"projectType": project[@"project_type"] ?: @"mod"
         };
     } else if ([source isEqualToString:kModSourceCurseForge]) {
         NSNumber *modID = [projectID isKindOfClass:NSNumber.class] ? projectID : @([[projectID description] integerValue]);
@@ -753,7 +909,8 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
     NSString *source = dependency[@"source"];
     if ([source isEqualToString:kModSourceModrinth] && [dependency[@"versionId"] isKindOfClass:NSString.class]) {
         NSDictionary *version = [self modrinthVersionForID:dependency[@"versionId"]];
-        NSDictionary *project = [self modrinthProjectInfoForID:dependency[@"projectId"]];
+        id projectID = dependency[@"projectId"] ?: version[@"project_id"];
+        NSDictionary *project = [self modrinthProjectInfoForID:[projectID description]];
         NSDictionary *normalized = [self normalizedModrinthVersion:version project:project profileInfo:profileInfo];
         if (normalized) {
             return normalized;
@@ -776,9 +933,34 @@ static NSTimeInterval const kDependencyMetadataRefreshInterval = 24.0 * 60.0 * 6
     for (NSDictionary *dependency in dependencies) {
         if (![dependency isKindOfClass:NSDictionary.class]) continue;
         NSString *source = dependency[@"source"];
-        id projectID = dependency[@"projectId"] ?: dependency[@"versionId"];
         NSString *type = dependency[@"type"];
-        if (![source isKindOfClass:NSString.class] || !projectID) {
+        if (![source isKindOfClass:NSString.class]) {
+            continue;
+        }
+
+        NSString *fileName = dependency[@"fileName"];
+        NSString *downloadURL = dependency[@"downloadUrl"];
+        NSString *manualURL = dependency[@"manualUrl"];
+        BOOL directArtifact = [fileName isKindOfClass:NSString.class] &&
+            (([downloadURL isKindOfClass:NSString.class] && downloadURL.length > 0) ||
+             ([manualURL isKindOfClass:NSString.class] && manualURL.length > 0));
+        if (directArtifact) {
+            NSString *installDirectory = [dependency[@"installDirectory"] isKindOfClass:NSString.class] ? dependency[@"installDirectory"] : kInstallDirectoryMods;
+            NSString *key = [NSString stringWithFormat:@"%@:%@:%@", source, installDirectory, fileName];
+            if ([seen containsObject:key]) {
+                continue;
+            }
+            [seen addObject:key];
+            if ([type isEqualToString:@"optional"]) {
+                [optional addObject:dependency];
+            } else if (![type isEqualToString:@"embedded"] && ![type isEqualToString:@"tool"] && ![type isEqualToString:@"incompatible"]) {
+                [required addObject:dependency];
+            }
+            continue;
+        }
+
+        id projectID = dependency[@"projectId"] ?: dependency[@"versionId"];
+        if (!projectID) {
             continue;
         }
         NSString *key = [NSString stringWithFormat:@"%@:%@", source, projectID];
