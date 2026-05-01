@@ -312,17 +312,26 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     self.task = [MinecraftResourceDownloadTask new];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         __weak LauncherNavigationController *weakSelf = self;
-        self.task.handleError = ^{
+        MinecraftResourceDownloadTask *task = self.task;
+        task.handleError = ^{
             dispatch_async(dispatch_get_main_queue(), ^{
                 [weakSelf setInteractionEnabled:YES forDownloading:YES];
                 weakSelf.task = nil;
                 weakSelf.progressVC = nil;
             });
         };
-        [self.task downloadVersion:object];
+        task.allDownloadTasksFinishedHandler = ^{
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [weakSelf completeDownloadTask:task];
+            });
+        };
+        [task downloadVersion:object];
         dispatch_async(dispatch_get_main_queue(), ^{
-            self.progressViewMain.observedProgress = self.task.progress;
-            [self.task.progress addObserver:self
+            if (self.task != task) {
+                return;
+            }
+            self.progressViewMain.observedProgress = task.progress;
+            [task.progress addObserver:self
                 forKeyPath:@"fractionCompleted"
                 options:NSKeyValueObservingOptionInitial
                 context:ProgressObserverContext];
@@ -355,6 +364,52 @@ static void *ProgressObserverContext = &ProgressObserverContext;
         }
         [self launchMinecraft:sender];
     }
+}
+
+- (void)completeDownloadTask:(MinecraftResourceDownloadTask *)task {
+    if (!task || self.task != task) {
+        return;
+    }
+
+    @try {
+        [task.progress removeObserver:self forKeyPath:@"fractionCompleted" context:ProgressObserverContext];
+    } @catch(id exception) {}
+    [self.progressVC dismissModalViewControllerAnimated:NO];
+
+    self.progressViewMain.observedProgress = nil;
+    self.task = nil;
+    if (task.metadata) {
+        __block NSDictionary *metadata = task.metadata;
+        [self invokeAfterJITEnabled:^{
+            UIKit_launchMinecraftSurfaceVC(self.view.window, metadata);
+        }];
+        [self setInteractionEnabled:YES forDownloading:YES];
+        return;
+    }
+
+    NSArray *manualDownloads = task.postInstallManualDownloads;
+    NSString *installerPath = task.postInstallInstallerPath;
+    BOOL hitEnter = task.postInstallHitEnter;
+    void (^finishInstall)(void) = ^{
+        [task finalizeModInstall];
+        [task finalizeModpackMetadata];
+        [self reloadProfileList];
+        if (installerPath) {
+            [self enterModInstallerWithPath:installerPath hitEnterAfterWindowShown:hitEnter];
+        }
+        [self setInteractionEnabled:YES forDownloading:YES];
+    };
+
+    if (manualDownloads.count > 0) {
+        CurseForgeManualDownloadViewController *vc = [[CurseForgeManualDownloadViewController alloc]
+            initWithDownloads:manualDownloads
+            completion:finishInstall];
+        UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
+        [self presentViewController:nav animated:YES completion:nil];
+        return;
+    }
+
+    finishInstall();
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
@@ -413,45 +468,7 @@ static void *ProgressObserverContext = &ProgressObserverContext;
         self.progressText.text = progress.localizedAdditionalDescription;
 
         if (!finished || self.task != task) return;
-        @try {
-            [downloadProgress removeObserver:self forKeyPath:@"fractionCompleted" context:ProgressObserverContext];
-        } @catch(id exception) {}
-        [self.progressVC dismissModalViewControllerAnimated:NO];
-
-        self.progressViewMain.observedProgress = nil;
-        self.task = nil;
-        if (task.metadata) {
-            __block NSDictionary *metadata = task.metadata;
-            [self invokeAfterJITEnabled:^{
-                UIKit_launchMinecraftSurfaceVC(self.view.window, metadata);
-            }];
-        } else {
-            NSArray *manualDownloads = task.postInstallManualDownloads;
-            NSString *installerPath = task.postInstallInstallerPath;
-            BOOL hitEnter = task.postInstallHitEnter;
-            void (^finishInstall)(void) = ^{
-                [task finalizeModInstall];
-                [task finalizeModpackMetadata];
-                [self reloadProfileList];
-                if (installerPath) {
-                    [self enterModInstallerWithPath:installerPath hitEnterAfterWindowShown:hitEnter];
-                }
-                [self setInteractionEnabled:YES forDownloading:YES];
-            };
-
-            if (manualDownloads.count > 0) {
-                CurseForgeManualDownloadViewController *vc = [[CurseForgeManualDownloadViewController alloc]
-                    initWithDownloads:manualDownloads
-                    completion:finishInstall];
-                UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
-                [self presentViewController:nav animated:YES completion:nil];
-                return;
-            }
-
-            finishInstall();
-            return;
-        }
-        [self setInteractionEnabled:YES forDownloading:YES];
+        [self completeDownloadTask:task];
     });
 }
 
@@ -465,21 +482,30 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     NSDictionary *userInfo = notification.userInfo;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         __weak LauncherNavigationController *weakSelf = self;
-        self.task.handleError = ^{
+        MinecraftResourceDownloadTask *task = self.task;
+        task.handleError = ^{
             dispatch_async(dispatch_get_main_queue(), ^{
                 [weakSelf setInteractionEnabled:YES forDownloading:YES];
                 weakSelf.task = nil;
                 weakSelf.progressVC = nil;
             });
         };
+        task.allDownloadTasksFinishedHandler = ^{
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [weakSelf completeDownloadTask:task];
+            });
+        };
         if ([notification.name isEqualToString:@"InstallMods"]) {
-            [self.task downloadModsWithPlan:userInfo store:notification.object];
+            [task downloadModsWithPlan:userInfo store:notification.object];
         } else {
-            [self.task downloadModpackFromAPI:notification.object detail:userInfo[@"detail"] atIndex:[userInfo[@"index"] unsignedLongValue]];
+            [task downloadModpackFromAPI:notification.object detail:userInfo[@"detail"] atIndex:[userInfo[@"index"] unsignedLongValue]];
         }
         dispatch_async(dispatch_get_main_queue(), ^{
-            self.progressViewMain.observedProgress = self.task.progress;
-            [self.task.progress addObserver:self
+            if (self.task != task) {
+                return;
+            }
+            self.progressViewMain.observedProgress = task.progress;
+            [task.progress addObserver:self
                 forKeyPath:@"fractionCompleted"
                 options:NSKeyValueObservingOptionInitial
                 context:ProgressObserverContext];

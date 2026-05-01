@@ -12,6 +12,7 @@
 @property NSArray<NSDictionary *> *postInstallManualDownloads;
 @property NSDictionary *postInstallModpackMetadataPlan;
 @property(nonatomic, copy) void(^handleError)(void);
+@property(nonatomic, copy) void(^allDownloadTasksFinishedHandler)(void);
 
 - (NSURLSessionDownloadTask *)createDownloadTask:(NSString *)url size:(NSUInteger)size sha:(NSString *)sha altName:(NSString *)altName toPath:(NSString *)path;
 - (void)finishDownloadWithErrorString:(NSString *)error;

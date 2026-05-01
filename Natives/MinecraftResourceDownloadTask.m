@@ -17,6 +17,7 @@
 @property AFURLSessionManager* manager;
 @property(nonatomic) NSUInteger pendingDownloadTaskCount;
 @property(nonatomic) BOOL finishedAddingDownloadTasks;
+@property(nonatomic) BOOL notifiedAllDownloadTasksFinished;
 @property(nonatomic) NSDictionary *postInstallModPlan;
 @property(nonatomic) ModManagerStore *postInstallModStore;
 @end
@@ -48,6 +49,24 @@
     }
 }
 
+- (void)notifyAllDownloadTasksFinishedIfNeeded {
+    void (^handler)(void) = nil;
+    @synchronized (self) {
+        if (self.notifiedAllDownloadTasksFinished ||
+            !self.finishedAddingDownloadTasks ||
+            self.pendingDownloadTaskCount != 0 ||
+            self.progress.cancelled) {
+            return;
+        }
+        self.notifiedAllDownloadTasksFinished = YES;
+        handler = self.allDownloadTasksFinishedHandler;
+    }
+    [self markAllDownloadTasksComplete];
+    if (handler) {
+        handler();
+    }
+}
+
 - (void)noteDownloadTaskFinished {
     BOOL shouldComplete = NO;
     @synchronized (self) {
@@ -57,7 +76,7 @@
         shouldComplete = self.finishedAddingDownloadTasks && self.pendingDownloadTaskCount == 0 && !self.progress.cancelled;
     }
     if (shouldComplete) {
-        [self markAllDownloadTasksComplete];
+        [self notifyAllDownloadTasksFinishedIfNeeded];
     }
 }
 
@@ -179,7 +198,7 @@
     }
 
     if ([self allDownloadTasksFinished]) {
-        [self markAllDownloadTasksComplete];
+        [self notifyAllDownloadTasksFinishedIfNeeded];
     }
 }
 
@@ -625,6 +644,7 @@
     @synchronized (self) {
         self.pendingDownloadTaskCount = 0;
         self.finishedAddingDownloadTasks = NO;
+        self.notifiedAllDownloadTasksFinished = NO;
     }
     [self.fileList removeAllObjects];
     [self.progressList removeAllObjects];
