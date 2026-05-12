@@ -2,6 +2,9 @@
 #import "UIKit+hook.h"
 #import "utils.h"
 
+// Weak reference to iOS 26 Liquid Glass API - may not exist on older OS versions
+extern BOOL _UISolariumEnabled(void) __attribute__((weak_import));
+
 @interface PickViewController : UIViewController
 @property(nonatomic, assign) UITextField *textField;
 @end
