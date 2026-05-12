@@ -1,4 +1,7 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
+// Weak reference to iOS 26 Liquid Glass API - may not exist on older OS versions
+extern BOOL _UISolariumEnabled(void) __attribute__((weak_import));
 #import "authenticator/BaseAuthenticator.h"
 #import "AFNetworking.h"
 #import "ALTServerConnection.h"
