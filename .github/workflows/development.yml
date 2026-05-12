@@ -32,14 +32,7 @@ jobs:
       - name: Checkout repository submodules
         run: git submodule update --init --recursive
 
-      # --- STRUCTURAL FORCE REPAIR ---
-      # This pulls the pristine, unbroken version of JavaLauncher.m directly from the main branch 
-      # to ensure no incomplete code blocks or cut-off tags crash the parser.
-      - name: Reset JavaLauncher Source
-        run: |
-          curl -s https://githubusercontent.com > Natives/JavaLauncher.m
-          echo "Pristine source structure successfully restored."
-
+      # Injects compilation bypass flags directly into CMake build tree
       - name: Patch Native Build Flags
         run: |
           if [ -f "Natives/CMakeLists.txt" ]; then
