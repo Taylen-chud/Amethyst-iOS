@@ -38,16 +38,16 @@ jobs:
           distribution: 'zulu'
           java-version: '8'
 
+      # --- UPDATED: Added ldid to the brew installation step ---
       - name: Install dependencies
         run: |
-          brew install make
+          brew install make ldid
 
       - name: Build for ${{ matrix.platform_name }}
         run: |
           export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
           export SLIMMED=1
 
-          # Appending /bin to $JAVA_HOME resolves the Makefile pathing rule
           if [ "${{ matrix.platform_name }}" == "ios" ]; then
             gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }} BOOTJDK=$JAVA_HOME/bin
             gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }} TROLLSTORE_JIT_ENT=1 BOOTJDK=$JAVA_HOME/bin
