@@ -48,31 +48,29 @@ jobs:
           brew install make ldid
 
       # --- FORCED CODE SIGNING INJECTION STEP ---
-      # This intercepts the build pipeline right before compilation packaging targets execute.
-      # It searches the Amethyst internal Frameworks path and signs every custom dylib with ldid.
+      # This forces ad-hoc pseudosignatures across every file in the Frameworks directory.
+      # This resolves the runtime 'Hook disabled' crash by certifying the binaries directly.
       - name: Inject Framework Signing Rules
         run: |
           mkdir -p Natives/resources/Frameworks
           
-          # We place a tiny pre-build trigger that signs all dylibs right before gmake bundles them
           cat << 'EOF' > sign_custom_frameworks.sh
           #!/bin/bash
-          echo "Looking for unsigned custom libraries..."
+          echo "Scanning for custom dylibs requiring pseudo-signatures..."
           if [ -d "Natives/resources/Frameworks" ]; then
-            find Natives/resources/Frameworks -name "*.dylib" -exec echo "Signing: {}" \; -exec ldid -S {} \;
-            echo "Framework ad-hoc pseudo-signing completed."
+            find Natives/resources/Frameworks -name "*.dylib" -exec echo "Signing framework binary: {}" \; -exec ldid -S {} \;
+            echo "Framework signing sequence completed successfully."
           fi
           EOF
           chmod +x sign_custom_frameworks.sh
           ./sign_custom_frameworks.sh
 
-      # --- COMPILATION PIPELINE ---
       - name: Build for ${{ matrix.platform_name }}
         run: |
           export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
           export SLIMMED=1
 
-          # Run the signing script again during the active make sequence to cover generated assets
+          # Run the signature scan right before compile processing triggers
           ./sign_custom_frameworks.sh
 
           if [ "${{ matrix.platform_name }}" == "ios" ]; then
@@ -85,7 +83,6 @@ jobs:
             gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }} BOOTJDK=$JAVA_HOME/bin
           fi
 
-      # --- ARTIFACT DISPATCH MANAGEMENT ---
       - name: Upload regular ipa
         uses: actions/upload-artifact@main
         with:
