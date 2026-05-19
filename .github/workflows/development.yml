@@ -18,11 +18,11 @@ jobs:
     - name: Set up Xcode Version
       run: sudo xcode-select -s /Applications/Xcode_15.4.app
 
-    - name: Set up JDK 8
+    - name: Set up JDK 8 (Azul Zulu for Apple Silicon)
       uses: actions/setup-java@v4
       with:
         java-version: '8'
-        distribution: 'temurin' # Uses the stable, community-backed Eclipse Temurin JDK 8 binary
+        distribution: 'zulu' # Azul supports native Java 8 on Apple Silicon Mac runners
 
     - name: Install System Dependencies
       run: |
@@ -30,7 +30,6 @@ jobs:
 
     - name: Run Project Makefile
       run: |
-        # The environment now correctly detects JDK 8
         make
 
     - name: Cache Build Dependencies
