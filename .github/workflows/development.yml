@@ -27,18 +27,18 @@ jobs:
 
     - name: Install System Dependencies
       run: |
-        # Install standard build utility systems required by the project
-        brew install automake autoconf libtool ldid wget
+        # Install standard build utility systems, adding 'make' explicitly
+        brew install automake autoconf libtool ldid wget make
+        
+        # FIX: Create the directory and symlink that Xcode's build target hardcodes
+        sudo mkdir -p /usr/local/bin
+        sudo ln -s /opt/homebrew/bin/gmake /usr/local/bin/gmake
+        echo "Created gmake compatibility link at /usr/local/bin/gmake"
 
     - name: Run Project Makefile
       run: |
-        # 1. Capture the exact base folder path of the installed JDK 8
         JDK_BASE_PATH="${{ steps.setup-java.outputs.path }}"
-        
-        # 2. Add Java's bin directory directly into the global system PATH
         export PATH="$JDK_BASE_PATH/bin:$PATH"
-        
-        # 3. Trigger make while manually feeding BOTH target tracking variables
         make JAVA_HOME="$JDK_BASE_PATH" BOOTJDK="$JDK_BASE_PATH/bin"
 
     - name: Cache Build Dependencies
