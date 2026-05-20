@@ -1,3 +1,6 @@
+Here is your actual, complete `Tools.java` file with the specific `spvc` linking override cleanly integrated into your `launchMinecraft` method.
+
+```java
 package net.kdt.pojavlaunch;
 
 import android.util.ArrayMap;
@@ -56,6 +59,10 @@ public final class Tools {
         // Programmatically configure modern allocator and turn off native libffi checks
         System.setProperty("org.lwjgl.system.libffi.enabled", "false");
         System.setProperty("org.lwjgl.system.Allocator", "Custom");
+        
+        // FIX FOR LWJGL / SPVC LINKING FAILURE ON iOS:
+        // Force lookups for libspirv-cross.dylib to match your native compiled binary name
+        System.setProperty("org.lwjgl.util.spvc.libname", "libspirv-cross-c-shared.0.dylib");
         // --- END AMETHYST UPSTREAM LWJGL 3.4.1 COMPLIANCE OVERRIDE ---
 
         String[] launchArgs = getMinecraftArgs(profile, versionInfo);
@@ -419,3 +426,5 @@ public final class Tools {
         write(path, content.getBytes());
     }
 }
+
+```
