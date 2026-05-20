@@ -14,7 +14,6 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.InputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -53,6 +52,12 @@ public final class Tools {
     public static final String OBSOLETE_RESOURCES_PATH=DIR_GAME_NEW + "/resources";
 
     public static void launchMinecraft(MinecraftAccount profile, final JMinecraftVersionList.Version versionInfo) throws Throwable {
+        // --- BEGIN AMETHYST UPSTREAM LWJGL 3.4.1 COMPLIANCE OVERRIDE ---
+        // Programmatically configure modern allocator and turn off native libffi checks
+        System.setProperty("org.lwjgl.system.libffi.enabled", "false");
+        System.setProperty("org.lwjgl.system.Allocator", "Custom");
+        // --- END AMETHYST UPSTREAM LWJGL 3.4.1 COMPLIANCE OVERRIDE ---
+
         String[] launchArgs = getMinecraftArgs(profile, versionInfo);
         // System.out.println("Minecraft Args: " + Arrays.toString(launchArgs));
 
@@ -112,20 +117,6 @@ public final class Tools {
                     if (arg.equals("--xuid")) {
                         varArgMap.put("user_type", "msa");
                     }
-                } else {
-                    /*
-                    JMinecraftVersionList.Arguments.ArgValue argv = (JMinecraftVersionList.Arguments.ArgValue) arg;
-                    if (argv.values != null) {
-                        minecraftArgs.add(argv.values[0]);
-                    } else {
-                        
-                         for (JMinecraftVersionList.Arguments.ArgValue.ArgRules rule : arg.rules) {
-                         // rule.action = allow
-                         // TODO implement this
-                         }
-                         
-                    }
-                    */
                 }
             }
         }
@@ -137,7 +128,6 @@ public final class Tools {
                 profile
             ), varArgMap
         );
-        // Tools.dialogOnUiThread(this, "Result args", Arrays.asList(argsFromJson).toString());
         return argsFromJson;
     }
 
@@ -147,7 +137,6 @@ public final class Tools {
             if (i > 0) builder.append(" ");
             builder.append(strArr[i]);
         }
-
         return builder.toString();
     }
 
@@ -173,46 +162,9 @@ public final class Tools {
         return libInfos[0].replaceAll("\\.", "/") + "/" + libInfos[1] + "/" + libInfos[2] + "/" + libInfos[1] + "-" + libInfos[2] + ".jar";
     }
 
-/*
-    private static String getLWJGL3ClassPath() {
-        StringBuilder libStr = new StringBuilder();
-        File lwjgl3Folder = new File(Tools.DIR_GAME_NEW, "lwjgl3");
-        if (/* info.arguments != null && @lwjgl3Folder.exists()) {
-            for (File file: lwjgl3Folder.listFiles()) {
-                if (file.getName().endsWith(".jar")) {
-                    libStr.append(file.getAbsolutePath() + ":");
-                }
-            }
-            // Remove the ':' at the end
-            libStr.setLength(libStr.length() - 1);
-        }
-        return libStr.toString();
-    }
-*/
     public static String generateLaunchClassPath(JMinecraftVersionList.Version info) {
-        StringBuilder libStr = new StringBuilder(); //versnDir + "/" + version + "/" + version + ".jar:";
-
+        StringBuilder libStr = new StringBuilder();
         String[] classpath = generateLibClasspath(info);
-
-        // Debug: LWJGL 3 override
-        // File lwjgl2Folder = new File(Tools.MAIN_PATH, "lwjgl2");
-
-        /*
-         File lwjgl3Folder = new File(Tools.MAIN_PATH, "lwjgl3");
-         if (lwjgl3Folder.exists()) {
-         for (File file: lwjgl3Folder.listFiles()) {
-         if (file.getName().endsWith(".jar")) {
-         libStr.append(file.getAbsolutePath() + ":");
-         }
-         }
-         } else if (lwjgl2Folder.exists()) {
-         for (File file: lwjgl2Folder.listFiles()) {
-         if (file.getName().endsWith(".jar")) {
-         libStr.append(file.getAbsolutePath() + ":");
-         }
-         }
-         }
-         */
 
         for (String perJar : classpath) {
             if (!new File(perJar).exists()) {
@@ -253,12 +205,9 @@ public final class Tools {
     }
 
     public static void preProcessLibraries(DependentLibrary[] libraries) {
-        // Ignore some libraries since they are unsupported (jinput, text2speech) or unused (LWJGL)
-        // Support for text2speech is not planned, so skip it for now.
         for (int i = 0; i < libraries.length; i++) {
             DependentLibrary libItem = libraries[i];
             if (libItem.name.startsWith("com.mojang:text2speech") ||
-                //libItem.name.startsWith("net.java.jinput") ||
                 libItem.name.startsWith("net.java.dev.jna:platform:") ||
                 libItem.name.startsWith("org.lwjgl") ||
                 libItem.name.startsWith("tv.twitch")) {
@@ -268,18 +217,13 @@ public final class Tools {
 
             String[] version = libItem.name.split(":")[2].split("\\.");
             if (libItem.name.startsWith("net.java.dev.jna:jna:")) {
-                // Special handling for LabyMod 1.8.9 and Forge 1.12.2(?)
-                // we have libjnidispatch 5.13.0 in Frameworks directory
                 if (Integer.parseInt(version[0]) >= 5 && Integer.parseInt(version[1]) >= 13) continue;
-                //System.out.println("Library " + libItem.name + " has been changed to version 5.13.0");
-                
-createLibraryInfo(libItem);
+                createLibraryInfo(libItem);
                 libItem.name = "net.java.dev.jna:jna:5.13.0";
                 libItem.downloads.artifact.path = "net/java/dev/jna/jna/5.13.0/jna-5.13.0.jar";
                 libItem.downloads.artifact.url = "https://libraries.minecraft.net/net/java/dev/jna/jna/5.13.0/jna-5.13.0.jar";
             } else if (libItem.name.startsWith("org.ow2.asm:asm-all:")) {
                 if(Integer.parseInt(version[0]) >= 5) continue;
-                //System.out.println("Library " + libItem.name + " has been changed to version 5.0.4");
                 createLibraryInfo(libItem);
                 libItem.name = "org.ow2.asm:asm-all:5.0.4";
                 libItem.url = null;
@@ -324,11 +268,9 @@ createLibraryInfo(libItem);
                              "releaseTime", "time", "type"
                              );
 
-                // Go through the libraries, remove the ones overridden by the custom version
                 List<DependentLibrary> inheritLibraryList = new ArrayList<>(Arrays.asList(inheritsVer.libraries));
                 outer_loop:
                 for(DependentLibrary library : customVer.libraries){
-                    // Clean libraries overridden by the custom version
                     String libName = library.name.substring(0, library.name.lastIndexOf(":"));
 
                     for(DependentLibrary inheritLibrary : inheritLibraryList) {
@@ -338,20 +280,16 @@ createLibraryInfo(libItem);
                             System.out.println("Library " + libName + ": Replaced version " +
                                     libName.substring(libName.lastIndexOf(":") + 1) + " with " +
                                     inheritLibName.substring(inheritLibName.lastIndexOf(":") + 1));
-
-                            // Remove the library , superseded by the overriding libs
                             inheritLibraryList.remove(inheritLibrary);
                             continue outer_loop;
                         }
                     }
                 }
 
-                // Fuse libraries
                 inheritLibraryList.addAll(Arrays.asList(customVer.libraries));
                 inheritsVer.libraries = inheritLibraryList.toArray(new DependentLibrary[0]);
                 preProcessLibraries(inheritsVer.libraries);
 
-                // Inheriting Minecraft 1.13+ with append custom args
                 if (inheritsVer.arguments != null && customVer.arguments != null) {
                     List totalArgList = new ArrayList();
                     totalArgList.addAll(Arrays.asList(inheritsVer.arguments.game));
@@ -366,12 +304,10 @@ createLibraryInfo(libItem);
                         Object perCustomArg = customVer.arguments.game[i];
                         if (perCustomArg instanceof String) {
                             String perCustomArgStr = (String) perCustomArg;
-                            // Check if there is a duplicate argument on combine
                             if (perCustomArgStr.startsWith("--") && totalArgList.contains(perCustomArgStr)) {
                                 perCustomArg = customVer.arguments.game[i + 1];
                                 if (perCustomArg instanceof String) {
                                     perCustomArgStr = (String) perCustomArg;
-                                    // If the next is argument value, skip it
                                     if (!perCustomArgStr.startsWith("--")) {
                                         nskip++;
                                     }
@@ -394,7 +330,6 @@ createLibraryInfo(libItem);
         }
     }
 
-    // Prevent NullPointerException
     private static void insertSafety(JMinecraftVersionList.Version targetVer, JMinecraftVersionList.Version fromVer, String... keyArr) {
         for (String key : keyArr) {
             Object value = null;
