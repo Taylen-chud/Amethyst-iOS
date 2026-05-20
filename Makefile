@@ -149,10 +149,10 @@ METHOD_PACKAGE = \
 		IPA_SUFFIX=".ipa"; \
 	fi; \
 	if [ '$(SLIMMED_ONLY)' = '0' ]; then \
-		zip --symlinks -r $(OUTPUTDIR)/org.angelauramc.amethyst-$(VERSION)-$(PLATFORM_NAME)$$IPA_SUFFIX Payload; \
+		zip --symlinks -r $(OUTPUTDIR)/org.angelauramc.amethyst-$(VERSION)-$(PLATFORM_NAME)$$IPA_SUFFIX Payload || [ $$? -eq 18 ]; \
 	fi; \
 	if [ '$(SLIMMED)' = '1' ] || [ '$(SLIMMED_ONLY)' = '1' ]; then \
-		zip --symlinks -r $(OUTPUTDIR)/org.angelauramc.amethyst.slimmed-$(VERSION)-$(PLATFORM_NAME)$$IPA_SUFFIX Payload --exclude='Payload/AngelAuraAmethyst.app/java_runtimes/*'; \
+		zip --symlinks -r $(OUTPUTDIR)/org.angelauramc.amethyst.slimmed-$(VERSION)-$(PLATFORM_NAME)$$IPA_SUFFIX Payload --exclude='Payload/AngelAuraAmethyst.app/java_runtimes/*' || [ $$? -eq 18 ]; \
 	fi
 
 # Function to download and unpack Java runtimes.
@@ -367,6 +367,8 @@ payload: native dep_mg java jre assets
 		ldid -S$(SOURCEDIR)/entitlements.sideload.xml $(OUTPUTDIR)/Payload/AngelAuraAmethyst.app/AngelAuraAmethyst; \
 	fi
 	chmod -R 755 $(OUTPUTDIR)/Payload
+	# Clean up any residual .dSYM leftovers that shouldn't be here before zip packaging rules run
+	rm -rf $(OUTPUTDIR)/Payload/AngelAuraAmethyst.app/*.dSYM || true
 	# Always run the platform retag
 	$(call METHOD_MACHO,$(OUTPUTDIR)/Payload/AngelAuraAmethyst.app,$(call METHOD_CHANGE_PLAT,$(PLATFORM),$$file)); \
 	$(call METHOD_MACHO,$(OUTPUTDIR)/java_runtimes,$(call METHOD_CHANGE_PLAT,$(PLATFORM),$$file));
@@ -410,7 +412,7 @@ package: payload
 	fi
 	cd $(OUTPUTDIR); \
 	$(call METHOD_PACKAGE); \
-	zip --symlinks -r $(OUTPUTDIR)/java_runtimes.zip java_runtimes; \
+	zip --symlinks -r $(OUTPUTDIR)/java_runtimes.zip java_runtimes || [ $$? -eq 18 ]; \
 	echo '[Amethyst v$(VERSION)] package - end'
 	
 dsym: payload
