@@ -39,7 +39,7 @@ public class GLFW
     public static final int GLFW_VERSION_MINOR = 4;
 
     /** The revision number of the GLFW library. This is incremented when a bug fix release is made that does not contain any API changes. */
-    public static final int GLFW_VERSION_REVISION = 0;
+    public static final int GLFW_VERSION_REVISION = 1;
 
     /** Boolean values. */
     public static final int
