@@ -9,7 +9,7 @@ TARGETS := $(shell find $(SOURCEDIR) -mindepth 1 -maxdepth 1 -type d)
 TARGETS := $(TARGETS:$(SOURCEDIR)/%=$(OUTPUTDIR)/%.jar)
 
 # Add all jars to classpath and allow compiling with private API
-JCFLAGS := -cp "$(subst $() $(),:,$(wildcard $(SOURCEDIR)/*/):$(wildcard libs/*/*.jar))" -XDignore.symbol.file
+JCFLAGS := -cp "$(subst $() $(),:,$(wildcard $(SOURCEDIR)/*/):$(wildcard libs/lwjgl/*.jar):$(wildcard libs/others/*.jar):$(wildcard libs/caciocavallo/*.jar):$(wildcard libs/caciocavallo17/*.jar))" -XDignore.symbol.file
 
 all: $(TARGETS) $(OUTPUTDIR)/lwjgl33.jar
 	
