@@ -1,0 +1,90 @@
+diff --git a/JavaApp/Makefile b/JavaApp/Makefile
+index b97004a..320162f 100644
+--- a/JavaApp/Makefile
++++ b/JavaApp/Makefile
+@@ -60,6 +60,18 @@ $(OUTPUTDIR)/patchjna_agent.jar: $(CLASSES)
+ 	@echo "Creating $@"
+ 	@$(BOOTJDK)/jar -cfm $@ $(SOURCEDIR)/patchjna_agent.txt -C $(basename $@) .
+ 
++$(OUTPUTDIR)/patchsvc.jar: $(CLASSES)
++	@set -e
++	@mv $(basename $@)/de/maxhenkel/lame4j/Mp3Decoder.class $(basename $@)/de/maxhenkel/lame4j/Mp3Decoder.class.patch
++	@mv $(basename $@)/de/maxhenkel/lame4j/Mp3Encoder.class $(basename $@)/de/maxhenkel/lame4j/Mp3Encoder.class.patch
++	@mv $(basename $@)/de/maxhenkel/opus4j/OpusDecoder.class $(basename $@)/de/maxhenkel/opus4j/OpusDecoder.class.patch
++	@mv $(basename $@)/de/maxhenkel/opus4j/OpusEncoder.class $(basename $@)/de/maxhenkel/opus4j/OpusEncoder.class.patch
++	@mv $(basename $@)/de/maxhenkel/rnnoise4j/Denoiser.class $(basename $@)/de/maxhenkel/rnnoise4j/Denoiser.class.patch
++	@mv $(basename $@)/de/maxhenkel/speex4j/AutomaticGainControl.class $(basename $@)/de/maxhenkel/speex4j/AutomaticGainControl.class.patch
++	@rm -rf $(basename $@)/de/maxhenkel/*/*.class
++	@echo "Creating $@"
++	@$(BOOTJDK)/jar -cfm $@ $(SOURCEDIR)/patchsvc.txt -C $(basename $@) .
++
+ clean:
+ 	rm -rf $(OUTPUTDIR)
+ 
+diff --git a/JavaApp/src/patchjna_agent/com/sun/jna/Platform.java b/JavaApp/src/patchjna_agent/com/sun/jna/Platform.java
+index c027da6..22a71db 100644
+--- a/JavaApp/src/patchjna_agent/com/sun/jna/Platform.java
++++ b/JavaApp/src/patchjna_agent/com/sun/jna/Platform.java
+@@ -115,6 +115,7 @@ public final class Platform {
+             try {
+                 matchingClasses.add(Class.forName("de.maxhenkel.voicechat.config.ClientConfig"));
+                 matchingClasses.add(Class.forName("de.maxhenkel.voicechat.VoicechatClient"));
++                matchingClasses.add(Class.forName("de.maxhenkel.voicechat.voice.client.microphone.MicrophoneManager"));
+                 isMacFoundVoiceChatMod = true;
+             } catch (Throwable th) {}
+             try {
+diff --git a/Natives/JavaLauncher.m b/Natives/JavaLauncher.m
+index 616e982..b56abec 100644
+--- a/Natives/JavaLauncher.m
++++ b/Natives/JavaLauncher.m
+@@ -278,6 +278,9 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
+     if(getPrefBool(@"general.cosmetica")) {
+         margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/arc_dns_injector.jar=23.95.137.176", librariesPath].UTF8String;
+     }
++    if(getPrefBool(@"video.fix_simple_voice_chat_mod")) {
++        margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchsvc.jar=", librariesPath].UTF8String;
++    }
+ 
+     // Workaround random stack guard allocation crashes
+     margv[++margc] = "-XX:+UnlockExperimentalVMOptions";
+diff --git a/Natives/LauncherPreferencesViewController.m b/Natives/LauncherPreferencesViewController.m
+index 776f3d9..ed0d0a1 100644
+--- a/Natives/LauncherPreferencesViewController.m
++++ b/Natives/LauncherPreferencesViewController.m
+@@ -216,7 +216,12 @@
+               @"icon": @"mic",
+               @"type": self.typeSwitch
+             },
+-        ], @[
++            @{@"key": @"fix_simple_voice_chat_mod",
++              @"hasDetail": @YES,
++              @"icon": @"waveform",
++              @"type": self.typeSwitch
++            },
++        ], @[ 
+             // Control settings
+             @{@"icon": @"gamecontroller"},
+             @{@"key": @"default_gamepad_ctrl",
+diff --git a/Natives/PLPreferences.m b/Natives/PLPreferences.m
+index 955d797..df99b41 100644
+--- a/Natives/PLPreferences.m
++++ b/Natives/PLPreferences.m
+@@ -25,6 +25,7 @@
+             @"fullscreen_airplay": @YES,
+             @"silence_other_audio": @NO,
+             @"silence_with_switch": @NO,
++            @"fix_simple_voice_chat_mod": @NO,
+             @"allow_microphone": @NO
+         }.mutableCopy,
+         @"control": @{
+diff --git a/Natives/resources/en.lproj/Localizable.strings b/Natives/resources/en.lproj/Localizable.strings
+index 9541a1f..fb8e6aa 100644
+--- a/Natives/resources/en.lproj/Localizable.strings
++++ b/Natives/resources/en.lproj/Localizable.strings
+@@ -332,3 +332,6 @@
+ "controller_configurator.section.footer.menu_mappings" = "Bindings when the mouse is not locked, such as on the title screen or in the pause menu.";
+ "controller_configurator.section.controller_style" = "Controller type";
+ "controller_configurator.section.footer.controller_style" = "Show different controller button names in this configurator.";
++
++"preference.title.fix_simple_voice_chat_mod" = "Fix Simple Voice Chat";
++"preference.detail.fix_simple_voice_chat_mod" = "Apply compatibility patches for Simple Voice Chat mods.";

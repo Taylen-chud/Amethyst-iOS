@@ -332,3 +332,6 @@
 "controller_configurator.section.footer.menu_mappings" = "Bindings when the mouse is not locked, such as on the title screen or in the pause menu.";
 "controller_configurator.section.controller_style" = "Controller type";
 "controller_configurator.section.footer.controller_style" = "Show different controller button names in this configurator.";
+
+"preference.title.fix_simple_voice_chat_mod" = "Fix Simple Voice Chat";
+"preference.detail.fix_simple_voice_chat_mod" = "Apply compatibility patches for Simple Voice Chat mods.";

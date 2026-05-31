@@ -25,6 +25,7 @@
             @"fullscreen_airplay": @YES,
             @"silence_other_audio": @NO,
             @"silence_with_switch": @NO,
+            @"fix_simple_voice_chat_mod": @NO,
             @"allow_microphone": @NO
         }.mutableCopy,
         @"control": @{

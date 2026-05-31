@@ -1,0 +1,2 @@
+Agent-Class: com.congcq.patchsvc.PatchSVC
+Premain-Class: com.congcq.patchsvc.PatchSVC

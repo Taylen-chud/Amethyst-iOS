@@ -278,6 +278,9 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     if(getPrefBool(@"general.cosmetica")) {
         margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/arc_dns_injector.jar=23.95.137.176", librariesPath].UTF8String;
     }
+    if(getPrefBool(@"video.fix_simple_voice_chat_mod")) {
+        margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchsvc.jar=", librariesPath].UTF8String;
+    }
 
     // Workaround random stack guard allocation crashes
     margv[++margc] = "-XX:+UnlockExperimentalVMOptions";
