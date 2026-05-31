@@ -16,6 +16,9 @@
 
 * ~~make the java 25 implementation less "hacky"~~
 
+# ISSUES 
+
+* keyboard dosent work properly
 
 # NOTE
 if you do use this build and want to use the new
