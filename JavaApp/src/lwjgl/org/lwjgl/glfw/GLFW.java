@@ -865,6 +865,11 @@ public class GLFW
         return 1L;
     }
 
+    public static String glfwGetMonitorName(long monitor) {
+        return "iOS Display";
+    }
+
+
     public static void glfwGetMonitorPos(@NativeType("GLFWmonitor *") long monitor, @Nullable @NativeType("int *") IntBuffer xpos, @Nullable @NativeType("int *") IntBuffer ypos) {
         if (CHECKS) {
             checkSafe(xpos, 1);
