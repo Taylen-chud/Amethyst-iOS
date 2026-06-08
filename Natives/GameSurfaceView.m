@@ -13,7 +13,7 @@
     self.layer.drawsAsynchronously = YES;
     self.layer.opaque = YES;
 
-    if (@available(iOS 15.0, *)) {
+    if (@available(iOS 16.0, *)) {
         if ([self.layer isKindOfClass:CAMetalLayer.class]) {
             CAMetalLayer *metalLayer = (CAMetalLayer *)self.layer;
             metalLayer.preferredFrameRateRange = CAFrameRateRangeMake(30, 120, 120);
