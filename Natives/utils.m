@@ -195,18 +195,7 @@ BOOL DeviceCanCreateRXMap(void) {
     return ret == 0;
 }
 BOOL DeviceHasTXM(void) {
-    DIR *d = opendir("/private/preboot");
-    if(!d) return NO;
-    struct dirent *dir;
-    char txmPath[PATH_MAX];
-    while ((dir = readdir(d)) != NULL) {
-        if(strlen(dir->d_name) == 96) {
-            snprintf(txmPath, sizeof(txmPath), "/private/preboot/%s/usr/standalone/firmware/FUD/Ap,TrustedExecutionMonitor.img4", dir->d_name);
-            break;
-        }
-    }
-    closedir(d);
-    return access(txmPath, F_OK) == 0;
+    return YES;
 }
 JITFlags DeviceGetJITFlags(BOOL refresh) {
     static JITFlags cachedFlags = 0;
@@ -226,13 +215,10 @@ JITFlags DeviceGetJITFlags(BOOL refresh) {
         
         if (@available(iOS 26.0, *)) {
             cachedFlags |= JIT_FLAG_IS_IOS_26;
-            if (!DeviceCanCreateRXMap()) {
-                cachedFlags |= JIT_FLAG_FORCE_MIRRORED;
-            }
+            cachedFlags |= JIT_FLAG_FORCE_MIRRORED;
         }
-        if (DeviceHasTXM()) {
-            cachedFlags |= JIT_FLAG_HAS_TXM;
-        }
+        cachedFlags |= JIT_FLAG_HAS_TXM;
+        
     });
     return cachedFlags;
 }
