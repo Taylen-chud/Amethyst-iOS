@@ -13,11 +13,15 @@
     self.layer.drawsAsynchronously = YES;
     self.layer.opaque = YES;
 
-    if (@available(iOS 16.0, *)) {
-        if ([self.layer isKindOfClass:CAMetalLayer.class]) {
-            CAMetalLayer *metalLayer = (CAMetalLayer *)self.layer;
-            metalLayer.preferredFrameRateRange = CAFrameRateRangeMake(30, 120, 120);
-        }
+    if ([self.layer respondsToSelector:NSSelectorFromString(@"setPreferredFrameRateRange:")]) {
+        NSMethodSignature *sig = [self.layer methodSignatureForSelector:NSSelectorFromString(@"setPreferredFrameRateRange:")];
+        NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+        inv.target = self.layer;
+        inv.selector = NSSelectorFromString(@"setPreferredFrameRateRange:");
+        // CAFrameRateRange is {float minimum, float maximum, float preferred}
+        float range[3] = {30.0f, 120.0f, 120.0f};
+        [inv setArgument:&range atIndex:2];
+        [inv invoke];
     }
 
     return self;
