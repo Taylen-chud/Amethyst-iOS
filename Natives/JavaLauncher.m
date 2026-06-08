@@ -51,6 +51,9 @@ void init_loadDefaultEnv() {
 
     // Runs JVM in a separate thread
     setenv("HACK_IGNORE_START_ON_FIRST_THREAD", "1", 1);
+
+    // Force MoltenVK to use immediate present mode (uncapped fps)
+    setenv("MVK_CONFIG_PRESENT_MODE_IMMEDIATE", "1", 1);
 }
 
 void init_loadCustomEnv() {
@@ -360,9 +363,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = cacio_classpath.UTF8String;
 
     if (!getEntitlementValue(@"com.apple.developer.kernel.extended-virtual-addressing")) {
-        // In jailed environment, where extended virtual addressing entitlement isn't
-        // present (for free dev account), allocating compressed space fails.
-        // FIXME: does extended VA allow allocating compressed class space?
         margv[++margc] = "-XX:-UseCompressedClassPointers";
     }
 
@@ -380,7 +380,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         ? [NSString stringWithFormat:@"%@/lwjgl33.jar", librariesPath]
         : [NSString stringWithFormat:@"%@/lwjgl.jar", librariesPath];
     NSLog(@"[JavaLauncher] Using LWJGL %@ jar", useLWJGL33 ? @"3.3.x" : @"3.4.x");
-    // Build classpath with all jars from libs/ except lwjgl*.jar, then add correct lwjgl jar
     NSMutableString *classpathBuilder = [NSMutableString string];
     NSArray *libFiles = [fm contentsOfDirectoryAtPath:librariesPath error:nil];
     for (NSString *libFile in libFiles) {
@@ -409,7 +408,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     } else {
         margv[++margc] = [launchTarget UTF8String];
     }
-    //margv[++margc] = "ghidra.GhidraRun";
 
     pJLI_Launch = (JLI_Launch_func *)dlsym(libjli, "JLI_Launch");
 
@@ -420,25 +418,20 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
 
     NSLog(@"[Init] Calling JLI_Launch");
 
-    // Cr4shed known issue: exit after crash dump,
-    // reset signal handler so that JVM can catch them
     signal(SIGSEGV, SIG_DFL);
     signal(SIGPIPE, SIG_DFL);
     signal(SIGBUS, SIG_DFL);
     signal(SIGILL, SIG_DFL);
     signal(SIGFPE, SIG_DFL);
 
-    // Free split VC
     tmpRootVC = nil;
 
     return pJLI_Launch(++margc, margv,
-                   0, NULL, // sizeof(const_jargs) / sizeof(char *), const_jargs,
-                   0, NULL, // sizeof(const_appclasspath) / sizeof(char *), const_appclasspath,
-                   // These values are ignored in Java 17, so keep it anyways
+                   0, NULL,
+                   0, NULL,
                    "1.8.0-internal",
                    "1.8",
-
                    "java", "openjdk",
-                   /* (const_jargs != NULL) ? JNI_TRUE : */ JNI_FALSE,
+                   JNI_FALSE,
                    JNI_TRUE, JNI_FALSE, JNI_TRUE);
 }
