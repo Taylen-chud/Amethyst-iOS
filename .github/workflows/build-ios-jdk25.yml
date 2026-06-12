@@ -51,16 +51,8 @@ jobs:
         working-directory: openjdk-build
         run: |
           mkdir -p patches/jre_25/ios
-          # Phase 2: apply BOTH patches. mirror_mapping is required for
-          # JIT to work on iOS 26 + TXM (iPhone 17 / A19 Pro). Without
-          # it, code pages allocated via MAP_JIT can't transition to
-          # executable (APRR is disabled on TXM, pthread_jit_write_protect_np
-          # is marked unavailable in the iOS SDK). Mirror mapping uses
-          # vm_remap-based dual mappings instead — same approach
-          # crystall1ne uses for working JDK 21 on iOS 26.
           cp patches/jre_21/ios/1_jdk21u_ios.diff patches/jre_25/ios/
           cp patches/jre_21/ios/2_mirror_mapping.diff patches/jre_25/ios/
-          # Allow our own override / extension patches
           if [ -d ../amethyst/scripts/jdk25_ios_patches ]; then
             cp ../amethyst/scripts/jdk25_ios_patches/*.diff patches/jre_25/ios/ 2>/dev/null || true
           fi
@@ -74,9 +66,6 @@ jobs:
 
       - name: Pre-scan JDK 25 source for known-bad iOS patterns
         run: |
-          # Static analysis catches iOS-incompatible includes / API calls
-          # before we burn 13 min compiling. Clone to /tmp so the actual
-          # build's 5_clonejdk.sh can do its own clone undisturbed.
           SCAN_DIR=/tmp/jdk25-scan
           rm -rf "$SCAN_DIR"
           git clone --depth 1 --branch jdk-25.0.1+8 https://github.com/openjdk/jdk25u "$SCAN_DIR" 2>&1 | tail -3
@@ -108,22 +97,11 @@ jobs:
           python3 << 'PYEOF'
           with open('6_buildjdk.sh','r') as f: s = f.read()
 
-          # 1. Make git apply tolerant on rejects (the upstream `|| exit 1`
-          #    aborts the whole build before our fixup script can run).
           old_apply = 'git apply --reject --whitespace=fix {} || (echo "git apply failed (iOs patch set)" && exit 1)'
           new_apply = 'git apply --reject --whitespace=fix {} || echo "git apply had rejects (fuzz-fallback + fixup script will handle)"'
           assert old_apply in s, "could not find git apply line to patch"
           s = s.replace(old_apply, new_apply)
 
-          # 1b. Insert a fuzz-fallback pass AFTER all patches have been
-          #     git-applied. For each .rej file, retry with GNU patch -F 100
-          #     --ignore-whitespace which tolerates line shifts. patch is
-          #     mature; finds shifted hunks via context matching. This
-          #     auto-resolves the bulk of mirror_mapping rejections.
-          fuzz_marker = "echo \"Applying {}\" && git apply"
-          # Find the line containing the iOS xargs invocation and insert AFTER it.
-          # 6_buildjdk.sh has TWO xargs lines: one for Android in `if "$BUILD_IOS" != "1"`,
-          # one for iOS in the `else`. We want the iOS one, so the regex requires `/ios/`.
           import re
           xargs_line_re = re.compile(r"^([ \t]*)find \.\./patches/jre[^\n]*ios[^\n]*\.diff[^\n]*xargs[^\n]*$", re.MULTILINE)
           matches = list(xargs_line_re.finditer(s))
@@ -132,18 +110,9 @@ jobs:
           m = matches[0]
           indent = m.group(1)
           print(f"OK: located iOS xargs at offset {m.start()} indent={len(indent)} chars")
-          # Single triple-quoted string so I can't accidentally break the
-          # concat with stray comments. apply_rejs.py runs AFTER patch -F
-          # 100 fuzz pass to pick up hunks neither got automatically.
           fuzz_block = (
               f"\n"
               f"{indent}# Fuzz-fallback: try GNU patch -F 100 on each .rej from git apply.\n"
-              f"{indent}# Pass target file EXPLICITLY because git apply's .rej format omits\n"
-              f"{indent}# the standard `--- a/path` / `+++ b/path` headers that patch needs\n"
-              f"{indent}# to auto-detect targets. Without -p N + diff headers, patch goes\n"
-              f"{indent}# interactive (\"File to patch:\") then dumps to Oops.rej and skips.\n"
-              f"{indent}# Move .rej to .bak before patch runs so patch can write its own\n"
-              f"{indent}# (smaller) .rej of leftover hunks at the original location.\n"
               f"{indent}for r in $(find . -name '*.rej' 2>/dev/null); do\n"
               f"{indent}  target=$(echo \"$r\" | sed 's/\\.rej$//')\n"
               f"{indent}  if [ ! -f \"$target\" ]; then echo \"[fuzz-fallback] no target for $r\"; continue; fi\n"
@@ -152,28 +121,30 @@ jobs:
               f"{indent}  patch -F 100 --ignore-whitespace \"$target\" < \"$r.bak\" 2>&1 | tail -5 || echo \"  patch nonzero\"\n"
               f"{indent}  rm -f \"$r.bak\"\n"
               f"{indent}done\n"
-              f"{indent}rm -f Oops.rej  # stale fallback name from any earlier interactive patch\n"
+              f"{indent}rm -f Oops.rej\n"
               f"{indent}echo \"=== apply_rejs.py: aggressive context-shrink applier ===\"\n"
               f"{indent}python3 ../../amethyst/scripts/apply_rejs.py . || echo \"apply_rejs.py exited non-zero\"\n"
           )
           s = s[:m.end()] + fuzz_block + s[m.end():]
 
-          # 2. Inject our fixup script call AFTER the git-apply step and AFTER
-          #    the macOS-desktop hack that mv's macosx out of the way. The
-          #    fixup runs only for iOS+JDK25 builds.
           inject = '''
-          # iOS JDK 25 fixups: targeted text replacements for hunks the JDK 21
-          # base patch could not place because OpenJDK source moved between
-          # versions. WARNs are non-fatal because apply_rejs.py may have already
-          # applied the change in a different form (e.g. base-patch's
-          # `ifeq (false, true)` instead of fixup's `macosx_NOTIOS`) — both
-          # achieve the iOS skip, the file just doesn't have the fixup's
-          # expected `old` text anymore.
+          # iOS JDK 25 fixups
           if [[ "$BUILD_IOS" == "1" ]] && [[ "$TARGET_VERSION" == "25" ]]; then
             echo "[fixups] running jdk25_ios_fixups.py..."
-            # 6_buildjdk.sh has cd'd into openjdk-25/ (i.e. openjdk-build/openjdk-25/),
-            # so amethyst checkout is two levels up.
-            python3 ../../amethyst/scripts/jdk25_ios_fixups.py . || echo "[fixups] exited non-zero (likely WARNs from apply_rejs.py overlap; see output above)"
+            python3 ../../amethyst/scripts/jdk25_ios_fixups.py . || echo "[fixups] exited non-zero"
+
+            # Hard sed fix for _load_reported bitfield — immune to whitespace
+            # mismatches that cause the Python fixup to miss. This rewrites
+            # set_load_reported() to use mirror_w(this) instead of taking the
+            # address of the bitfield, which C++ forbids.
+            NMETHOD_HPP="src/hotspot/share/code/nmethod.hpp"
+            if [ -f "$NMETHOD_HPP" ]; then
+              sed -i '' \
+                's/mirror_w_set(_load_reported) = true/mirror_w(this)->_load_reported = true/g' \
+                "$NMETHOD_HPP"
+              echo "[sed-fix] patched set_load_reported in nmethod.hpp"
+              grep -n "load_reported" "$NMETHOD_HPP" | head -5
+            fi
           fi
 
           '''
@@ -181,9 +152,6 @@ jobs:
           assert marker in s, "could not find injection point"
           s = s.replace(marker, inject + marker)
 
-          # 3. Use `make -k` (keep going) so a single failure doesn't stop
-          #    the whole build — we surface ALL iOS-incompatible spots in one
-          #    run instead of iterating one-error-at-a-time.
           old_make = 'make JOBS=$jobs images || \\'
           new_make = 'make JOBS=$jobs -k images || \\'
           if old_make in s:
@@ -193,7 +161,7 @@ jobs:
           with open('6_buildjdk.sh','w') as f: f.write(s)
           print("OK: patched 6_buildjdk.sh")
           PYEOF
-          grep -n "jdk25_ios_fixups\|git apply had rejects" 6_buildjdk.sh
+          grep -n "jdk25_ios_fixups\|git apply had rejects\|sed-fix" 6_buildjdk.sh
 
       - name: Build iOS JDK 25
         working-directory: openjdk-build
@@ -206,7 +174,6 @@ jobs:
           set -o pipefail
           export TARGET=aarch64-apple-ios
           export TARGET_JDK=aarch64
-          # tee swallowed the exit code last time; pipefail propagates it
           bash 2_ci_build_global.sh 2>&1 | tee build.log
 
       - name: Show last 200 lines of build log
