@@ -1,12 +1,12 @@
 name: Build iOS JDK 25
 
-# Manually triggered (or via push to a special path) — OpenJDK builds take
+# Manually triggered (or via push to a special path) â€” OpenJDK builds take
 # 40-90 min on macos-14, so this is opt-in not auto.
 #
 # Strategy: lean on AngelAuraMC/angelauramc-openjdk-build's existing iOS
 # build infrastructure (judge/buildjre17-21-25 branch). They have iOS
 # patches for JDK 21 and Android patches for JDK 25 but no iOS-25 yet.
-# We use the JDK 21 iOS patches as a starting point against JDK 25 source —
+# We use the JDK 21 iOS patches as a starting point against JDK 25 source â€”
 # expect some hunks to fail and require manual fixup as we iterate.
 
 on:
@@ -33,7 +33,7 @@ jobs:
           ref: judge/buildjre17-21-25
           path: openjdk-build
 
-      - name: Setup boot JDK (Temurin 25 — required to jlink JDK 25 jmods)
+      - name: Setup boot JDK (Temurin 25 â€” required to jlink JDK 25 jmods)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -133,7 +133,7 @@ jobs:
             echo "[fixups] running jdk25_ios_fixups.py..."
             python3 ../../amethyst/scripts/jdk25_ios_fixups.py . || echo "[fixups] exited non-zero"
 
-            # Hard sed fix for _load_reported bitfield — immune to whitespace
+            # Hard sed fix for _load_reported bitfield â€” immune to whitespace
             # mismatches that cause the Python fixup to miss. This rewrites
             # set_load_reported() to use mirror_w(this) instead of taking the
             # address of the bitfield, which C++ forbids.
@@ -146,7 +146,7 @@ jobs:
               grep -n "load_reported" "$NMETHOD_HPP" | head -5
             fi
 
-            # Hard fix for memMapPrinter_macosx.cpp — the Python fixup wraps
+            # Hard fix for memMapPrinter_macosx.cpp â€” the Python fixup wraps
             # it in a !TARGET_OS_IPHONE guard but the old text didn't match.
             # mach_vm.h is explicitly unsupported on iOS SDK so this file must
             # be excluded entirely, with an empty stub so the NMT linker symbol
@@ -166,6 +166,20 @@ jobs:
               } > /tmp/mmp_patch.cpp
               cp /tmp/mmp_patch.cpp "$MEMMAPPRINTER"
               echo "[sed-fix] patched memMapPrinter_macosx.cpp with iOS guard + stub"
+            fi
+
+            # Hard fix for -mmacosx-version-min linker flag conflict.
+            # The Python fixup comments out OS_LDFLAGS in flags-ldflags.m4
+            # but the old text didn't match. sed it out directly â€” the flag
+            # is incompatible with -miphoneos-version-min and causes the
+            # final libjvm.dylib link to fail.
+            FLAGS_LDFLAGS="make/autoconf/flags-ldflags.m4"
+            if [ -f "$FLAGS_LDFLAGS" ]; then
+              sed -i '' \
+                's|OS_LDFLAGS="-mmacosx-version-min=|#OS_LDFLAGS="-mmacosx-version-min=|g' \
+                "$FLAGS_LDFLAGS"
+              echo "[sed-fix] commented out OS_LDFLAGS in flags-ldflags.m4"
+              grep -n "OS_LDFLAGS" "$FLAGS_LDFLAGS" | head -5
             fi
           fi
 
