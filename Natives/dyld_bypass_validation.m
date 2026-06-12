@@ -227,25 +227,30 @@ void init_bypassDyldLibValidation() {
     bypassed = YES;
 
     NSDebugLog(@"[DyldLVBypass] init");
-    
-       if (@available(iOS 26.0, *)) {
-    if (DeviceHasJITFlags(JIT_FLAG_FORCE_MIRRORED | JIT_FLAG_HAS_TXM)) {
-        NSDebugLog(@"[DyldLVBypass] Using redirectFunctionMirrored");
-        redirectFunction = redirectFunctionMirrored;
-    } else if (DeviceHasJITFlags(JIT_FLAG_FORCE_MIRRORED)) {
-        // Non-TXM iOS 26+: avoid patching code in dsc, use hardware breakpoint instead
-        NSDebugLog(@"[DyldLVBypass] Using redirectFunctionHWBreakpoint");
+
+    if (@available(iOS 27.0, *)) {
+        // iOS 27 (Darwin 27 / xnu-13361): JIT26PrepareRegionForPatching and
+        // vm_remap hang during early dyld patching on TXM devices. Fall back
+        // to HWBreakpoint which worked correctly on iOS 27 beta 1.
+        NSDebugLog(@"[DyldLVBypass] iOS 27+: FORCED redirectFunctionHWBreakpoint");
         redirectFunction = redirectFunctionHWBreakpoint;
+    } else if (@available(iOS 26.0, *)) {
+        if (DeviceHasJITFlags(JIT_FLAG_FORCE_MIRRORED | JIT_FLAG_HAS_TXM)) {
+            NSDebugLog(@"[DyldLVBypass] Using redirectFunctionMirrored");
+            redirectFunction = redirectFunctionMirrored;
+        } else if (DeviceHasJITFlags(JIT_FLAG_FORCE_MIRRORED)) {
+            // Non-TXM iOS 26+: avoid patching code in dsc, use hardware breakpoint instead
+            NSDebugLog(@"[DyldLVBypass] Using redirectFunctionHWBreakpoint");
+            redirectFunction = redirectFunctionHWBreakpoint;
+        } else {
+            NSDebugLog(@"[DyldLVBypass] Using redirectFunctionDirect");
+            redirectFunction = redirectFunctionDirect;
+        }
     } else {
         NSDebugLog(@"[DyldLVBypass] Using redirectFunctionDirect");
         redirectFunction = redirectFunctionDirect;
     }
-} else {
-    NSDebugLog(@"[DyldLVBypass] Using redirectFunctionDirect");
-    redirectFunction = redirectFunctionDirect;
-}
 
-    
     // Modifying exec page during execution may cause SIGBUS, so ignore it now
     // Before calling JLI_Launch, this will be set back to SIG_DFL
     signal(SIGBUS, SIG_IGN);
