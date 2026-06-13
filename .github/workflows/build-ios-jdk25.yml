@@ -1,14 +1,5 @@
 name: Build iOS JDK 25
 
-# Manually triggered (or via push to a special path) — OpenJDK builds take
-# 40-90 min on macos-14, so this is opt-in not auto.
-#
-# Strategy: lean on AngelAuraMC/angelauramc-openjdk-build's existing iOS
-# build infrastructure (judge/buildjre17-21-25 branch). They have iOS
-# patches for JDK 21 and Android patches for JDK 25 but no iOS-25 yet.
-# We use the JDK 21 iOS patches as a starting point against JDK 25 source —
-# expect some hunks to fail and require manual fixup as we iterate.
-
 on:
   workflow_dispatch:
   push:
