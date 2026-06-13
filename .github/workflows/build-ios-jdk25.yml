@@ -1,5 +1,14 @@
 name: Build iOS JDK 25
 
+# Manually triggered (or via push to a special path) — OpenJDK builds take
+# 40-90 min on macos-14, so this is opt-in not auto.
+#
+# Strategy: lean on AngelAuraMC/angelauramc-openjdk-build's existing iOS
+# build infrastructure (judge/buildjre17-21-25 branch). They have iOS
+# patches for JDK 21 and Android patches for JDK 25 but no iOS-25 yet.
+# We use the JDK 21 iOS patches as a starting point against JDK 25 source —
+# expect some hunks to fail and require manual fixup as we iterate.
+
 on:
   workflow_dispatch:
   push:
@@ -24,7 +33,7 @@ jobs:
           ref: judge/buildjre17-21-25
           path: openjdk-build
 
-      - name: Setup boot JDK (Temurin 25)
+      - name: Setup boot JDK (Temurin 25 — required to jlink JDK 25 jmods)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -63,10 +72,24 @@ jobs:
           cd "$SCAN_DIR"
           echo "=== files including <mach/mach_vm.h> ==="
           grep -rn '#include\s*<mach/mach_vm.h>' src 2>/dev/null || echo "(none)"
+          echo ""
           echo "=== files including <sys/proc_info.h> ==="
           grep -rn '#include\s*<sys/proc_info.h>' src 2>/dev/null || echo "(none)"
+          echo ""
+          echo "=== mach_vm_* / mach_port_t / host_priv_t call sites ==="
+          grep -rln 'mach_vm_allocate\|mach_vm_deallocate\|mach_vm_protect\|mach_vm_region' src 2>/dev/null | head -20 || echo "(none)"
+          echo ""
           echo "=== macOS-only frameworks referenced ==="
           grep -rln 'AppKit\.h\|Cocoa\.h\|Carbon\.h' src 2>/dev/null | head -10 || echo "(none)"
+          echo ""
+          echo "=== files w/ __APPLE__ but no TARGET_OS_IPHONE in BSD paths ==="
+          for f in $(grep -rln '__APPLE__' src 2>/dev/null); do
+            if ! grep -q 'TARGET_OS_IPHONE\|TARGET_OS_OSX' "$f" 2>/dev/null; then
+              case "$f" in
+                src/hotspot/os/bsd/*|*macosx*|*_bsd*) echo "  $f" ;;
+              esac
+            fi
+          done | head -20
 
       - name: Patch OpenJDK build script (tolerate rejects + run our fixups)
         working-directory: openjdk-build
@@ -86,8 +109,10 @@ jobs:
           assert len(matches) == 1, f"expected exactly 1 iOS xargs line, found {len(matches)}"
           m = matches[0]
           indent = m.group(1)
+          print(f"OK: located iOS xargs at offset {m.start()} indent={len(indent)} chars")
           fuzz_block = (
               f"\n"
+              f"{indent}# Fuzz-fallback: try GNU patch -F 100 on each .rej from git apply.\n"
               f"{indent}for r in $(find . -name '*.rej' 2>/dev/null); do\n"
               f"{indent}  target=$(echo \"$r\" | sed 's/\\.rej$//')\n"
               f"{indent}  if [ ! -f \"$target\" ]; then echo \"[fuzz-fallback] no target for $r\"; continue; fi\n"
@@ -97,33 +122,43 @@ jobs:
               f"{indent}  rm -f \"$r.bak\"\n"
               f"{indent}done\n"
               f"{indent}rm -f Oops.rej\n"
+              f"{indent}echo \"=== apply_rejs.py: aggressive context-shrink applier ===\"\n"
               f"{indent}python3 ../../amethyst/scripts/apply_rejs.py . || echo \"apply_rejs.py exited non-zero\"\n"
           )
           s = s[:m.end()] + fuzz_block + s[m.end():]
 
           inject = '''
+          # iOS JDK 25 fixups
           if [[ "$BUILD_IOS" == "1" ]] && [[ "$TARGET_VERSION" == "25" ]]; then
             echo "[fixups] running jdk25_ios_fixups.py..."
             python3 ../../amethyst/scripts/jdk25_ios_fixups.py . || echo "[fixups] exited non-zero"
 
-            # Fix 1: _load_reported bitfield - C++ forbids taking address of bitfield
+            # Hard sed fix for _load_reported bitfield — immune to whitespace
+            # mismatches that cause the Python fixup to miss. This rewrites
+            # set_load_reported() to use mirror_w(this) instead of taking the
+            # address of the bitfield, which C++ forbids.
             NMETHOD_HPP="src/hotspot/share/code/nmethod.hpp"
             if [ -f "$NMETHOD_HPP" ]; then
-              sed -i '' 's/mirror_w_set(_load_reported) = true/mirror_w(this)->_load_reported = true/g' "$NMETHOD_HPP"
+              sed -i '' \
+                's/mirror_w_set(_load_reported) = true/mirror_w(this)->_load_reported = true/g' \
+                "$NMETHOD_HPP"
               echo "[sed-fix] patched set_load_reported in nmethod.hpp"
               grep -n "load_reported" "$NMETHOD_HPP" | head -5
             fi
 
-            # Fix 2: memMapPrinter_macosx.cpp includes mach_vm.h which is
-            # unsupported on iOS SDK. Wrap entire file in !TARGET_OS_IPHONE
-            # guard and provide an empty stub so the NMT linker symbol resolves.
+            # Hard fix for memMapPrinter_macosx.cpp — the Python fixup wraps
+            # it in a !TARGET_OS_IPHONE guard but the old text didn't match.
+            # mach_vm.h is explicitly unsupported on iOS SDK so this file must
+            # be excluded entirely, with an empty stub so the NMT linker symbol
+            # pd_print_all_mappings still resolves.
             MEMMAPPRINTER="src/hotspot/os/bsd/memMapPrinter_macosx.cpp"
             if [ -f "$MEMMAPPRINTER" ] && ! grep -q "TARGET_OS_IPHONE" "$MEMMAPPRINTER"; then
               {
                 echo '#include <TargetConditionals.h>'
                 echo '#if !TARGET_OS_IPHONE'
                 cat "$MEMMAPPRINTER"
-                echo '#endif'
+                echo '#endif // !TARGET_OS_IPHONE'
+                echo ''
                 echo '#if TARGET_OS_IPHONE'
                 echo '#include "nmt/memMapPrinter.hpp"'
                 echo 'void MemMapPrinter::pd_print_all_mappings(const MappingPrintSession&) {}'
@@ -133,31 +168,18 @@ jobs:
               echo "[sed-fix] patched memMapPrinter_macosx.cpp with iOS guard + stub"
             fi
 
-            # Fix 3: flags-ldflags.m4 still sets -mmacosx-version-min which
-            # conflicts with -miphoneos-version-min at link time.
+            # Hard fix for -mmacosx-version-min linker flag conflict.
+            # The Python fixup comments out OS_LDFLAGS in flags-ldflags.m4
+            # but the old text didn't match. sed it out directly — the flag
+            # is incompatible with -miphoneos-version-min and causes the
+            # final libjvm.dylib link to fail.
             FLAGS_LDFLAGS="make/autoconf/flags-ldflags.m4"
             if [ -f "$FLAGS_LDFLAGS" ]; then
-              sed -i '' 's|OS_LDFLAGS="-mmacosx-version-min=|#OS_LDFLAGS="-mmacosx-version-min=|g' "$FLAGS_LDFLAGS"
+              sed -i '' \
+                's|OS_LDFLAGS="-mmacosx-version-min=|#OS_LDFLAGS="-mmacosx-version-min=|g' \
+                "$FLAGS_LDFLAGS"
               echo "[sed-fix] commented out OS_LDFLAGS in flags-ldflags.m4"
               grep -n "OS_LDFLAGS" "$FLAGS_LDFLAGS" | head -5
-            fi
-
-            # Fix 4: libjli links ApplicationServices + Cocoa which don't exist
-            # on iOS. Replace with Foundation only.
-            CORELIBSDIR="make/modules/java.base/lib/CoreLibraries.gmk"
-            if [ -f "$CORELIBSDIR" ]; then
-              perl -i -0pe 's/-framework ApplicationServices\s*\\\s*\n\s*-framework Cocoa\s*\\/-framework Foundation \\/g' "$CORELIBSDIR" || true
-              echo "[sed-fix] patched CoreLibraries.gmk libjli frameworks"
-              grep -n "framework" "$CORELIBSDIR" | grep -i "applic\|cocoa\|foundation" | head -10
-            fi
-
-            # Fix 5: libnet missing CFNetwork framework - CFNetworkCopyProxiesForURL
-            # and friends are in CFNetwork, not CoreServices.
-            JAVABASE_LIB="make/modules/java.base/Lib.gmk"
-            if [ -f "$JAVABASE_LIB" ]; then
-              sed -i '' 's|-framework CoreServices, \\|-framework CoreServices \\\n        -framework CFNetwork, \\|g' "$JAVABASE_LIB" || true
-              echo "[sed-fix] patched Lib.gmk libnet CFNetwork"
-              grep -n "CFNetwork\|CoreServices" "$JAVABASE_LIB" | head -10
             fi
           fi
 
@@ -170,12 +192,12 @@ jobs:
           new_make = 'make JOBS=$jobs -k images || \\'
           if old_make in s:
               s = s.replace(old_make, new_make)
-              print("OK: enabled make -k")
+              print("OK: enabled make -k (keep going on errors)")
 
           with open('6_buildjdk.sh','w') as f: f.write(s)
           print("OK: patched 6_buildjdk.sh")
           PYEOF
-          grep -n "jdk25_ios_fixups\|sed-fix" 6_buildjdk.sh
+          grep -n "jdk25_ios_fixups\|git apply had rejects\|sed-fix" 6_buildjdk.sh
 
       - name: Build iOS JDK 25
         working-directory: openjdk-build
