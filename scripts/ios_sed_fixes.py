@@ -201,34 +201,57 @@ else:
     print('[ios_sed_fixes] fix7: WARN AwtLibraries.gmk not found')
 
 
-# Fix 8: ClientLibraries.gmk - guard BUILD_LIBOSXUI with macosx_NOTIOS.
-# Sources live in src/java.desktop/macosx which gets moved out on iOS,
-# causing "No sources found for BUILD_LIBOSXUI".
+# Fix 8: ClientLibraries.gmk - guard the ENTIRE libosxui block with
+# macosx_NOTIOS. The outer ifeq (macosx) wraps both Metal shader compilation
+# AND the SetupJdkLibrary call. The Metal shader step references
+# src/java.desktop/macosx/native/... which gets moved out on iOS, so the
+# entire block must be skipped, not just the library setup.
 p = ROOT / 'make/modules/java.desktop/lib/ClientLibraries.gmk'
 if p.exists():
     s = p.read_text()
-    if 'libosxui disabled for iOS' not in s:
-        original = s
-        old = '$(eval $(call SetupJdkLibrary, BUILD_LIBOSXUI,'
-        if old in s:
-            idx = s.index(old)
-            targets_marker = 'TARGETS += $(BUILD_LIBOSXUI)'
-            targets_idx = s.index(targets_marker, idx)
-            end_idx = targets_idx + len(targets_marker)
-            block = s[idx:end_idx]
-            new_block = (
-                '# libosxui disabled for iOS - sources moved to macosx_NOTIOS\n'
-                'ifeq ($(call isTargetOs, macosx_NOTIOS), true)\n'
-                + block + '\n'
-                'endif'
-            )
-            s = s[:idx] + new_block + s[end_idx:]
-            p.write_text(s)
-            print('[ios_sed_fixes] fix8: patched ClientLibraries.gmk BUILD_LIBOSXUI guard')
-        else:
-            print('[ios_sed_fixes] fix8: WARN BUILD_LIBOSXUI block not found in ClientLibraries.gmk')
+    original = s
+    # Change the outer macosx guard that wraps the entire libosxui block
+    # (Metal shaders + SetupJdkLibrary + TARGETS line)
+    old = 'ifeq ($(call isTargetOs, macosx), true)\n  ##############################################################################\n  ## Build libosxui'
+    new = 'ifeq ($(call isTargetOs, macosx_NOTIOS), true)\n  ##############################################################################\n  ## Build libosxui'
+    if old in s:
+        s = s.replace(old, new)
+        print('[ios_sed_fixes] fix8: patched ClientLibraries.gmk outer libosxui guard')
     else:
-        print('[ios_sed_fixes] fix8: ClientLibraries.gmk already patched')
+        # Try the actual format we saw in the patched tree
+        old2 = 'ifeq ($(call isTargetOs, macosx), true)\n  ##############################################################################\n  ## Build libosxui\n  ##############################################################################'
+        new2 = 'ifeq ($(call isTargetOs, macosx_NOTIOS), true)\n  ##############################################################################\n  ## Build libosxui\n  ##############################################################################'
+        if old2 in s:
+            s = s.replace(old2, new2)
+            print('[ios_sed_fixes] fix8: patched ClientLibraries.gmk outer libosxui guard (v2)')
+        else:
+            # Regex fallback — match any macosx guard before Build libosxui
+            s2 = re.sub(
+                r'ifeq \(\$\(call isTargetOs, macosx\), true\)(\s*\n\s*#{10,}\s*\n\s*## Build libosxui)',
+                r'ifeq ($(call isTargetOs, macosx_NOTIOS), true)\1',
+                s
+            )
+            if s2 != s:
+                s = s2
+                print('[ios_sed_fixes] fix8: patched ClientLibraries.gmk outer libosxui guard (regex)')
+            else:
+                print('[ios_sed_fixes] fix8: WARN outer libosxui guard not found')
+                for i, line in enumerate(s.splitlines(), 1):
+                    if 'libosxui' in line or ('isTargetOs' in line and 'macosx' in line):
+                        print(f'  {i}: {line}')
+
+    # Also remove the redundant inner macosx_NOTIOS guard that fix8 previously
+    # added inside the outer block (now the outer block handles it)
+    if '# libosxui disabled for iOS - sources moved to macosx_NOTIOS\nifeq ($(call isTargetOs, macosx_NOTIOS), true)' in s:
+        s = s.replace(
+            '  # libosxui disabled for iOS - sources moved to macosx_NOTIOS\nifeq ($(call isTargetOs, macosx_NOTIOS), true)\n',
+            '  '
+        )
+        # Find matching endif and remove it
+        print('[ios_sed_fixes] fix8: removed redundant inner macosx_NOTIOS guard')
+
+    if s != original:
+        p.write_text(s)
 else:
     print('[ios_sed_fixes] fix8: WARN ClientLibraries.gmk not found')
 
@@ -326,30 +349,19 @@ else:
 
 
 # Fix 12: ClientLibraries.gmk - libfontmanager depends on libawt_lwawt
-# which is skipped on iOS. Switch all occurrences to libawt_headless.
+# which is skipped on iOS. Switch ALL occurrences to libawt_headless.
 # Run unconditionally since partial application leaves stale lwawt references.
 p = ROOT / 'make/modules/java.desktop/lib/ClientLibraries.gmk'
 if p.exists():
     s = p.read_text()
     original = s
-    # Try all known spacing/trailing variants first.
-    patterns = [
-        ('JDK_LIBS_macosx := libawt_lwawt, \\',
-         'JDK_LIBS_macosx := libawt_headless, \\'),
-        ('JDK_LIBS_macosx := libawt_lwawt,',
-         'JDK_LIBS_macosx := libawt_headless,'),
-        ('JDK_LIBS_macosx := libawt_lwawt \\',
-         'JDK_LIBS_macosx := libawt_headless \\'),
-    ]
-    for old, new in patterns:
-        if old in s:
-            s = s.replace(old, new)
-    # Also catch any whitespace variation and bare references.
+    # Replace ALL occurrences unconditionally via regex
     s = re.sub(
         r'(JDK_LIBS_macosx\s*:=\s*)libawt_lwawt',
         r'\1libawt_headless',
         s
     )
+    # Also catch bare libawt_lwawt references in LIBS lines
     s = re.sub(
         r'\blibawt_lwawt\b',
         'libawt_headless',
@@ -357,7 +369,7 @@ if p.exists():
     )
     if s != original:
         p.write_text(s)
-        print('[ios_sed_fixes] fix12: patched ClientLibraries.gmk libawt_lwawt -> libawt_headless')
+        print('[ios_sed_fixes] fix12: patched ClientLibraries.gmk all libawt_lwawt -> libawt_headless')
         for line in s.splitlines():
             if 'libawt' in line:
                 print(' ', repr(line))
