@@ -68,6 +68,108 @@ jobs:
           echo "=== macOS-only frameworks referenced ==="
           grep -rln 'AppKit\.h\|Cocoa\.h\|Carbon\.h' src 2>/dev/null | head -10 || echo "(none)"
 
+      - name: Write iOS sed-fix helper script
+        run: |
+          cat > /tmp/ios_sed_fixes.py << 'PYSCRIPT'
+import re, subprocess
+from pathlib import Path
+
+def run(cmd):
+    subprocess.run(cmd, shell=True)
+
+root = Path('.')
+
+# Fix 1: _load_reported bitfield
+p = root / 'src/hotspot/share/code/nmethod.hpp'
+if p.exists():
+    s = p.read_text()
+    s2 = s.replace('mirror_w_set(_load_reported) = true', 'mirror_w(this)->_load_reported = true')
+    if s2 != s:
+        p.write_text(s2)
+        print('[sed-fix] patched nmethod.hpp set_load_reported')
+    else:
+        print('[sed-fix] WARN: nmethod.hpp _load_reported pattern not found')
+
+# Fix 2: memMapPrinter_macosx.cpp mach_vm.h guard
+p = root / 'src/hotspot/os/bsd/memMapPrinter_macosx.cpp'
+if p.exists() and 'TARGET_OS_IPHONE' not in p.read_text():
+    original = p.read_text()
+    patched = (
+        '#include <TargetConditionals.h>\n'
+        '#if !TARGET_OS_IPHONE\n'
+        + original +
+        '#endif\n'
+        '#if TARGET_OS_IPHONE\n'
+        '#include "nmt/memMapPrinter.hpp"\n'
+        'void MemMapPrinter::pd_print_all_mappings(const MappingPrintSession&) {}\n'
+        '#endif\n'
+    )
+    p.write_text(patched)
+    print('[sed-fix] patched memMapPrinter_macosx.cpp')
+
+# Fix 3: flags-ldflags.m4 macosx-version-min
+p = root / 'make/autoconf/flags-ldflags.m4'
+if p.exists():
+    s = p.read_text()
+    s2 = re.sub(r'(    OS_LDFLAGS="-mmacosx-version-min=)', r'    #OS_LDFLAGS="-mmacosx-version-min=', s)
+    if s2 != s:
+        p.write_text(s2)
+        print('[sed-fix] patched flags-ldflags.m4')
+    else:
+        print('[sed-fix] WARN: flags-ldflags.m4 pattern not found')
+
+# Fix 4: CoreLibraries.gmk - remove ApplicationServices and Cocoa everywhere
+p = root / 'make/modules/java.base/lib/CoreLibraries.gmk'
+if p.exists():
+    s = p.read_text()
+    original = s
+    # Replace AppServices+Cocoa pairs with Foundation
+    s = re.sub(
+        r'[ \t]*-framework ApplicationServices[ \t]*\\\n[ \t]*-framework Cocoa[ \t]*\\',
+        '        -framework Foundation \\\\',
+        s
+    )
+    # Remove any leftover standalone ApplicationServices lines
+    s = re.sub(r'[ \t]*-framework ApplicationServices[ \t]*\\\n', '', s)
+    # Remove any leftover standalone Cocoa lines
+    s = re.sub(r'[ \t]*-framework Cocoa[ \t]*\\\n', '', s)
+    if s != original:
+        p.write_text(s)
+        print('[sed-fix] patched CoreLibraries.gmk')
+        run('grep -n framework make/modules/java.base/lib/CoreLibraries.gmk | grep -i "applic\|cocoa\|foundation" | head -10')
+    else:
+        print('[sed-fix] WARN: CoreLibraries.gmk no changes')
+
+# Fix 5: Lib.gmk - add CFNetwork to libnet
+p = root / 'make/modules/java.base/Lib.gmk'
+if p.exists():
+    s = p.read_text()
+    if 'CFNetwork' not in s:
+        original = s
+        patterns = [
+            ('        -framework CoreServices, \\\n',
+             '        -framework CoreServices \\\n        -framework CFNetwork, \\\n'),
+            ('    -framework CoreServices, \\\n',
+             '    -framework CoreServices \\\n    -framework CFNetwork, \\\n'),
+        ]
+        for old, new in patterns:
+            if old in s:
+                s = s.replace(old, new)
+                break
+        if s != original:
+            p.write_text(s)
+            print('[sed-fix] patched Lib.gmk CFNetwork')
+            run('grep -n "CFNetwork\|CoreServices" make/modules/java.base/Lib.gmk | head -10')
+        else:
+            print('[sed-fix] WARN: Lib.gmk CoreServices not matched, printing candidates:')
+            for line in s.splitlines():
+                if 'CoreServices' in line:
+                    print(' ', repr(line))
+    else:
+        print('[sed-fix] Lib.gmk CFNetwork already present')
+PYSCRIPT
+          echo "Helper script written."
+
       - name: Patch OpenJDK build script (tolerate rejects + run our fixups)
         working-directory: openjdk-build
         run: |
@@ -101,110 +203,21 @@ jobs:
           )
           s = s[:m.end()] + fuzz_block + s[m.end():]
 
-          inject = '''
+          inject = """
           if [[ "$BUILD_IOS" == "1" ]] && [[ "$TARGET_VERSION" == "25" ]]; then
             echo "[fixups] running jdk25_ios_fixups.py..."
             python3 ../../amethyst/scripts/jdk25_ios_fixups.py . || echo "[fixups] exited non-zero"
-
-            # Fix 1: _load_reported bitfield - C++ forbids taking address of bitfield
-            NMETHOD_HPP="src/hotspot/share/code/nmethod.hpp"
-            if [ -f "$NMETHOD_HPP" ]; then
-              sed -i '' 's/mirror_w_set(_load_reported) = true/mirror_w(this)->_load_reported = true/g' "$NMETHOD_HPP"
-              echo "[sed-fix] patched set_load_reported in nmethod.hpp"
-              grep -n "load_reported" "$NMETHOD_HPP" | head -5
-            fi
-
-            # Fix 2: memMapPrinter_macosx.cpp includes mach_vm.h which is
-            # unsupported on iOS SDK. Wrap entire file in !TARGET_OS_IPHONE
-            # guard and provide an empty stub so the NMT linker symbol resolves.
-            MEMMAPPRINTER="src/hotspot/os/bsd/memMapPrinter_macosx.cpp"
-            if [ -f "$MEMMAPPRINTER" ] && ! grep -q "TARGET_OS_IPHONE" "$MEMMAPPRINTER"; then
-              {
-                echo '#include <TargetConditionals.h>'
-                echo '#if !TARGET_OS_IPHONE'
-                cat "$MEMMAPPRINTER"
-                echo '#endif'
-                echo '#if TARGET_OS_IPHONE'
-                echo '#include "nmt/memMapPrinter.hpp"'
-                echo 'void MemMapPrinter::pd_print_all_mappings(const MappingPrintSession&) {}'
-                echo '#endif'
-              } > /tmp/mmp_patch.cpp
-              cp /tmp/mmp_patch.cpp "$MEMMAPPRINTER"
-              echo "[sed-fix] patched memMapPrinter_macosx.cpp with iOS guard + stub"
-            fi
-
-            # Fix 3: flags-ldflags.m4 still sets -mmacosx-version-min which
-            # conflicts with -miphoneos-version-min at link time.
-            FLAGS_LDFLAGS="make/autoconf/flags-ldflags.m4"
-            if [ -f "$FLAGS_LDFLAGS" ]; then
-              sed -i '' 's|OS_LDFLAGS="-mmacosx-version-min=|#OS_LDFLAGS="-mmacosx-version-min=|g' "$FLAGS_LDFLAGS"
-              echo "[sed-fix] commented out OS_LDFLAGS in flags-ldflags.m4"
-              grep -n "OS_LDFLAGS" "$FLAGS_LDFLAGS" | head -5
-            fi
-
-            # Fix 4: libjli links ApplicationServices + Cocoa which don't exist
-            # on iOS. Replace with Foundation only.
-            # Fix 5: libnet missing CFNetwork framework.
-            # Both use Python for reliable multiline text replacement.
-            python3 << 'INNEREOF'
-import re
-from pathlib import Path
-
-# Fix 4 - CoreLibraries.gmk
-p = Path('make/modules/java.base/lib/CoreLibraries.gmk')
-if p.exists():
-    s = p.read_text()
-    # Replace ApplicationServices + Cocoa block with Foundation only
-    s_new = re.sub(
-        r'-framework ApplicationServices\s*\\\s*\n\s*-framework Cocoa\s*\\',
-        '-framework Foundation \\\\',
-        s
-    )
-    if s_new != s:
-        p.write_text(s_new)
-        print('[sed-fix] patched CoreLibraries.gmk libjli frameworks')
-    else:
-        print('[sed-fix] WARN: CoreLibraries.gmk pattern not found, trying alternate')
-        s_new = s.replace(
-            '    -framework ApplicationServices \\\n        -framework Cocoa \\',
-            '    -framework Foundation \\'
-        )
-        if s_new != s:
-            p.write_text(s_new)
-            print('[sed-fix] patched CoreLibraries.gmk (alternate match)')
-        else:
-            print('[sed-fix] WARN: CoreLibraries.gmk no match found')
-else:
-    print('[sed-fix] WARN: CoreLibraries.gmk not found')
-
-# Fix 5 - Lib.gmk CFNetwork
-p = Path('make/modules/java.base/Lib.gmk')
-if p.exists():
-    s = p.read_text()
-    if 'CFNetwork' not in s:
-        s_new = s.replace(
-            '    -framework CoreServices, \\',
-            '    -framework CoreServices \\\n        -framework CFNetwork, \\'
-        )
-        if s_new != s:
-            p.write_text(s_new)
-            print('[sed-fix] patched Lib.gmk libnet CFNetwork')
-        else:
-            print('[sed-fix] WARN: Lib.gmk CoreServices pattern not found')
-    else:
-        print('[sed-fix] Lib.gmk CFNetwork already present')
-else:
-    print('[sed-fix] WARN: Lib.gmk not found')
-INNEREOF
+            echo "[sed-fixes] running ios_sed_fixes.py..."
+            python3 /tmp/ios_sed_fixes.py
           fi
 
-          '''
+          """
           marker = '# rm -rf build'
           assert marker in s, "could not find injection point"
           s = s.replace(marker, inject + marker)
 
-          old_make = 'make JOBS=$jobs images || \\'
-          new_make = 'make JOBS=$jobs -k images || \\'
+          old_make = 'make JOBS=$jobs images || \\\\'
+          new_make = 'make JOBS=$jobs -k images || \\\\'
           if old_make in s:
               s = s.replace(old_make, new_make)
               print("OK: enabled make -k")
@@ -212,7 +225,7 @@ INNEREOF
           with open('6_buildjdk.sh','w') as f: f.write(s)
           print("OK: patched 6_buildjdk.sh")
           PYEOF
-          grep -n "jdk25_ios_fixups\|sed-fix" 6_buildjdk.sh
+          grep -n "jdk25_ios_fixups\|ios_sed_fixes" 6_buildjdk.sh
 
       - name: Build iOS JDK 25
         working-directory: openjdk-build
