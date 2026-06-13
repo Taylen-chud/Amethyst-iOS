@@ -326,42 +326,46 @@ else:
 
 
 # Fix 12: ClientLibraries.gmk - libfontmanager depends on libawt_lwawt
-# which is skipped on iOS. Switch to libawt_headless instead.
+# which is skipped on iOS. Switch all occurrences to libawt_headless.
+# Run unconditionally since partial application leaves stale lwawt references.
 p = ROOT / 'make/modules/java.desktop/lib/ClientLibraries.gmk'
 if p.exists():
     s = p.read_text()
-    if 'libawt_headless' not in s:
-        original = s
-        # Try all known spacing/trailing variants
-        patterns = [
-            ('JDK_LIBS_macosx := libawt_lwawt, \\',
-             'JDK_LIBS_macosx := libawt_headless, \\'),
-            ('JDK_LIBS_macosx := libawt_lwawt,',
-             'JDK_LIBS_macosx := libawt_headless,'),
-            ('JDK_LIBS_macosx := libawt_lwawt \\',
-             'JDK_LIBS_macosx := libawt_headless \\'),
-        ]
-        for old, new in patterns:
-            if old in s:
-                s = s.replace(old, new)
-                break
-        # Also try regex for any whitespace variation
-        if s == original:
-            s = re.sub(
-                r'(JDK_LIBS_macosx\s*:=\s*)libawt_lwawt',
-                r'\1libawt_headless',
-                s
-            )
-        if s != original:
-            p.write_text(s)
-            print('[ios_sed_fixes] fix12: patched ClientLibraries.gmk libfontmanager -> libawt_headless')
-        else:
-            print('[ios_sed_fixes] fix12: WARN libawt_lwawt not found, printing libawt lines:')
-            for line in s.splitlines():
-                if 'libawt' in line:
-                    print(' ', repr(line))
+    original = s
+    # Try all known spacing/trailing variants first.
+    patterns = [
+        ('JDK_LIBS_macosx := libawt_lwawt, \\',
+         'JDK_LIBS_macosx := libawt_headless, \\'),
+        ('JDK_LIBS_macosx := libawt_lwawt,',
+         'JDK_LIBS_macosx := libawt_headless,'),
+        ('JDK_LIBS_macosx := libawt_lwawt \\',
+         'JDK_LIBS_macosx := libawt_headless \\'),
+    ]
+    for old, new in patterns:
+        if old in s:
+            s = s.replace(old, new)
+    # Also catch any whitespace variation and bare references.
+    s = re.sub(
+        r'(JDK_LIBS_macosx\s*:=\s*)libawt_lwawt',
+        r'\1libawt_headless',
+        s
+    )
+    s = re.sub(
+        r'\blibawt_lwawt\b',
+        'libawt_headless',
+        s
+    )
+    if s != original:
+        p.write_text(s)
+        print('[ios_sed_fixes] fix12: patched ClientLibraries.gmk libawt_lwawt -> libawt_headless')
+        for line in s.splitlines():
+            if 'libawt' in line:
+                print(' ', repr(line))
     else:
-        print('[ios_sed_fixes] fix12: ClientLibraries.gmk already uses libawt_headless')
+        print('[ios_sed_fixes] fix12: no libawt_lwawt found in ClientLibraries.gmk')
+        for line in s.splitlines():
+            if 'libawt' in line:
+                print(' ', repr(line))
 else:
     print('[ios_sed_fixes] fix12: WARN ClientLibraries.gmk not found')
 

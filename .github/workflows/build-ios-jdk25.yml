@@ -196,4 +196,12 @@ jobs:
             openjdk-build/openjdk-25/src/hotspot/share/runtime/atomic.hpp
             openjdk-build/openjdk-25/src/hotspot/share/runtime/deoptimization.cpp
             openjdk-build/openjdk-25/src/hotspot/share/memory/heap.hpp
+            openjdk-build/openjdk-25/make/modules/java.desktop/lib/AwtLibraries.gmk
+            openjdk-build/openjdk-25/make/modules/java.desktop/lib/ClientLibraries.gmk
+            openjdk-build/openjdk-25/make/modules/java.base/Lib.gmk
+            openjdk-build/openjdk-25/make/modules/java.base/lib/CoreLibraries.gmk
+            openjdk-build/openjdk-25/make/modules/java.instrument/Lib.gmk
+            openjdk-build/openjdk-25/make/modules/jdk.hotspot.agent/Lib.gmk
+            openjdk-build/openjdk-25/make/modules/jdk.jpackage/Lib.gmk
+            openjdk-build/openjdk-25/make/autoconf/flags-ldflags.m4
           if-no-files-found: ignore
