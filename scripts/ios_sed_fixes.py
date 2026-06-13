@@ -231,3 +231,75 @@ if p.exists():
         print('[ios_sed_fixes] fix8: ClientLibraries.gmk already patched')
 else:
     print('[ios_sed_fixes] fix8: WARN ClientLibraries.gmk not found')
+
+
+# Fix 9: AwtLibraries.gmk - guard BUILD_LIBOSXAPP with macosx_NOTIOS.
+# libosxapp sources are in src/java.desktop/macosx which gets moved out.
+# libawt_lwawt depends on libosxapp so both must be skipped together.
+p = ROOT / 'make/modules/java.desktop/lib/AwtLibraries.gmk'
+if p.exists():
+    s = p.read_text()
+    original = s
+    # Guard libosxapp block
+    if 'libosxapp disabled for iOS' not in s:
+        old = 'ifeq ($(call isTargetOs, macosx), true)\n  ##############################################################################\n  # Build libosxapp'
+        new = 'ifeq ($(call isTargetOs, macosx_NOTIOS), true)\n  ##############################################################################\n  # Build libosxapp'
+        if old in s:
+            s = s.replace(old, new)
+            print('[ios_sed_fixes] fix9a: patched libosxapp guard')
+        else:
+            # Try alternate - just find and replace the isTargetOs macosx guard near libosxapp
+            s = re.sub(
+                r'(ifeq \(\$\(call isTargetOs, macosx\), true\)\s*\n\s*#{10,}\s*\n\s*# Build libosxapp)',
+                lambda m: m.group(0).replace('isTargetOs, macosx)', 'isTargetOs, macosx_NOTIOS)'),
+                s
+            )
+            if s != original:
+                print('[ios_sed_fixes] fix9a: patched libosxapp guard (regex)')
+            else:
+                print('[ios_sed_fixes] fix9a: WARN libosxapp guard not found')
+
+    # Guard libawt_lwawt block
+    if 'libawt_lwawt disabled for iOS' not in s:
+        old2 = 'ifeq ($(call isTargetOs, macosx), true)\n  ##############################################################################\n  ## Build libawt_lwawt'
+        new2 = 'ifeq ($(call isTargetOs, macosx_NOTIOS), true)\n  ##############################################################################\n  ## Build libawt_lwawt'
+        if old2 in s:
+            s = s.replace(old2, new2)
+            print('[ios_sed_fixes] fix9b: patched libawt_lwawt guard')
+        else:
+            s2 = re.sub(
+                r'(ifeq \(\$\(call isTargetOs, macosx\), true\)\s*\n\s*#{10,}\s*\n\s*## Build libawt_lwawt)',
+                lambda m: m.group(0).replace('isTargetOs, macosx)', 'isTargetOs, macosx_NOTIOS)'),
+                s
+            )
+            if s2 != s:
+                s = s2
+                print('[ios_sed_fixes] fix9b: patched libawt_lwawt guard (regex)')
+            else:
+                print('[ios_sed_fixes] fix9b: WARN libawt_lwawt guard not found')
+
+    if s != original:
+        p.write_text(s)
+else:
+    print('[ios_sed_fixes] fix9: WARN AwtLibraries.gmk not found')
+
+
+# Fix 10: jdk.hotspot.agent/Lib.gmk - libsaproc links JavaRuntimeSupport
+# which doesn't exist on iOS. Comment out TARGETS += $(BUILD_LIBSAPROC).
+p = ROOT / 'make/modules/jdk.hotspot.agent/Lib.gmk'
+if p.exists():
+    s = p.read_text()
+    if 'BUILD_LIBSAPROC)  # disabled for iOS' not in s:
+        s2 = s.replace(
+            'TARGETS += $(BUILD_LIBSAPROC)',
+            '#TARGETS += $(BUILD_LIBSAPROC)  # disabled for iOS'
+        )
+        if s2 != s:
+            p.write_text(s2)
+            print('[ios_sed_fixes] fix10: patched jdk.hotspot.agent/Lib.gmk libsaproc')
+        else:
+            print('[ios_sed_fixes] fix10: WARN BUILD_LIBSAPROC not found in Lib.gmk')
+    else:
+        print('[ios_sed_fixes] fix10: libsaproc already disabled')
+else:
+    print('[ios_sed_fixes] fix10: WARN jdk.hotspot.agent/Lib.gmk not found')
