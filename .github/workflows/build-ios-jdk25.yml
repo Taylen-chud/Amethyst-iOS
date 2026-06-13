@@ -68,108 +68,6 @@ jobs:
           echo "=== macOS-only frameworks referenced ==="
           grep -rln 'AppKit\.h\|Cocoa\.h\|Carbon\.h' src 2>/dev/null | head -10 || echo "(none)"
 
-      - name: Write iOS sed-fix helper script
-        run: |
-          cat > /tmp/ios_sed_fixes.py << 'PYSCRIPT'
-import re, subprocess
-from pathlib import Path
-
-def run(cmd):
-    subprocess.run(cmd, shell=True)
-
-root = Path('.')
-
-# Fix 1: _load_reported bitfield
-p = root / 'src/hotspot/share/code/nmethod.hpp'
-if p.exists():
-    s = p.read_text()
-    s2 = s.replace('mirror_w_set(_load_reported) = true', 'mirror_w(this)->_load_reported = true')
-    if s2 != s:
-        p.write_text(s2)
-        print('[sed-fix] patched nmethod.hpp set_load_reported')
-    else:
-        print('[sed-fix] WARN: nmethod.hpp _load_reported pattern not found')
-
-# Fix 2: memMapPrinter_macosx.cpp mach_vm.h guard
-p = root / 'src/hotspot/os/bsd/memMapPrinter_macosx.cpp'
-if p.exists() and 'TARGET_OS_IPHONE' not in p.read_text():
-    original = p.read_text()
-    patched = (
-        '#include <TargetConditionals.h>\n'
-        '#if !TARGET_OS_IPHONE\n'
-        + original +
-        '#endif\n'
-        '#if TARGET_OS_IPHONE\n'
-        '#include "nmt/memMapPrinter.hpp"\n'
-        'void MemMapPrinter::pd_print_all_mappings(const MappingPrintSession&) {}\n'
-        '#endif\n'
-    )
-    p.write_text(patched)
-    print('[sed-fix] patched memMapPrinter_macosx.cpp')
-
-# Fix 3: flags-ldflags.m4 macosx-version-min
-p = root / 'make/autoconf/flags-ldflags.m4'
-if p.exists():
-    s = p.read_text()
-    s2 = re.sub(r'(    OS_LDFLAGS="-mmacosx-version-min=)', r'    #OS_LDFLAGS="-mmacosx-version-min=', s)
-    if s2 != s:
-        p.write_text(s2)
-        print('[sed-fix] patched flags-ldflags.m4')
-    else:
-        print('[sed-fix] WARN: flags-ldflags.m4 pattern not found')
-
-# Fix 4: CoreLibraries.gmk - remove ApplicationServices and Cocoa everywhere
-p = root / 'make/modules/java.base/lib/CoreLibraries.gmk'
-if p.exists():
-    s = p.read_text()
-    original = s
-    # Replace AppServices+Cocoa pairs with Foundation
-    s = re.sub(
-        r'[ \t]*-framework ApplicationServices[ \t]*\\\n[ \t]*-framework Cocoa[ \t]*\\',
-        '        -framework Foundation \\\\',
-        s
-    )
-    # Remove any leftover standalone ApplicationServices lines
-    s = re.sub(r'[ \t]*-framework ApplicationServices[ \t]*\\\n', '', s)
-    # Remove any leftover standalone Cocoa lines
-    s = re.sub(r'[ \t]*-framework Cocoa[ \t]*\\\n', '', s)
-    if s != original:
-        p.write_text(s)
-        print('[sed-fix] patched CoreLibraries.gmk')
-        run('grep -n framework make/modules/java.base/lib/CoreLibraries.gmk | grep -i "applic\|cocoa\|foundation" | head -10')
-    else:
-        print('[sed-fix] WARN: CoreLibraries.gmk no changes')
-
-# Fix 5: Lib.gmk - add CFNetwork to libnet
-p = root / 'make/modules/java.base/Lib.gmk'
-if p.exists():
-    s = p.read_text()
-    if 'CFNetwork' not in s:
-        original = s
-        patterns = [
-            ('        -framework CoreServices, \\\n',
-             '        -framework CoreServices \\\n        -framework CFNetwork, \\\n'),
-            ('    -framework CoreServices, \\\n',
-             '    -framework CoreServices \\\n    -framework CFNetwork, \\\n'),
-        ]
-        for old, new in patterns:
-            if old in s:
-                s = s.replace(old, new)
-                break
-        if s != original:
-            p.write_text(s)
-            print('[sed-fix] patched Lib.gmk CFNetwork')
-            run('grep -n "CFNetwork\|CoreServices" make/modules/java.base/Lib.gmk | head -10')
-        else:
-            print('[sed-fix] WARN: Lib.gmk CoreServices not matched, printing candidates:')
-            for line in s.splitlines():
-                if 'CoreServices' in line:
-                    print(' ', repr(line))
-    else:
-        print('[sed-fix] Lib.gmk CFNetwork already present')
-PYSCRIPT
-          echo "Helper script written."
-
       - name: Patch OpenJDK build script (tolerate rejects + run our fixups)
         working-directory: openjdk-build
         run: |
@@ -207,8 +105,8 @@ PYSCRIPT
           if [[ "$BUILD_IOS" == "1" ]] && [[ "$TARGET_VERSION" == "25" ]]; then
             echo "[fixups] running jdk25_ios_fixups.py..."
             python3 ../../amethyst/scripts/jdk25_ios_fixups.py . || echo "[fixups] exited non-zero"
-            echo "[sed-fixes] running ios_sed_fixes.py..."
-            python3 /tmp/ios_sed_fixes.py
+            echo "[ios_sed_fixes] running ios_sed_fixes.py..."
+            python3 ../../amethyst/scripts/ios_sed_fixes.py .
           fi
 
           """
