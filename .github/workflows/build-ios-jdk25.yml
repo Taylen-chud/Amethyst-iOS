@@ -97,16 +97,17 @@ jobs:
               f"{indent}  rm -f \"$r.bak\"\n"
               f"{indent}done\n"
               f"{indent}rm -f Oops.rej\n"
-              f"{indent}python3 ../../../amethyst/scripts/apply_rejs.py . || echo \"apply_rejs.py exited non-zero\"\n"
+              f"{indent}python3 \"$GITHUB_WORKSPACE/amethyst/scripts/apply_rejs.py\" . || echo \"apply_rejs.py exited non-zero\"\n"
           )
           s = s[:m.end()] + fuzz_block + s[m.end():]
 
           inject = """
           if [[ "$BUILD_IOS" == "1" ]] && [[ "$TARGET_VERSION" == "25" ]]; then
+            SCRIPTS_DIR="$GITHUB_WORKSPACE/amethyst/scripts"
             echo "[fixups] running jdk25_ios_fixups.py..."
-            python3 ../../../amethyst/scripts/jdk25_ios_fixups.py . || echo "[fixups] exited non-zero"
+            python3 "$SCRIPTS_DIR/jdk25_ios_fixups.py" . || echo "[fixups] exited non-zero"
             echo "[ios_sed_fixes] running ios_sed_fixes.py..."
-            python3 ../../../amethyst/scripts/ios_sed_fixes.py .
+            python3 "$SCRIPTS_DIR/ios_sed_fixes.py" .
           fi
 
           """
