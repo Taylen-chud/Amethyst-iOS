@@ -467,3 +467,26 @@ if p.exists():
         print('[ios_sed_fixes] fix14: AwtLibraries.gmk already patched or no matches')
 else:
     print('[ios_sed_fixes] fix14: WARN AwtLibraries.gmk not found')
+
+
+# Fix 15: java.desktop/Lib.gmk - libjsound links AudioUnit which doesn't
+# exist on iOS. Replace with AVFoundation (which does exist on iOS and
+# provides audio functionality).
+p = ROOT / 'make/modules/java.desktop/Lib.gmk'
+if p.exists():
+    s = p.read_text()
+    original = s
+    # Replace AudioUnit with AVFoundation
+    s = re.sub(r'(-framework )AudioUnit', r'\1AVFoundation', s)
+    # Also remove CoreMIDI which doesn't exist on iOS
+    s = re.sub(r'[ \t]*-framework CoreMIDI[, \t]*\\\n', '', s)
+    if s != original:
+        p.write_text(s)
+        print('[ios_sed_fixes] fix15: patched java.desktop/Lib.gmk libjsound frameworks')
+        for line in s.splitlines():
+            if any(f in line for f in ['AudioUnit', 'AVFoundation', 'CoreMIDI', 'AudioToolbox']):
+                print(' ', line.strip())
+    else:
+        print('[ios_sed_fixes] fix15: java.desktop/Lib.gmk already patched or no matches')
+else:
+    print('[ios_sed_fixes] fix15: WARN java.desktop/Lib.gmk not found')
