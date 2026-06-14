@@ -470,16 +470,21 @@ else:
 
 
 # Fix 15: java.desktop/Lib.gmk - libjsound links AudioUnit which doesn't
-# exist on iOS. Replace with AVFoundation (which does exist on iOS and
-# provides audio functionality).
+# exist on iOS. Replace with AVFoundation. CoreMIDI IS available on iOS
+# (since iOS 4.2) so leave it alone.
 p = ROOT / 'make/modules/java.desktop/Lib.gmk'
 if p.exists():
     s = p.read_text()
     original = s
-    # Replace AudioUnit with AVFoundation
+    # Replace AudioUnit with AVFoundation only
     s = re.sub(r'(-framework )AudioUnit', r'\1AVFoundation', s)
-    # Also remove CoreMIDI which doesn't exist on iOS
-    s = re.sub(r'[ \t]*-framework CoreMIDI[, \t]*\\\n', '', s)
+    # Restore CoreMIDI if fix15 previously removed it
+    if 'CoreMIDI' not in s and 'AVFoundation' in s:
+        s = re.sub(
+            r'(-framework AVFoundation[, \t]*\\\n)',
+            r'\1          -framework CoreMIDI \\\n',
+            s
+        )
     if s != original:
         p.write_text(s)
         print('[ios_sed_fixes] fix15: patched java.desktop/Lib.gmk libjsound frameworks')
