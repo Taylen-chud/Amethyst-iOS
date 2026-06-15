@@ -2,26 +2,17 @@ name: Build iOS JDK 25
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/build-ios-jdk25.yml'
-      - 'scripts/jdk25_ios_patches/**'
 
 jobs:
   build:
     runs-on: macos-14
     timeout-minutes: 180
     steps:
-      - name: Checkout amethyst (for any local patches)
+      - name: Checkout openjdk-build (PR branch)
         uses: actions/checkout@v4
         with:
-          path: amethyst
-
-      - name: Checkout AngelAuraMC openjdk-build
-        uses: actions/checkout@v4
-        with:
-          repository: AngelAuraMC/angelauramc-openjdk-build
-          ref: judge/buildjre17-21-25
+          repository: taylenwells2026-blip/angelauramc-openjdk-build
+          ref: PR
           path: openjdk-build
 
       - name: Setup boot JDK (Temurin 25)
@@ -38,93 +29,11 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-path
           xcrun --sdk iphoneos --show-sdk-version
 
-      - name: Stage both iOS patches (base + mirror_mapping) for JDK 25
-        working-directory: openjdk-build
-        run: |
-          mkdir -p patches/jre_25/ios
-          cp patches/jre_21/ios/1_jdk21u_ios.diff patches/jre_25/ios/
-          cp patches/jre_21/ios/2_mirror_mapping.diff patches/jre_25/ios/
-          if [ -d ../amethyst/scripts/jdk25_ios_patches ]; then
-            cp ../amethyst/scripts/jdk25_ios_patches/*.diff patches/jre_25/ios/ 2>/dev/null || true
-          fi
-          ls -la patches/jre_25/ios/
-
       - name: Make scripts executable
         working-directory: openjdk-build
         run: |
           chmod +x ios-arm64-clang ios-arm64-clang++ macos-host-cc
           chmod +x *.sh
-
-      - name: Pre-scan JDK 25 source for known-bad iOS patterns
-        run: |
-          SCAN_DIR=/tmp/jdk25-scan
-          rm -rf "$SCAN_DIR"
-          git clone --depth 1 --branch jdk-25.0.1+8 https://github.com/openjdk/jdk25u "$SCAN_DIR" 2>&1 | tail -3
-          cd "$SCAN_DIR"
-          echo "=== files including <mach/mach_vm.h> ==="
-          grep -rn '#include\s*<mach/mach_vm.h>' src 2>/dev/null || echo "(none)"
-          echo "=== files including <sys/proc_info.h> ==="
-          grep -rn '#include\s*<sys/proc_info.h>' src 2>/dev/null || echo "(none)"
-          echo "=== macOS-only frameworks referenced ==="
-          grep -rln 'AppKit\.h\|Cocoa\.h\|Carbon\.h' src 2>/dev/null | head -10 || echo "(none)"
-
-      - name: Patch OpenJDK build script (tolerate rejects + run our fixups)
-        working-directory: openjdk-build
-        run: |
-          python3 << 'PYEOF'
-          with open('6_buildjdk.sh','r') as f: s = f.read()
-
-          old_apply = 'git apply --reject --whitespace=fix {} || (echo "git apply failed (iOs patch set)" && exit 1)'
-          new_apply = 'git apply --reject --whitespace=fix {} || echo "git apply had rejects (fuzz-fallback + fixup script will handle)"'
-          assert old_apply in s, "could not find git apply line to patch"
-          s = s.replace(old_apply, new_apply)
-
-          import re
-          xargs_line_re = re.compile(r"^([ \t]*)find \.\./patches/jre[^\n]*ios[^\n]*\.diff[^\n]*xargs[^\n]*$", re.MULTILINE)
-          matches = list(xargs_line_re.finditer(s))
-          assert matches, "could not locate iOS xargs patch-apply line"
-          assert len(matches) == 1, f"expected exactly 1 iOS xargs line, found {len(matches)}"
-          m = matches[0]
-          indent = m.group(1)
-          fuzz_block = (
-              f"\n"
-              f"{indent}for r in $(find . -name '*.rej' 2>/dev/null); do\n"
-              f"{indent}  target=$(echo \"$r\" | sed 's/\\.rej$//')\n"
-              f"{indent}  if [ ! -f \"$target\" ]; then echo \"[fuzz-fallback] no target for $r\"; continue; fi\n"
-              f"{indent}  echo \"[fuzz-fallback] retrying $r -> $target\"\n"
-              f"{indent}  mv \"$r\" \"$r.bak\"\n"
-              f"{indent}  patch -F 100 --ignore-whitespace \"$target\" < \"$r.bak\" 2>&1 | tail -5 || echo \"  patch nonzero\"\n"
-              f"{indent}  rm -f \"$r.bak\"\n"
-              f"{indent}done\n"
-              f"{indent}rm -f Oops.rej\n"
-              f"{indent}python3 \"$GITHUB_WORKSPACE/amethyst/scripts/apply_rejs.py\" . || echo \"apply_rejs.py exited non-zero\"\n"
-          )
-          s = s[:m.end()] + fuzz_block + s[m.end():]
-
-          inject = """
-          if [[ "$BUILD_IOS" == "1" ]] && [[ "$TARGET_VERSION" == "25" ]]; then
-            SCRIPTS_DIR="$GITHUB_WORKSPACE/amethyst/scripts"
-            echo "[fixups] running jdk25_ios_fixups.py..."
-            python3 "$SCRIPTS_DIR/jdk25_ios_fixups.py" . || echo "[fixups] exited non-zero"
-            echo "[ios_sed_fixes] running ios_sed_fixes.py..."
-            python3 "$SCRIPTS_DIR/ios_sed_fixes.py" .
-          fi
-
-          """
-          marker = '# rm -rf build'
-          assert marker in s, "could not find injection point"
-          s = s.replace(marker, inject + marker)
-
-          old_make = 'make JOBS=$jobs images || \\\\'
-          new_make = 'make JOBS=$jobs -k images || \\\\'
-          if old_make in s:
-              s = s.replace(old_make, new_make)
-              print("OK: enabled make -k")
-
-          with open('6_buildjdk.sh','w') as f: f.write(s)
-          print("OK: patched 6_buildjdk.sh")
-          PYEOF
-          grep -n "jdk25_ios_fixups\|ios_sed_fixes" 6_buildjdk.sh
 
       - name: Build iOS JDK 25
         working-directory: openjdk-build
@@ -144,23 +53,10 @@ jobs:
         working-directory: openjdk-build
         run: tail -200 build.log 2>/dev/null || true
 
-      - name: Summarize rejected patches
-        if: always()
-        working-directory: openjdk-build
-        run: |
-          REJ_COUNT=$(find openjdk-25 -name "*.rej" 2>/dev/null | wc -l | tr -d ' ')
-          echo "=== rejected hunks: $REJ_COUNT files ==="
-          find openjdk-25 -name "*.rej" 2>/dev/null | sort | head -50 | while read f; do
-            HUNK_COUNT=$(grep -c '^@@' "$f")
-            echo "  $f ($HUNK_COUNT hunks)"
-          done
-
       - name: Find built JRE
         if: always()
         working-directory: openjdk-build
-        run: |
-          find . -name "libjvm.dylib" -type f 2>/dev/null | head -5
-          find . -name "*.tar.xz" -type f 2>/dev/null | head -5
+        run: find . -name "libjvm.dylib" -type f 2>/dev/null | head -5
 
       - name: Upload built JRE if successful
         if: success()
@@ -176,32 +72,4 @@ jobs:
         with:
           name: build-log
           path: openjdk-build/build.log
-          if-no-files-found: ignore
-
-      - name: Upload rejected patches (always, for analysis)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rejected-patches
-          path: openjdk-build/openjdk-25/**/*.rej
-          if-no-files-found: ignore
-
-      - name: Upload patched-but-unbuilt JDK 25 source tree (rejects + applied)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: jdk25-patched-tree
-          path: |
-            openjdk-build/openjdk-25/src/hotspot/share/code/**
-            openjdk-build/openjdk-25/src/hotspot/share/runtime/atomic.hpp
-            openjdk-build/openjdk-25/src/hotspot/share/runtime/deoptimization.cpp
-            openjdk-build/openjdk-25/src/hotspot/share/memory/heap.hpp
-            openjdk-build/openjdk-25/make/modules/java.desktop/lib/AwtLibraries.gmk
-            openjdk-build/openjdk-25/make/modules/java.desktop/lib/ClientLibraries.gmk
-            openjdk-build/openjdk-25/make/modules/java.base/Lib.gmk
-            openjdk-build/openjdk-25/make/modules/java.base/lib/CoreLibraries.gmk
-            openjdk-build/openjdk-25/make/modules/java.instrument/Lib.gmk
-            openjdk-build/openjdk-25/make/modules/jdk.hotspot.agent/Lib.gmk
-            openjdk-build/openjdk-25/make/modules/jdk.jpackage/Lib.gmk
-            openjdk-build/openjdk-25/make/autoconf/flags-ldflags.m4
           if-no-files-found: ignore
