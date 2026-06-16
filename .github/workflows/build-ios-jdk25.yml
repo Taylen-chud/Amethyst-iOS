@@ -34,6 +34,12 @@ jobs:
         run: |
           chmod +x ios-arm64-clang ios-arm64-clang++ macos-host-cc
           chmod +x *.sh
+     
+      - name: Debug paths
+        working-directory: openjdk-build
+        run: |
+          ls patches/jre_25/
+          ls patches/jre_25/ios/
 
       - name: Build iOS JDK 25
         working-directory: openjdk-build
