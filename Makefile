@@ -293,7 +293,7 @@ jre: native
 	if [ -f "$(ls jre*.tar.xz)" ]; then rm $(SOURCEDIR)/depends/jre*.tar.xz; fi; \
 	cd $(SOURCEDIR); \
 	if [ ! -f "$(SOURCEDIR)/depends/java-25-openjdk/release" ] || [ ! -f "$(SOURCEDIR)/depends/java-25-openjdk/lib/server/libjvm.dylib" ]; then \
-		JRE25_URL="https://github.com/taylenwells2026-blip/Amethyst-Java-25/releases/download/Jre25-iOS-v1.0.1-slim/jre25-ios-arm64-20260614-release.tar.xz"; \
+		JRE25_URL="https://github.com/taylenwells2026-blip/Amethyst-iOS/releases/download/JRE25-ios-amethystopenjdk/jre25-ios-arm64-20260617-release.tar.xz"; \
 		echo "[jre25] downloading iOS-built OpenJDK 25..."; \
 		curl -L --fail -o /tmp/jre25.tar.xz "$$JRE25_URL"; \
 		mkdir -p $(SOURCEDIR)/depends/java-25-openjdk; \
