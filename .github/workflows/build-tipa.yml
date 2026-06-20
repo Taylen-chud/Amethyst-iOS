@@ -32,44 +32,44 @@ jobs:
           echo "BOOTJDK=$JDK_BASE_PATH/bin" >> $GITHUB_ENV
           echo "PATH=$JDK_BASE_PATH/bin:$PATH" >> $GITHUB_ENV
 
-      - name: Get JRE8
-        uses: dawidd6/action-download-artifact@v2
+      - name: Get JRE8 from CDN
         continue-on-error: true
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: build.yml
-          path: depends
-          workflow_conclusion: success
-          allow_forks: false
-          repo: taylenwells2026-blip/angelauramc-openjdk-build
-          branch: main
-          name: jre8-ios-aarch64
+        run: |
+          mkdir -p depends
+          echo "Downloading JRE8 from CDN..."
+          curl -L --fail -o /tmp/jre8.zip https://crystall1ne.dev/cdn/amethyst-ios/jre8-ios-aarch64.zip || true
+          if [ -f /tmp/jre8.zip ]; then
+            unzip -q /tmp/jre8.zip -d depends || true
+            rm -f /tmp/jre8.zip
+          else
+            echo "JRE8 not available on CDN; continuing.";
+          fi
 
-      - name: Get JRE17
-        uses: dawidd6/action-download-artifact@v2
+      - name: Get JRE17 from CDN
         continue-on-error: true
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: build.yml
-          path: depends
-          workflow_conclusion: success
-          allow_forks: false
-          repo: taylenwells2026-blip/angelauramc-openjdk-build
-          branch: main
-          name: jre17-ios-aarch64
+        run: |
+          mkdir -p depends
+          echo "Downloading JRE17 from CDN..."
+          curl -L --fail -o /tmp/jre17.zip https://crystall1ne.dev/cdn/amethyst-ios/jre17-ios-aarch64.zip || true
+          if [ -f /tmp/jre17.zip ]; then
+            unzip -q /tmp/jre17.zip -d depends || true
+            rm -f /tmp/jre17.zip
+          else
+            echo "JRE17 not available on CDN; continuing.";
+          fi
 
-      - name: Get JRE21
-        uses: dawidd6/action-download-artifact@v2
+      - name: Get JRE21 from CDN
         continue-on-error: true
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: build.yml
-          path: depends
-          workflow_conclusion: completed
-          allow_forks: false
-          repo: taylenwells2026-blip/angelauramc-openjdk-build
-          branch: main
-          name: jre21-ios-aarch64
+        run: |
+          mkdir -p depends
+          echo "Downloading JRE21 from CDN..."
+          curl -L --fail -o /tmp/jre21.zip https://crystall1ne.dev/cdn/amethyst-ios/jre21-ios-aarch64.zip || true
+          if [ -f /tmp/jre21.zip ]; then
+            unzip -q /tmp/jre21.zip -d depends || true
+            rm -f /tmp/jre21.zip
+          else
+            echo "JRE21 not available on CDN; continuing.";
+          fi
 
       - name: Get JRE25 from release (Taylen-chud)
         continue-on-error: true
