@@ -105,7 +105,7 @@ void pojavMakeCurrent(basic_render_window_t* window) {
 }
 
 void* pojavCreateContext(basic_render_window_t* contextSrc) {
-    if (!br_make_current) return;
+    if (!br_make_current) return NULL;
     if (clientAPI == GLFW_NO_API) {
         // Game has selected Vulkan API to render
         return (__bridge void *)SurfaceViewController.surface.layer;
