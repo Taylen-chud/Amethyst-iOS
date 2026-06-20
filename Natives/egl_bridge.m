@@ -119,9 +119,11 @@ void* pojavCreateContext(basic_render_window_t* contextSrc) {
     }
 
     if (clientAPI == GLFW_NO_API) {
+        void *layerPtr = (__bridge void *)SurfaceViewController.surface.layer;
+        NSLog(@"[Amethyst-Debug] pojavCreateContext(): clientAPI=%d returning layer=%p", clientAPI, layerPtr);
         // Vulkan uses the native CAMetalLayer directly.
         // Return the iOS view layer instead of an EGL context pointer.
-        return (__bridge void *)SurfaceViewController.surface.layer;
+        return layerPtr;
     }
 
     return br_init_context(contextSrc);

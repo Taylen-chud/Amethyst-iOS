@@ -13,6 +13,15 @@
     self.layer.drawsAsynchronously = YES;
     self.layer.opaque = YES;
 
+    if ([self.layer isKindOfClass:CAMetalLayer.class]) {
+        CAMetalLayer *mLayer = (CAMetalLayer *)self.layer;
+        if (mLayer.device == NULL) {
+            mLayer.device = MTLCreateSystemDefaultDevice();
+        }
+        mLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+        mLayer.framebufferOnly = YES;
+    }
+
     if ([self.layer respondsToSelector:NSSelectorFromString(@"setPreferredFrameRateRange:")]) {
         NSMethodSignature *sig = [self.layer methodSignatureForSelector:NSSelectorFromString(@"setPreferredFrameRateRange:")];
         NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
