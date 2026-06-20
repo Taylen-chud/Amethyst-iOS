@@ -71,6 +71,67 @@ jobs:
           branch: buildjre17-21
           name: jre21-ios-aarch64
 
+      - name: Get JRE25 (openjdk 25)
+        uses: dawidd6/action-download-artifact@v2
+        continue-on-error: true
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build-ios-jdk25.yml
+          path: depends
+          workflow_conclusion: success
+          allow_forks: false
+          repo: taylenwells2026-blip/angelauramc-openjdk-build
+          branch: main
+          name: jre25-ios-aarch64
+
+      - name: Try alternate JRE repo (taylenwells)
+        uses: dawidd6/action-download-artifact@v2
+        continue-on-error: true
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build.yml
+          path: depends
+          workflow_conclusion: completed
+          allow_forks: false
+          repo: taylenwells2026-blip/angelauramc-openjdk-build
+          branch: main
+          name: jre8-ios-aarch64
+
+      - name: Try alternate JRE repo (taylenwells) - other JREs
+        uses: dawidd6/action-download-artifact@v2
+        continue-on-error: true
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build.yml
+          path: depends
+          workflow_conclusion: completed
+          allow_forks: false
+          repo: taylenwells2026-blip/angelauramc-openjdk-build
+          branch: main
+          name: jre17-ios-aarch64
+
+      - name: Try alternate JRE repo (taylenwells) - jre21
+        uses: dawidd6/action-download-artifact@v2
+        continue-on-error: true
+        with:
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          workflow: build.yml
+          path: depends
+          workflow_conclusion: completed
+          allow_forks: false
+          repo: taylenwells2026-blip/angelauramc-openjdk-build
+          branch: main
+          name: jre21-ios-aarch64
+
+      - name: Fallback: download JRE zips from CDN
+        run: |
+          mkdir -p depends
+          echo "Attempting CDN downloads for JREs (non-fatal)"
+          curl -L --fail -o depends/jre8-ios-aarch64.zip https://crystall1ne.dev/cdn/amethyst-ios/jre8-ios-aarch64.zip || true
+          curl -L --fail -o depends/jre17-ios-aarch64.zip https://crystall1ne.dev/cdn/amethyst-ios/jre17-ios-aarch64.zip || true
+          curl -L --fail -o depends/jre21-ios-aarch64.zip https://crystall1ne.dev/cdn/amethyst-ios/jre21-ios-aarch64.zip || true
+          curl -L --fail -o depends/jre25-ios-arm64.tar.xz https://github.com/Taylen-chud/Amethyst-iOS/releases/download/Jre25/jre25-ios-arm64-20260618-release.tar.xz || true
+
       - name: Install dependencies
         run: |
           brew update || true
