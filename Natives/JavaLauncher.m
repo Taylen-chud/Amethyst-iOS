@@ -266,19 +266,23 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     //margv[++margc] = "-Dorg.lwjgl.util.NoChecks=true";
     margv[++margc] = "-Dlog4j2.formatMsgNoLookups=true";
 
-    // Preset OpenGL libname
+    // Preset OpenGL libname.
+    // LWJGL 3.4.1 may initialize OpenGL library loading during startup even when
+    // Vulkan is ultimately selected, so provide a valid iOS OpenGL shim.
     const char *glLibName = getenv("POJAV_RENDERER");
     if (glLibName) {
         if (!strcmp(glLibName, "auto")) {
             // workaround only applies to 1.20.2+
             glLibName = RENDERER_NAME_MTL_ANGLE;
         }
-        
-     if (strcmp(glLibName, RENDERER_NAME_VULKAN) != 0) {
-            margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%s", glLibName].UTF8String;
+        if (strcmp(glLibName, RENDERER_NAME_VULKAN) == 0) {
+            // Vulkan selection still requires a valid OpenGL library name during
+            // LWJGL startup. Use the Metal ANGLE shim instead of the invalid
+            // com.apple.opengl fallback.
+            glLibName = RENDERER_NAME_MTL_ANGLE;
         }
+        margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%s", glLibName].UTF8String;
     }
-        
 
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
     margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", librariesPath].UTF8String;

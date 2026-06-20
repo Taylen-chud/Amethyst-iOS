@@ -67,6 +67,9 @@ int pojavInitOpenGL() {
         set_osm_bridge_tbl();
     } else if ([renderer isEqualToString:@ RENDERER_NAME_VULKAN]) {
         set_vk_bridge_tbl();
+        // Vulkan mode still may trigger LWJGL OpenGL probing during startup.
+        // Ensure a valid iOS OpenGL shim is available for that probe path.
+        JNI_LWJGL_changeRenderer(RENDERER_NAME_MTL_ANGLE);
     }
     if (strcmp(renderer.UTF8String, RENDERER_NAME_VULKAN) != 0) {
         JNI_LWJGL_changeRenderer(renderer.UTF8String);
