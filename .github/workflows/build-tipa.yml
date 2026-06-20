@@ -17,10 +17,17 @@ jobs:
           echo "RUNNER=1" >> $GITHUB_ENV
 
       - name: Install JDK 8 (Zulu)
+        id: setup-java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '8'
+
+      - name: Export Java env
+        run: |
+          echo "JAVA_HOME=${{ steps.setup-java.outputs.java-home }}" >> $GITHUB_ENV
+          echo "BOOTJDK=${{ steps.setup-java.outputs.java-home }}/bin" >> $GITHUB_ENV
+          echo "PATH=${{ steps.setup-java.outputs.java-home }}/bin:$PATH" >> $GITHUB_ENV
 
       - name: Get JRE8
         uses: dawidd6/action-download-artifact@v2
