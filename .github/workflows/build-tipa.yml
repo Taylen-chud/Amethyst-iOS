@@ -1,0 +1,33 @@
+name: Build TIPA (TrollStore)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-tipa:
+    name: Build TrollStore .tipa
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up environment
+        run: |
+          export PATH=/usr/local/bin:$PATH
+          echo "RUNNER=1" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        run: |
+          brew update || true
+          brew install wget cmake || true
+
+      - name: Build .tipa
+        run: |
+          set -e
+          make dsym package PLATFORM=2 TROLLSTORE_JIT_ENT=1
+
+      - name: Upload tipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: amethyst-trollstore-tipa
+          path: artifacts/*.tipa

@@ -68,7 +68,9 @@ int pojavInitOpenGL() {
     } else if ([renderer isEqualToString:@ RENDERER_NAME_VULKAN]) {
         set_vk_bridge_tbl();
     }
-    JNI_LWJGL_changeRenderer(renderer.UTF8String);
+    if (strcmp(renderer.UTF8String, RENDERER_NAME_VULKAN) != 0) {
+        JNI_LWJGL_changeRenderer(renderer.UTF8String);
+    }
     // Preload renderer library
     dlopen([NSString stringWithFormat:@"@rpath/%@", renderer].UTF8String, RTLD_GLOBAL);
 
