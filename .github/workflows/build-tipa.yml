@@ -41,8 +41,8 @@ jobs:
           path: depends
           workflow_conclusion: success
           allow_forks: false
-          repo: PojavLauncherTeam/android-openjdk-build-multiarch
-          branch: buildjre8
+          repo: taylenwells2026-blip/angelauramc-openjdk-build
+          branch: main
           name: jre8-ios-aarch64
 
       - name: Get JRE17
@@ -54,8 +54,8 @@ jobs:
           path: depends
           workflow_conclusion: success
           allow_forks: false
-          repo: PojavLauncherTeam/android-openjdk-build-multiarch
-          branch: buildjre17-21
+          repo: taylenwells2026-blip/angelauramc-openjdk-build
+          branch: main
           name: jre17-ios-aarch64
 
       - name: Get JRE21
@@ -67,61 +67,25 @@ jobs:
           path: depends
           workflow_conclusion: completed
           allow_forks: false
-          repo: PojavLauncherTeam/android-openjdk-build-multiarch
-          branch: buildjre17-21
-          name: jre21-ios-aarch64
-
-      - name: Get JRE25 (openjdk 25)
-        uses: dawidd6/action-download-artifact@v2
-        continue-on-error: true
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: build-ios-jdk25.yml
-          path: depends
-          workflow_conclusion: success
-          allow_forks: false
-          repo: taylenwells2026-blip/angelauramc-openjdk-build
-          branch: main
-          name: jre25-ios-aarch64
-
-      - name: Try alternate JRE repo (taylenwells)
-        uses: dawidd6/action-download-artifact@v2
-        continue-on-error: true
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: build.yml
-          path: depends
-          workflow_conclusion: completed
-          allow_forks: false
-          repo: taylenwells2026-blip/angelauramc-openjdk-build
-          branch: main
-          name: jre8-ios-aarch64
-
-      - name: Try alternate JRE repo (taylenwells) - other JREs
-        uses: dawidd6/action-download-artifact@v2
-        continue-on-error: true
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: build.yml
-          path: depends
-          workflow_conclusion: completed
-          allow_forks: false
-          repo: taylenwells2026-blip/angelauramc-openjdk-build
-          branch: main
-          name: jre17-ios-aarch64
-
-      - name: Try alternate JRE repo (taylenwells) - jre21
-        uses: dawidd6/action-download-artifact@v2
-        continue-on-error: true
-        with:
-          github_token: ${{secrets.GITHUB_TOKEN}}
-          workflow: build.yml
-          path: depends
-          workflow_conclusion: completed
-          allow_forks: false
           repo: taylenwells2026-blip/angelauramc-openjdk-build
           branch: main
           name: jre21-ios-aarch64
+
+      - name: Get JRE25 from release (Taylen-chud)
+        continue-on-error: true
+        run: |
+          mkdir -p depends
+          echo "Downloading JRE25 release from Taylen-chud..."
+          curl -L --fail -o /tmp/jre25.tar.xz https://github.com/Taylen-chud/Amethyst-iOS/releases/download/Jre25/jre25-ios-arm64-20260618-release.tar.xz || true
+          if [ -f /tmp/jre25.tar.xz ]; then
+            mkdir -p depends/java-25-openjdk
+            tar xf /tmp/jre25.tar.xz -C depends/java-25-openjdk || true
+            rm -f /tmp/jre25.tar.xz
+          else
+            echo "JRE25 release not downloaded; continuing (CDN fallback may apply).";
+          fi
+
+      
 
       - name: "Fallback: download JRE zips from CDN"
         run: |
