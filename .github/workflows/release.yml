@@ -82,6 +82,7 @@ jobs:
           
       - name: Get JRE8
         uses: dawidd6/action-download-artifact@v2
+        continue-on-error: true
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build.yml
@@ -94,6 +95,7 @@ jobs:
 
       - name: Get JRE17
         uses: dawidd6/action-download-artifact@v2
+        continue-on-error: true
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build.yml
@@ -106,6 +108,7 @@ jobs:
 
       - name: Get JRE21
         uses: dawidd6/action-download-artifact@v2
+        continue-on-error: true
         with:
           github_token: ${{secrets.GITHUB_TOKEN}}
           workflow: build.yml
