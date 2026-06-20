@@ -1,3 +1,8 @@
+# WARNING 
+a lot of people have reported they are unable to run the game at all.
+i am looking into this and will be working on it 
+in the following days
+
 # Changes made
 * updated lwjgl 3.3.3 to 3.4.1 from versions 26.1 onwards
 
