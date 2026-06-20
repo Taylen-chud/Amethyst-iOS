@@ -25,9 +25,10 @@ jobs:
 
       - name: Export Java env
         run: |
-          echo "JAVA_HOME=${{ steps.setup-java.outputs.java-home }}" >> $GITHUB_ENV
-          echo "BOOTJDK=${{ steps.setup-java.outputs.java-home }}/bin" >> $GITHUB_ENV
-          echo "PATH=${{ steps.setup-java.outputs.java-home }}/bin:$PATH" >> $GITHUB_ENV
+          JDK_BASE_PATH="${{ steps.setup-java.outputs.path }}"
+          echo "JAVA_HOME=$JDK_BASE_PATH" >> $GITHUB_ENV
+          echo "BOOTJDK=$JDK_BASE_PATH/bin" >> $GITHUB_ENV
+          echo "PATH=$JDK_BASE_PATH/bin:$PATH" >> $GITHUB_ENV
 
       - name: Get JRE8
         uses: dawidd6/action-download-artifact@v2
