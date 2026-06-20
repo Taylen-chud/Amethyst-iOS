@@ -72,7 +72,9 @@ jobs:
       - name: Install dependencies
         run: |
           brew update || true
-          brew install wget cmake || true
+          brew install ldid wget make || true
+          sudo mkdir -p /usr/local/bin
+          sudo ln -s /opt/homebrew/bin/gmake /usr/local/bin/gmake || true
 
       - name: Build .tipa
         run: |
