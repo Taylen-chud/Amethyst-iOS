@@ -276,9 +276,9 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             glLibName = RENDERER_NAME_MTL_ANGLE;
         }
         if (strcmp(glLibName, RENDERER_NAME_VULKAN) == 0) {
-            // Vulkan selection still requires a valid OpenGL library name during
-            // LWJGL startup. Use the Metal ANGLE shim instead of the invalid
-            // com.apple.opengl fallback.
+            // Vulkan selection still requires a valid Vulkan loader name during
+            // LWJGL startup, and also may initialize OpenGL probing.
+            margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.vulkan.libname=%s", RENDERER_NAME_VULKAN].UTF8String;
             glLibName = RENDERER_NAME_MTL_ANGLE;
         }
         margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%s", glLibName].UTF8String;

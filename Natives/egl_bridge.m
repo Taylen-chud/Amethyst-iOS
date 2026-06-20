@@ -83,8 +83,13 @@ int pojavInitOpenGL() {
 
 void pojavSetWindowHint(int hint, int value) {
     if (hint == GLFW_CLIENT_API) {
+        const char *renderer = getenv("POJAV_RENDERER");
+        if (renderer && strcmp(renderer, RENDERER_NAME_VULKAN) == 0 && value != GLFW_NO_API) {
+            NSLog(@"[Amethyst-Debug] Vulkan renderer selected, overriding GLFW_CLIENT_API %d -> GLFW_NO_API", value);
+            value = GLFW_NO_API;
+        }
         clientAPI = value;
-    } else if (strcmp(getenv("POJAV_RENDERER"), "auto")==0 && hint == GLFW_CONTEXT_VERSION_MAJOR) {
+    } else if (getenv("POJAV_RENDERER") != NULL && strcmp(getenv("POJAV_RENDERER"), "auto") == 0 && hint == GLFW_CONTEXT_VERSION_MAJOR) {
         switch (value) {
             case 1:
             case 2:
@@ -111,11 +116,10 @@ void pojavMakeCurrent(basic_render_window_t* window) {
 
 void* pojavCreateContext(basic_render_window_t* contextSrc) {
     if (!br_make_current) return NULL;
-    if (clientAPI == GLFW_NO_API) {
-        // Game has selected Vulkan API to render
-        return (__bridge void *)SurfaceViewController.surface.layer;
-    }
 
+    // The renderer mode is controlled by GLFW client API hints during
+    // window creation. Do not force Vulkan/OpenGL selection here based on
+    // environment variables alone, or OpenGL versions will break.
     static BOOL inited = NO;
     if (!inited) {
         inited = YES;
