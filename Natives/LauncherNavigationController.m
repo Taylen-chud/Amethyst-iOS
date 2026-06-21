@@ -440,11 +440,14 @@ static void *ProgressObserverContext = &ProgressObserverContext;
         handler();
         return;
     } else if (@available(iOS 17.4, *)) {
+        // Don't send our own bundled script via script-data. StikDebug
+        // auto-matches a known-good script per-app by bundle/app name on
+        // TXM-capable iOS 26+ devices, and that auto-matched script is kept
+        // up to date by StikDebug independently of our release cadence.
+        // Forcing our own (potentially stale) bundled UniversalJIT26.js via
+        // script-data overrides that auto-selection entirely, which can
+        // break JIT on newer iOS versions StikDebug has already fixed for.
         NSString *scriptDataString = @"";
-        if(DeviceHasJITFlags(JIT_FLAG_FORCE_MIRRORED | JIT_FLAG_HAS_TXM)) {
-            NSData *scriptData = [NSData dataWithContentsOfFile:[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"UniversalJIT26.js"]];
-            scriptDataString = [@"&script-data=" stringByAppendingString:[scriptData base64EncodedStringWithOptions:0]];
-        }
         [UIApplication.sharedApplication openURL:[NSURL URLWithString:[NSString stringWithFormat:@"stikjit://enable-jit?bundle-id=%@&pid=%d%@", NSBundle.mainBundle.bundleIdentifier, getpid(), scriptDataString]] options:@{} completionHandler:nil];
     } else {
         // Assuming 16.7-17.3.1. SideStore still lacks this URL scheme at the time of writing, so it only jumps to SideStore.
