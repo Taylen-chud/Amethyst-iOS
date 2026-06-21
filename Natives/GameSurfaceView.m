@@ -37,10 +37,17 @@
 }
 
 + (Class)layerClass {
-    if ([[PLProfiles resolveKeyForCurrentProfile:@"renderer"] hasPrefix:@"libOSMesa"]) {
+    NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
+    if ([renderer hasPrefix:@"libOSMesa"]) {
         return CALayer.class;
-    } else {
+    } else if ([renderer isEqualToString:@ RENDERER_NAME_VULKAN]) {
+        // MoltenVK needs a CAMetalLayer-backed surface directly.
         return CAMetalLayer.class;
+    } else {
+        // GL4ES / MobileGlues go through libtinygl4angle.dylib's EGL
+        // implementation, which expects a CAEAGLLayer-backed native window
+        // for eglCreateWindowSurface, not CAMetalLayer.
+        return CAEAGLLayer.class;
     }
 }
 
