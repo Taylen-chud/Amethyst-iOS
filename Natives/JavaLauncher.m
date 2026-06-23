@@ -149,6 +149,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     BOOL launchJar = NO;
     NSString *gameDir;
     NSString *defaultJRETag;
+    NSString *lwjglFolder = @"lwjgl-3.3.3";
     NSCAssert(launchTarget, @"Unexpected nil launchTarget");
     if ([launchTarget isKindOfClass:NSDictionary.class]) {
         // Get preferred Java version from current profile
@@ -166,6 +167,15 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         } else {
             defaultJRETag = @"1_17_newer";
         }
+
+        // Minecraft switched to year-based version numbers (26.x, 27.x, ...)
+        // starting with 26.2, which also moved to LWJGL 3.4.1. Anything still
+        // on the old 1.x scheme keeps using 3.3.3.
+        int mcMajorVersion = [launchTarget[@"id"] intValue];
+        if (mcMajorVersion >= 26) {
+            lwjglFolder = @"lwjgl-3.4.1";
+        }
+        NSLog(@"[JavaLauncher] Using LWJGL from %@", lwjglFolder);
 
         // Setup POJAV_RENDERER
         NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
@@ -351,7 +361,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     init_loadCustomJvmFlags(&margc, (const char **)margv);
     NSLog(@"[Init] Found JLI lib");
 
-    NSString *classpath = [NSString stringWithFormat:@"%@/*", librariesPath];
+    NSString *classpath = [NSString stringWithFormat:@"%@/*:%@/%@/*", librariesPath, librariesPath, lwjglFolder];
     if (launchJar) {
         classpath = [classpath stringByAppendingFormat:@":%@", launchTarget];
     }
