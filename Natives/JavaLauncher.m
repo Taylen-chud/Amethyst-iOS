@@ -168,9 +168,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             defaultJRETag = @"1_17_newer";
         }
 
-        // Minecraft switched to year-based version numbers (26.x, 27.x, ...)
-        // starting with 26.2, which also moved to LWJGL 3.4.1. Anything still
-        // on the old 1.x scheme keeps using 3.3.3.
+        // Use LWJGL 3.4.1 for 26.1+, 3.3.3 for 1.21.11 and below
         int mcMajorVersion = [launchTarget[@"id"] intValue];
         if (mcMajorVersion >= 26) {
             lwjglFolder = @"lwjgl-3.4.1";
@@ -242,7 +240,8 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     }
     margv[++margc] = "-Xms128M";
     margv[++margc] = [NSString stringWithFormat:@"-Xmx%dM", allocmem].UTF8String;
-    margv[++margc] = [NSString stringWithFormat:@"-Djava.library.path=%@/Frameworks", NSBundle.mainBundle.bundlePath].UTF8String;
+    NSString *lwjglNativesFolder = [lwjglFolder isEqualToString:@"lwjgl-3.4.1"] ? @"lwjgl34" : @"lwjgl33";
+    margv[++margc] = [NSString stringWithFormat:@"-Djava.library.path=%@/Frameworks:%@/Frameworks/%@", NSBundle.mainBundle.bundlePath, NSBundle.mainBundle.bundlePath, lwjglNativesFolder].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.dir=%@", gameDir].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.home=%s", getenv("POJAV_HOME")].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.timezone=%@", NSTimeZone.localTimeZone.name].UTF8String;
