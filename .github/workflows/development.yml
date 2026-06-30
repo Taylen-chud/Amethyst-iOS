@@ -31,18 +31,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Amethyst.ipa
-          path: artifacts/Amethyst-*.ipa
+          path: artifacts/org.angelauramc.amethyst-*.ipa
 
 
       - name: Upload slimmed ipa
         uses: actions/upload-artifact@v4
         with:
           name: Amethyst slimmed
-          path: artifacts/amethyst.slimmed-*.ipa
+          path: artifacts/org.angelauraamethyst.slimmed-*.ipa
 
-
-      - name: Upload jre
-        uses: actions/upload-artifact@v4
-        with:
-          name: java_runtimes
-          path: artifacts/java_runtimes/*
