@@ -9,7 +9,7 @@ jobs:
   build:
     name: Development build
 
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - name: Install dependencies
         run: brew install temurin@8 ldid make
