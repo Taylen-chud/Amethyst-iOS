@@ -40,3 +40,9 @@ jobs:
           name: Amethyst slimmed
           path: artifacts/org.angelauraamethyst.slimmed-*.ipa
 
+
+      - name: Upload jre
+        uses: actions/upload-artifact@v4
+        with:
+          name: java_runtimes
+          path: artifacts/java_runtimes/*
