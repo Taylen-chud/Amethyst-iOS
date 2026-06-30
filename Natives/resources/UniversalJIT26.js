@@ -184,15 +184,21 @@ function JIT26PrepareRegion(brkResponse) {
 
     let jitPageAddress = x0;
     if (x0 == 0n) {
-        let requestRXResponse = send_command(`_M${x1.toString(16)},rx`);
-        log_verbose(`requestRXResponse = ${requestRXResponse}`);
+        // Request rwx instead of rx directly. Xcode's own "evaluate
+        // expression" debugger feature uses this same _M packet and is
+        // able to run real compiled code (including stp/ldp register-pair
+        // instructions) on iOS 27, so the underlying mechanism itself isn't
+        // broken -- going straight to rx-only may hit a stricter kernel
+        // code path than requesting rwx and dropping permissions after.
+        let requestRWXResponse = send_command(`_M${x1.toString(16)},rwx`);
+        log_verbose(`requestRWXResponse = ${requestRWXResponse}`);
         
-        if (!requestRXResponse || requestRXResponse.length === 0) {
-            log(`Failed to allocate RX memory`);
+        if (!requestRWXResponse || requestRWXResponse.length === 0) {
+            log(`Failed to allocate RWX memory`);
             return;
         }
         
-        jitPageAddress = BigInt(`0x${requestRXResponse}`);
+        jitPageAddress = BigInt(`0x${requestRWXResponse}`);
         log(`Allocated JIT page at address: 0x${jitPageAddress.toString(16)}`);
     }
 
