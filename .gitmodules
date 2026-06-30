@@ -12,3 +12,6 @@
 	path = Natives/external/MobileGlues
 	url = https://github.com/MobileGL-Dev/MobileGlues
 	branch = main
+[submodule "Natives/external/MobileGL"]
+	path = Natives/external/MobileGL
+	url = https://github.com/MobileGL-Dev/MobileGL.git
