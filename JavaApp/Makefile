@@ -12,7 +12,7 @@ TARGETS := $(TARGETS:$(SOURCEDIR)/%=$(OUTPUTDIR)/%.jar)
 JCFLAGS := -cp "$(subst $() $(),:,$(wildcard $(SOURCEDIR)/*/):$(wildcard libs/*/*.jar))" -XDignore.symbol.file
 
 all: $(TARGETS)
-	
+
 # Sometimes the CI produces empty class file resulting in broken jar, so we check and abort here
 check_empty_classes:
 	@set -e
@@ -31,7 +31,7 @@ $(CLASSES): $(OUTPUTDIR)/%.class: $(SOURCEDIR)/%.java
 	@mkdir -p $(dir $@)
 	@echo "Compiling $<"
 	@$(BOOTJDK)/javac $(JCFLAGS) -d $(OUTPUTDIR)/classes $<
-	@cp $(@:$(OUTPUTDIR)/$(TARGET)/%.class=$(OUTPUTDIR)/classes/%*.class) $(dir $@)/
+	@cp $(@:$(OUTPUTDIR)/$(TARGET)/%.class=$(OUTPUTDIR)/classes/%.class) $(dir $@)/
 
 $(OUTPUTDIR)/launcher.jar: $(CLASSES) check_empty_classes
 	@set -e
