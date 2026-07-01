@@ -25,14 +25,6 @@ jobs:
 
 
       - name: Checkout repository submodules
-        run: |
-          git config --global filter.lfs.smudge "git-lfs smudge --skip -- %f"
-          git config --global filter.lfs.process "git-lfs filter-process --skip"
-          git submodule update --init --recursive
-          git submodule update --init --recursive
-
-
-      - name: Checkout repository submodules
         run: git submodule update --init --recursive
 
       - name: Build
