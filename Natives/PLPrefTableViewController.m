@@ -37,7 +37,7 @@
             [self.prefSectionsVisibility addObject:@(self.prefSectionsVisible)];
         }
     } else {
-        // Display one singe section if prefSection is unspecified
+        // Display one single section if prefSection is unspecified
         self.prefSectionsVisibility = (id)@[@YES];
     }
 }
@@ -58,7 +58,6 @@
     }
 
     // Scan for child pane cells and reload them
-    // FIXME: any cheaper operations?
     NSMutableArray *indexPaths = [[NSMutableArray alloc] init];
     for (int section = 0; section < self.prefContents.count; section++) {
         if (!self.prefSectionsVisibility[section].boolValue) {
@@ -184,9 +183,7 @@
         view.autocorrectionType = UITextAutocorrectionTypeNo;
         view.autocapitalizationType = UITextAutocapitalizationTypeNone;
         view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleLeftMargin;
-        //view.contentVerticalAlignment = UIControlContentVerticalAlignmentTop;
         view.delegate = weakSelf;
-        //view.nonEditingLinebreakMode = NSLineBreakByCharWrapping;
         view.returnKeyType = UIReturnKeyDone;
         view.textAlignment = NSTextAlignmentRight;
         view.placeholder = localize((item[@"placeholder"] ? item[@"placeholder"] :
@@ -240,9 +237,6 @@
 
     BOOL(^isWarnable)(UIView *) = item[@"warnCondition"];
     NSString *warnKey = item[@"warnKey"];
-    // Display warning if: warn condition is met and either one of these:
-    // - does not have warnKey, always warn
-    // - has warnKey and its value is YES, warn once and set it to NO
     if (isWarnable && isWarnable(view) && (!warnKey || [self.getPreference(@"warnings", warnKey) boolValue])) {
         if (warnKey) {
             self.setPreference(@"warnings", warnKey, @NO);
@@ -270,7 +264,6 @@
     NSString *section = objc_getAssociatedObject(sender, @"section");
     NSString *key = item[@"key"];
 
-    // Special switches may define custom value instead of NO/YES
     NSArray *customSwitchValue = item[@"customSwitchValue"];
     self.setPreference(section, key, customSwitchValue ?
         customSwitchValue[sender.isOn] : @(sender.isOn));
@@ -280,10 +273,7 @@
         invokeAction(sender.isOn);
     }
 
-    // Some settings may affect the availability of other settings
-    // In this case, a switch may request to reload to apply user interaction change
     if ([item[@"requestReload"] boolValue]) {
-        // TODO: only reload needed rows
         [self.tableView reloadData];
     }
 }
@@ -311,7 +301,6 @@
         return;
     }
 
-    // userInterfaceIdiom = tvOS
     UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
     if (item[@"type"] == self.typeSwitch) {
         UISwitch *view = (id)cell.accessoryView;
@@ -361,19 +350,24 @@
     NSArray *pickKeys = item[@"pickKeys"];
     NSArray *pickList = item[@"pickList"];
     NSMutableArray<UIAction *> *menuItems = [[NSMutableArray alloc] init];
+    
     for (int i = 0; i < pickList.count; i++) {
+        // Safe check to avoid index-out-of-bounds crash if pickKeys and pickList are mismatched
+        NSString *selectedKey = (i < pickKeys.count) ? pickKeys[i] : pickList[i];
+        
         [menuItems addObject:[UIAction
             actionWithTitle:pickList[i]
             image:nil identifier:nil
             handler:^(UIAction *action) {
-                cell.detailTextLabel.text = pickKeys[i];
-                self.setPreference(self.prefSections[indexPath.section], item[@"key"], pickKeys[i]);
+                cell.detailTextLabel.text = selectedKey;
+                self.setPreference(self.prefSections[indexPath.section], item[@"key"], selectedKey);
                 void(^invokeAction)(NSString *) = item[@"action"];
                 if (invokeAction) {
-                    invokeAction(pickKeys[i]);
+                    invokeAction(selectedKey);
                 }
             }]];
-        if ([cell.detailTextLabel.text isEqualToString:pickKeys[i]]) {
+            
+        if ([cell.detailTextLabel.text isEqualToString:selectedKey]) {
             menuItems.lastObject.state = UIMenuElementStateOn;
         }
     }
