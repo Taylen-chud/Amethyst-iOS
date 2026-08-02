@@ -339,6 +339,10 @@
 }
 
 - (void)tableView:(UITableView *)tableView openPickerAtIndexPath:(NSIndexPath *)indexPath {
+    if (indexPath.section >= self.prefContents.count || indexPath.row >= self.prefContents[indexPath.section].count) {
+        return;
+    }
+
     UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
     NSDictionary *item = self.prefContents[indexPath.section][indexPath.row];
 
@@ -349,30 +353,37 @@
 
     NSArray *pickKeys = item[@"pickKeys"];
     NSArray *pickList = item[@"pickList"];
+    if (!pickList || pickList.count == 0) return;
+
+    NSString *currentVal = self.getPreference(self.prefSections[indexPath.section], item[@"key"]);
+
     NSMutableArray<UIAction *> *menuItems = [[NSMutableArray alloc] init];
     
     for (int i = 0; i < pickList.count; i++) {
         // Safe check to avoid index-out-of-bounds crash if pickKeys and pickList are mismatched
         NSString *selectedKey = (i < pickKeys.count) ? pickKeys[i] : pickList[i];
+        NSString *title = pickList[i];
         
-        [menuItems addObject:[UIAction
-            actionWithTitle:pickList[i]
+        UIAction *action = [UIAction
+            actionWithTitle:title
             image:nil identifier:nil
             handler:^(UIAction *action) {
-                cell.detailTextLabel.text = selectedKey;
+                cell.detailTextLabel.text = title;
                 self.setPreference(self.prefSections[indexPath.section], item[@"key"], selectedKey);
                 void(^invokeAction)(NSString *) = item[@"action"];
                 if (invokeAction) {
                     invokeAction(selectedKey);
                 }
-            }]];
+            }];
             
-        if ([cell.detailTextLabel.text isEqualToString:selectedKey]) {
-            menuItems.lastObject.state = UIMenuElementStateOn;
+        if ([currentVal isEqualToString:selectedKey]) {
+            action.state = UIMenuElementStateOn;
         }
+
+        [menuItems addObject:action];
     }
 
-    self.currentMenu = [UIMenu menuWithTitle:message children:menuItems];
+    self.currentMenu = [UIMenu menuWithTitle:message ? message : @"" children:menuItems];
     UIContextMenuInteraction *interaction = [[UIContextMenuInteraction alloc] initWithDelegate:self];
     cell.detailTextLabel.interactions = @[interaction];
     [interaction _presentMenuAtLocation:CGPointZero];
