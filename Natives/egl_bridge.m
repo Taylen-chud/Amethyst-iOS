@@ -62,6 +62,8 @@ int pojavInitOpenGL() {
         set_gl_bridge_tbl();
     } else if ([renderer isEqualToString:@(RENDERER_NAME_MOBILEGL_VULKAN)]) {
         renderer = @(RENDERER_NAME_MOBILEGL_VULKAN);
+        // Pre-load MoltenVK for Vulkan symbol resolution before loading MobileGL
+        dlopen("@rpath/libMoltenVK.dylib", RTLD_GLOBAL | RTLD_NOW);
         set_gl_bridge_tbl();
     } else if ([renderer isEqualToString:@(RENDERER_NAME_MOBILEGLUES)]) {
         renderer = @(RENDERER_NAME_MOBILEGLUES);
