@@ -52,22 +52,22 @@ int pojavInitOpenGL() {
     NSString *renderer = NSProcessInfo.processInfo.environment[@"POJAV_RENDERER"];
     BOOL isAuto = [renderer isEqualToString:@"auto"];
 
-    if (isAuto || [renderer isEqualToString:RENDERER_NAME_GL4ES]) {
+    if (isAuto || [renderer isEqualToString:@(RENDERER_NAME_GL4ES)]) {
         // At this point, if renderer is still auto (unspecified major version), pick gl4es
-        renderer = RENDERER_NAME_GL4ES;
+        renderer = @(RENDERER_NAME_GL4ES);
         setenv("POJAV_RENDERER", renderer.UTF8String, 1);
         set_gl_bridge_tbl();
-    } else if ([renderer isEqualToString:RENDERER_NAME_MOBILEGL] || [renderer isEqualToString:RENDERER_NAME_MOBILEGL_GLES]) {
-        renderer = RENDERER_NAME_MOBILEGL_GLES;
+    } else if ([renderer isEqualToString:@"mobilegl"] || [renderer isEqualToString:@(RENDERER_NAME_MOBILEGL_GLES)]) {
+        renderer = @(RENDERER_NAME_MOBILEGL_GLES);
         set_gl_bridge_tbl();
-    } else if ([renderer isEqualToString:RENDERER_NAME_MOBILEGL_VULKAN]) {
-        renderer = RENDERER_NAME_MOBILEGL_VULKAN;
+    } else if ([renderer isEqualToString:@(RENDERER_NAME_MOBILEGL_VULKAN)]) {
+        renderer = @(RENDERER_NAME_MOBILEGL_VULKAN);
         set_gl_bridge_tbl();
-    } else if ([renderer isEqualToString:RENDERER_NAME_MOBILEGLUES]) {
-        renderer = RENDERER_NAME_MOBILEGLUES;
+    } else if ([renderer isEqualToString:@(RENDERER_NAME_MOBILEGLUES)]) {
+        renderer = @(RENDERER_NAME_MOBILEGLUES);
         setenv("POJAV_RENDERER", renderer.UTF8String, 1);
         set_gl_bridge_tbl();
-    } else if ([renderer isEqualToString:RENDERER_NAME_MTL_ANGLE]) {
+    } else if ([renderer isEqualToString:@(RENDERER_NAME_MTL_ANGLE)]) {
         set_gl_bridge_tbl();
     } else if ([renderer hasPrefix:@"libOSMesa"]) {
         setenv("GALLIUM_DRIVER", "zink", 1);
