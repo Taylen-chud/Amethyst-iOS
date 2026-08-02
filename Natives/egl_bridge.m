@@ -56,14 +56,15 @@ int pojavInitOpenGL() {
         renderer = @ RENDERER_NAME_GL4ES;
         setenv("POJAV_RENDERER", renderer.UTF8String, 1);
         set_gl_bridge_tbl();
+         } else if ([renderer isEqualToString:@ RENDERER_NAME_MOBILEGL]) {
+        renderer = @ RENDERER_NAME_MOBILEGL_GLES;
+        set_gl_bridge_tbl();
+         } else if ([renderer isEqualToString:@ RENDERER_NAME_MOBILEGL]) {
+        renderer = @ RENDERER_NAME_MOBILEGL_VULKAN;
+        set_gl_bridge_tbl();
     } else if ([renderer isEqualToString:@ RENDERER_NAME_MOBILEGLUES]) {
         renderer = @ RENDERER_NAME_MOBILEGLUES;
         setenv("POJAV_RENDERER", renderer.UTF8String, 1);
-        set_gl_bridge_tbl();
-    } else if (isMobileGLRenderer(renderer.UTF8String)) {
-        setenv("MOBILEGL_BACKEND_TYPE",
-            [renderer isEqualToString:@ RENDERER_NAME_MOBILEGL_GLES] ? "DirectGLES" : "DirectVulkan",
-            1);
         set_gl_bridge_tbl();
     } else if ([renderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE]) {
         set_gl_bridge_tbl();

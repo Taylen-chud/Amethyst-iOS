@@ -109,7 +109,6 @@ POJAV_JRE8_DIR        ?= $(SOURCEDIR)/depends/java-8-openjdk
 POJAV_JRE17_DIR       ?= $(SOURCEDIR)/depends/java-17-openjdk
 POJAV_JRE21_DIR       ?= $(SOURCEDIR)/depends/java-21-openjdk
 POJAV_JRE25_DIR       ?= $(SOURCEDIR)/depends/java-25-openjdk
-MOBILEGL_SOURCE_DIR   ?= $(SOURCEDIR)/Natives/external/MobileGL
 MOLTENVK_LIBRARY      ?= $(SOURCEDIR)/Natives/resources/Frameworks/libMoltenVK.dylib
 
 # Function to use later for checking dependencies
@@ -336,50 +335,6 @@ dep_mg:
 
 	echo '[Amethyst v$(VERSION)] dep_mg - end'
 
-dep_mobilegl:
-	echo '[Amethyst v$(VERSION)] dep_mobilegl - start'
-	if [ ! -d "$(MOBILEGL_SOURCE_DIR)" ]; then \
-		echo 'MobileGL source directory not found: $(MOBILEGL_SOURCE_DIR)'; \
-		exit 1; \
-	fi
-	# Initialize base submodules first
-	git -C $(MOBILEGL_SOURCE_DIR) submodule update --init --recursive --force
-	# Force glslang to fetch its own missing validation tool dependencies directly
-	if [ -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang" ]; then \
-		cd $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang && python3 update_glslang_sources.py; \
-	fi
-	mkdir -p $(WORKINGDIR)/mobilegl
-	cd $(WORKINGDIR)/mobilegl && cmake \
-		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
-		-DCMAKE_CROSSCOMPILING=true \
-		-DCMAKE_SYSTEM_NAME=Darwin \
-		-DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-		-DCMAKE_OSX_SYSROOT="$(SDKPATH)" \
-		-DCMAKE_OSX_ARCHITECTURES=arm64 \
-		-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
-		-DCMAKE_C_FLAGS="-arch arm64" \
-		-DCMAKE_CXX_FLAGS="-arch arm64" \
-		-DMOBILEGL_IOS=ON \
-		-DMOBILEGL_BUILD_TEST=OFF \
-		-DMOBILEGL_BUILD_BENCHMARK=OFF \
-		-DMOBILEGL_BUILD_TRACE_REPLAY=OFF \
-		-DMOBILEGL_VULKAN_LIBRARY="$(MOLTENVK_LIBRARY)" \
-		-DENABLE_OPT=OFF \
-		$(MOBILEGL_SOURCE_DIR)
-
-	cmake --build $(WORKINGDIR)/mobilegl --config $(CMAKE_BUILD_TYPE) -j$(JOBS) --target MobileGL
-	install_name_tool -change @rpath/MoltenVK.framework/MoltenVK @rpath/libMoltenVK.dylib $(WORKINGDIR)/mobilegl/libMobileGL.dylib
-	if otool -l $(WORKINGDIR)/mobilegl/libMobileGL.dylib | grep -q 'path $(SOURCEDIR)/Natives/resources/Frameworks '; then \
-		install_name_tool -delete_rpath $(SOURCEDIR)/Natives/resources/Frameworks $(WORKINGDIR)/mobilegl/libMobileGL.dylib; \
-	fi
-	if otool -l $(WORKINGDIR)/mobilegl/libMobileGL.dylib | grep -q 'path @loader_path '; then \
-		install_name_tool -delete_rpath @loader_path $(WORKINGDIR)/mobilegl/libMobileGL.dylib; \
-	fi
-	install_name_tool -add_rpath @loader_path $(WORKINGDIR)/mobilegl/libMobileGL.dylib
-	cp $(WORKINGDIR)/mobilegl/libMobileGL.dylib $(WORKINGDIR)/libMobileGL.dylib
-	cp $(WORKINGDIR)/mobilegl/libMobileGL.dylib $(WORKINGDIR)/libMobileGL-gles.dylib
-	install_name_tool -id @rpath/libMobileGL-gles.dylib $(WORKINGDIR)/libMobileGL-gles.dylib
-	echo '[Amethyst v$(VERSION)] dep_mobilegl - end'
 
 assets:
 	echo '[Amethyst v$(VERSION)] assets - start'
@@ -396,7 +351,7 @@ assets:
 	fi
 	echo '[Amethyst v$(VERSION)] assets - end'
 
-payload: native dep_mg dep_mobilegl java jre assets
+payload: native dep_mg java jre assets
 	echo '[Amethyst v$(VERSION)] payload - start'
 	$(call METHOD_DIRCHECK,$(WORKINGDIR)/AngelAuraAmethyst.app/libs)
 	$(call METHOD_DIRCHECK,$(WORKINGDIR)/AngelAuraAmethyst.app/libs_caciocavallo)
