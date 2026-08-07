@@ -372,7 +372,12 @@ void pojavPumpEvents(void* window) {
                 if(GLFW_invoke_Char) GLFW_invoke_Char(window, event.i1);
                 break;
             case EVENT_TYPE_CHAR_MODS:
-                if(GLFW_invoke_CharMods) GLFW_invoke_CharMods(window, event.i1, event.i2);
+                if (GLFW_invoke_CharMods) {
+                    GLFW_invoke_CharMods(window, event.i1, event.i2);
+                } else if (GLFW_invoke_Char) {
+                    // Fallback to plain char callback when CharMods isn't available
+                    GLFW_invoke_Char(window, event.i1);
+                }
                 break;
             case EVENT_TYPE_KEY:
                 if(GLFW_invoke_Key) GLFW_invoke_Key(window, event.i1, event.i2, event.i3, event.i4);
@@ -537,11 +542,16 @@ BOOL CallbackBridge_nativeSendChar(jchar codepoint /* jint codepoint */) {
 }
 
 BOOL CallbackBridge_nativeSendCharMods(jchar codepoint, int mods) {
-    if (GLFW_invoke_CharMods && isInputReady) {
+    // Accept either CharMods or Char as targets — fall back to Char when necessary
+    if ((GLFW_invoke_CharMods || GLFW_invoke_Char) && isInputReady) {
         if (isUseStackQueueCall) {
             sendData(EVENT_TYPE_CHAR_MODS, (unsigned int) codepoint, mods, 0, 0);
         } else {
-            GLFW_invoke_CharMods((void*) showingWindow, codepoint, mods);
+            if (GLFW_invoke_CharMods) {
+                GLFW_invoke_CharMods((void*) showingWindow, codepoint, mods);
+            } else {
+                GLFW_invoke_Char((void*) showingWindow, (unsigned int) codepoint);
+            }
         }
         return YES;
     }
