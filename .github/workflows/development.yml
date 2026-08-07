@@ -44,10 +44,6 @@ jobs:
           git submodule sync --recursive
           git submodule update --init --recursive
 
-      - name: Force Update MobileGL Submodule to Latest Dev Commit
-        run: |
-          git submodule update --remote --merge Natives/external/MobileGL
-
       - name: Setup Xcode Version
         uses: maxim-lobanov/setup-xcode@master
         with:
@@ -58,12 +54,12 @@ jobs:
 
       - name: Get gl4es latest commit hash
         id: gl4es-sha
-        run: echo "::set-output name=sha::$(echo $(git ls-remote https://github.com refs/heads/master | grep -io '^\S*'))"
+        run: echo "::set-output name=sha::$(echo $(git ls-remote https://github.com/PojavLauncherTeam/gl4es-114-extra refs/heads/master | grep -io '^\S*'))"
         shell: bash
 
       - name: Cache gl4es
         uses: actions/cache@main
-        if: false
+        if: false # use gl4es 1.1.5
         id: gl4es-cache
         with:
           path: gl4es/libs
@@ -81,10 +77,10 @@ jobs:
         continue-on-error: true
         run: |
           cd gl4es
-          git git config user.email "github-actions@users.noreply.github.com"
+          git config user.email "github-actions@users.noreply.github.com"
           git config user.name "github-actions"
           export PATH=/opt/procursus/bin:$PATH
-          wget https://github.com
+          wget https://github.com/leetal/ios-cmake/raw/master/ios.toolchain.cmake
           cmake -B build -DCMAKE_TOOLCHAIN_FILE=ios.toolchain.cmake -DDEFAULT_ES=2 \
             -DNOX11=ON -DNOEGL=OFF -DSTATICLIB=OFF -DPLATFORM=OS64 \
             -DCMAKE_C_FLAGS=-Wno-error=implicit-function-declaration
@@ -104,11 +100,14 @@ jobs:
           export PATH=/opt/homebrew/bin:$PATH
           export SLIMMED=1
           if [ "${{ matrix.platform_name }}" == "ios" ]; then
+            # Build ipa and tipa for iOS
             gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }}
             gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }} TROLLSTORE_JIT_ENT=1
           elif [ "${{ matrix.platform_name }}" == "tvos" ]; then
+            # Build tipa only for tvOS
             gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }} TROLLSTORE_JIT_ENT=1
           else
+            # Build ipa only for everything else
             gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }}
           fi
 
@@ -135,3 +134,10 @@ jobs:
         with:
           name: org.angelauramc.amethyst.slimmed-${{ matrix.platform_name }}-trollstore.tipa
           path: artifacts/org.angelauramc.amethyst.slimmed-*-${{ matrix.platform_name }}-trollstore.tipa
+
+      - name: Upload PojavLauncher.dSYM
+        uses: actions/upload-artifact@main
+        if: matrix.platform_name == 'ios'
+        with:
+          name: AngelAuraAmethyst.dSYM
+          path: artifacts/AngelAuraAmethyst.dSYM
