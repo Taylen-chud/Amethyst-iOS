@@ -53,10 +53,6 @@ $(OUTPUTDIR)/launcher.jar: $(CLASSES) check_empty_classes
 	@echo "Creating $@"
 	@$(BOOTJDK)/jar -cfm $@ $(SOURCEDIR)/patchsvc.txt -C $(basename $@) 
 
-# One jar per LWJGL version - each built from only its own vendor folder,
-# so nothing ambiguous ends up on the runtime classpath. Patched classes from
-# src/lwjgl (compiled to $(OUTPUTDIR)/lwjgl) are then overlaid on top so our
-# custom GLFW/etc overrides actually ship instead of the stock vendor ones.
 $(OUTPUTDIR)/lwjgl-3.3.3.jar: $(CLASSES) check_empty_classes
 	@set -e
 	@echo "Creating $@"
