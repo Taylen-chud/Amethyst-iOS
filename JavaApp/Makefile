@@ -36,7 +36,13 @@ $(CLASSES): $(OUTPUTDIR)/%.class: $(SOURCEDIR)/%.java
 	@mkdir -p $(dir $@)
 	@echo "Compiling $<"
 	@$(BOOTJDK)/javac $(JCFLAGS) -d $(OUTPUTDIR)/classes $<
-
+	# Copy the main class and any inner-class files produced by javac into the target dir.
+	# No error suppression here on purpose: with -implicit:none above, javac only ever
+	# writes exactly the class(es) for $<, so a missing/failed copy here means something
+	# is genuinely wrong and should fail the build immediately - this is what launcher.jar
+	# (and PojavClassLoader specifically) depends on, and a silently-swallowed failure here
+	# is exactly what produced a jar that built "successfully" but was missing a class at
+	# runtime.
 	@set -e; \
 	CLASSNAME=$$(basename "$<" .java); \
 	find $(OUTPUTDIR)/classes -name "$$CLASSNAME*.class" -exec cp {} $(dir $@) \;
@@ -56,6 +62,8 @@ $(OUTPUTDIR)/patchsvc.jar: $(CLASSES)
 	@mkdir -p $(basename $@)/de/maxhenkel/opus4j
 	@mkdir -p $(basename $@)/de/maxhenkel/rnnoise4j
 	@mkdir -p $(basename $@)/de/maxhenkel/speex4j
+	# Copy compiled classes for de/maxhenkel into the staging dir. No error
+	# suppression: if these are missing, the jar would silently ship broken.
 	@cp -R $(OUTPUTDIR)/classes/de/maxhenkel/* $(basename $@)/de/maxhenkel/
 	# Now perform the patch renames.
 	@mv $(basename $@)/de/maxhenkel/lame4j/Mp3Decoder.class $(basename $@)/de/maxhenkel/lame4j/Mp3Decoder.class.patch
@@ -90,6 +98,8 @@ $(OUTPUTDIR)/patchjna_agent.jar: $(CLASSES)
 	@set -e
 	@mkdir -p $(basename $@)
 	@mkdir -p $(basename $@)/com/sun/jna
+	# Copy compiled classes for com/sun/jna into the staging dir. No error
+	# suppression: if this is missing, the jar would silently ship broken.
 	@cp -R $(OUTPUTDIR)/classes/com/sun/jna/* $(basename $@)/com/sun/jna/
 	@mv $(basename $@)/com/sun/jna/Platform.class $(basename $@)/com/sun/jna/Platform.class.patch
 	@echo "Creating $@"
