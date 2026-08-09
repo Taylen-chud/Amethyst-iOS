@@ -342,14 +342,20 @@ dep_mg: patch_mobileglues
 
 patch_mobileglues:
 	echo '[Amethyst v$(VERSION)] Patching MobileGlues for Darwin compatibility - start'
-	if [ ! -d "$(MOBILEGL_SOURCE_DIR)/MobileGlues-cpp" ]; then \
+	if [ ! -d "$(MOBILEGLUES_SOURCE_DIR)" ]; then \
+		echo 'ERROR: MobileGlues repository not found:'; \
+		echo '       $(MOBILEGLUES_SOURCE_DIR)'; \
+		exit 1; \
+	fi
+	if [ ! -d "$(MOBILEGLUES_SOURCE_DIR)/MobileGlues-cpp" ]; then \
 		echo 'ERROR: MobileGlues-cpp directory not found:'; \
-		echo '       $(MOBILEGL_SOURCE_DIR)/MobileGlues-cpp'; \
+		echo '       $(MOBILEGLUES_SOURCE_DIR)/MobileGlues-cpp'; \
 		exit 1; \
 	fi
 	python3 "$(SOURCEDIR)/patch_mobileglues.py" \
-		"$(MOBILEGL_SOURCE_DIR)"
+		"$(MOBILEGLUES_SOURCE_DIR)"
 	echo '[Amethyst v$(VERSION)] Patching MobileGlues for Darwin compatibility - end'
+
 
 
 dep_mobilegl:
