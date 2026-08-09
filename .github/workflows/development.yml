@@ -44,9 +44,6 @@ jobs:
           git submodule sync --recursive
           git submodule update --init --recursive
 
-      - name: Apply MobileGlues iOS compatibility patch
-        run: python3 patch_mobileglues.py
-
       - name: Setup Xcode Version
         uses: maxim-lobanov/setup-xcode@master
         with:
