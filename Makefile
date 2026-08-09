@@ -343,15 +343,7 @@ dep_mg: patch_mobileglues
 patch_mobileglues:
 	echo '[Amethyst v$(VERSION)] Patching MobileGlues for Darwin compatibility - start'
 	if [ -f "$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/gl/framebuffer.cpp" ]; then \
-		sed -i '' \
-			-e '/GLAPI GLAPIENTRY void glDeleteFramebuffersARB/,+0s/^/#ifndef __APPLE__\n/' \
-			-e '/GLAPI GLAPIENTRY void glDeleteFramebuffersARB.*__attribute__((alias/a\
-#else\
-GLAPI GLAPIENTRY void glDeleteFramebuffersARB(GLsizei n, const GLuint* names) { glDeleteFramebuffers(n, names); }\
-#endif' \
-			-e '/GLAPI GLAPIENTRY void glFramebufferRenderbuffer.*__attribute__((alias/s/$$/\n#else\nGLAPI GLAPIENTRY void glFramebufferRenderbuffer(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) { glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer); }\n#endif/' \
-			-e '/GLAPI GLAPIENTRY void glFramebufferTextureLayer.*__attribute__((alias/s/$$/\n#else\nGLAPI GLAPIENTRY void glFramebufferTextureLayer(GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer) { glFramebufferTextureLayer(target, attachment, texture, level, layer); }\n#endif/' \
-			"$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/gl/framebuffer.cpp"; \
+		python3 "$(SOURCEDIR)/patch_mobileglues.py" "$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/gl/framebuffer.cpp"; \
 	else \
 		echo 'Warning: framebuffer.cpp not found at expected path'; \
 	fi
