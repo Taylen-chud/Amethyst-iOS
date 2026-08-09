@@ -313,7 +313,7 @@ jre: native
 	cp $(WORKINGDIR)/libawt_xawt.dylib $(OUTPUTDIR)/java_runtimes/java-25-openjdk/lib
 	echo '[Amethyst v$(VERSION)] jre - end'
 
-dep_mg:
+dep_mg: patch_mobileglues
 	echo '[Amethyst v$(VERSION)] dep_mg - start'
 	mkdir -p $(WORKINGDIR)/mobileglues
 	cd $(WORKINGDIR)/mobileglues && cmake \
@@ -339,6 +339,23 @@ dep_mg:
 	fi
 
 	echo '[Amethyst v$(VERSION)] dep_mg - end'
+
+patch_mobileglues:
+	echo '[Amethyst v$(VERSION)] Patching MobileGlues for Darwin compatibility - start'
+	if [ -f "$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/gl/framebuffer.cpp" ]; then \
+		sed -i '' \
+			-e '/GLAPI GLAPIENTRY void glDeleteFramebuffersARB/,+0s/^/#ifndef __APPLE__\n/' \
+			-e '/GLAPI GLAPIENTRY void glDeleteFramebuffersARB.*__attribute__((alias/a\\
+#else\
+GLAPI GLAPIENTRY void glDeleteFramebuffersARB(GLsizei n, const GLuint* names) { glDeleteFramebuffers(n, names); }\
+#endif' \
+			-e '/GLAPI GLAPIENTRY void glFramebufferRenderbuffer.*__attribute__((alias/s/$$/\\n#else\\nGLAPI GLAPIENTRY void glFramebufferRenderbuffer(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) { glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer); }\\n#endif/' \
+			-e '/GLAPI GLAPIENTRY void glFramebufferTextureLayer.*__attribute__((alias/s/$$/\\n#else\\nGLAPI GLAPIENTRY void glFramebufferTextureLayer(GLenum target, GLenum attachment, GLuint texture, GLint level, GLint layer) { glFramebufferTextureLayer(target, attachment, texture, level, layer); }\\n#endif/' \
+			"$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/gl/framebuffer.cpp"; \
+	else \
+		echo 'Warning: framebuffer.cpp not found at expected path'; \
+	fi
+	echo '[Amethyst v$(VERSION)] Patching MobileGlues for Darwin compatibility - end'
 
 dep_mobilegl:
 	echo '[Amethyst v$(VERSION)] dep_mobilegl - start'
@@ -465,7 +482,7 @@ deploy:
 package: payload
 	echo '[Amethyst v$(VERSION)] package - start'
 	if [ '$(TEAMID)' != '-1' ] && [ '$(SIGNING_TEAMID)' != '-1' ] && [ -f '$(PROVISIONING)' ] && [ '$(DETECTPLAT)' = 'Darwin' ]; then \
-		printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n	<key>application-identifier</key>\n	<string>$(TEAMID).org.angelauramc.amethyst</string>\n	<key>com.apple.developer.team-identifier</key>\n	<string>$(TEAMID)</string>\n	<key>get-task-allow</key>\n	<true/>\n	<key>keychain-access-groups</key>\n	<array>\n	<string>$(TEAMID).*</string>\n	<string>com.apple.token</string>\n	</array>\n	<key>com.apple.developer.kernel.extended-virtual-addressing</key>\n	<true/>\n	<key>com.apple.developer.kernel.increased-memory-limit</key>\n	<true/>\n</dict>\n</plist>' > entitlements.codesign.xml; \
+		printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n	<key>appl[...]
 		$(MAKE) codesign; \
 		rm -rf entitlements.codesign.xml; \
 	else \
@@ -497,4 +514,4 @@ clean:
 	rm -rf $(OUTPUTDIR)
 	echo '[Amethyst v$(VERSION)] clean - end'
 
-.PHONY: all clean check native java jre package dsym deploy help
+.PHONY: all clean check native java jre package dsym deploy help patch_mobileglues
