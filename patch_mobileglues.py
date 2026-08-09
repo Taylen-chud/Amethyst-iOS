@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import re
 import sys
 from pathlib import Path
 
@@ -12,11 +11,33 @@ def patch_framebuffer(path: Path) -> None:
         print(f"Already patched: {path}")
         return
 
-    pattern = re.compile(
-        r'''extern\s+"C"\s*\{.*?
-__attribute__\\(\\(alias\\("glFramebufferTextureLayer"\\)\)\);\s*\}''',
-        re.DOTALL,
+    start_marker = 'extern "C" {'
+    end_marker = (
+        '__attribute__((alias("glFramebufferTextureLayer")));'
     )
+
+    start = source.find(start_marker)
+
+    if start == -1:
+        raise RuntimeError(
+            f"Could not find the framebuffer extern block in {path}"
+        )
+
+    marker_end = source.find(end_marker, start)
+
+    if marker_end == -1:
+        raise RuntimeError(
+            f"Could not find the framebuffer alias block in {path}"
+        )
+
+    end = source.find("}", marker_end)
+
+    if end == -1:
+        raise RuntimeError(
+            f"Could not find the end of the framebuffer alias block in {path}"
+        )
+
+    end += 1
 
     replacement = """extern "C" {
 #ifndef __APPLE__
@@ -76,14 +97,9 @@ GLAPI GLAPIENTRY void glFramebufferTextureLayerARB(
 #endif
 }"""
 
-    patched, count = pattern.subn(replacement, source, count=1)
-
-    if count != 1:
-        raise RuntimeError(
-            f"Could not find the framebuffer alias block in {path}"
-        )
-
+    patched = source[:start] + replacement + source[end:]
     path.write_text(patched, encoding="utf-8")
+
     print(f"Patched framebuffer aliases: {path}")
 
 
@@ -118,6 +134,7 @@ def patch_trace(path: Path) -> None:
     source = source.replace(old_code, new_code, 1)
 
     path.write_text(source, encoding="utf-8")
+
     print(f"Patched Darwin thread ID handling: {path}")
 
 
