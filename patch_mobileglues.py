@@ -5,102 +5,10 @@ from pathlib import Path
 
 
 def patch_framebuffer(path: Path) -> None:
-    source = path.read_text(encoding="utf-8")
-
-    if "MOBILEGLUES_DARWIN_FBO_PATCH" in source:
-        print(f"Already patched: {path}")
-        return
-
-    start_marker = 'extern "C" {'
-    end_marker = (
-        '__attribute__((alias("glFramebufferTextureLayer")));'
+    print(
+        "Skipping framebuffer alias patch for runtime compatibility testing:"
     )
-
-    start = source.find(start_marker)
-
-    if start == -1:
-        raise RuntimeError(
-            f"Could not find the framebuffer extern block in {path}"
-        )
-
-    marker_end = source.find(end_marker, start)
-
-    if marker_end == -1:
-        raise RuntimeError(
-            f"Could not find the framebuffer alias block in {path}"
-        )
-
-    end = source.find("}", marker_end)
-
-    if end == -1:
-        raise RuntimeError(
-            f"Could not find the end of the framebuffer alias block in {path}"
-        )
-
-    end += 1
-
-    replacement = """extern "C" {
-#ifndef __APPLE__
-GLAPI GLAPIENTRY void glDeleteFramebuffersARB(
-    GLsizei n, const GLuint* names)
-    __attribute__((alias("glDeleteFramebuffers")));
-
-GLAPI GLAPIENTRY void glFramebufferRenderbufferARB(
-    GLenum target,
-    GLenum attachment,
-    GLenum renderbuffertarget,
-    GLuint renderbuffer)
-    __attribute__((alias("glFramebufferRenderbuffer")));
-
-GLAPI GLAPIENTRY void glFramebufferTextureLayerARB(
-    GLenum target,
-    GLenum attachment,
-    GLuint texture,
-    GLint level,
-    GLint layer)
-    __attribute__((alias("glFramebufferTextureLayer")));
-#else
-/* MOBILEGLUES_DARWIN_FBO_PATCH */
-GLAPI GLAPIENTRY void glDeleteFramebuffersARB(
-    GLsizei n, const GLuint* names)
-{
-    glDeleteFramebuffers(n, names);
-}
-
-GLAPI GLAPIENTRY void glFramebufferRenderbufferARB(
-    GLenum target,
-    GLenum attachment,
-    GLenum renderbuffertarget,
-    GLuint renderbuffer)
-{
-    glFramebufferRenderbuffer(
-        target,
-        attachment,
-        renderbuffertarget,
-        renderbuffer);
-}
-
-GLAPI GLAPIENTRY void glFramebufferTextureLayerARB(
-    GLenum target,
-    GLenum attachment,
-    GLuint texture,
-    GLint level,
-    GLint layer)
-{
-    glFramebufferTextureLayer(
-        target,
-        attachment,
-        texture,
-        level,
-        layer);
-}
-#endif
-}"""
-
-    patched = source[:start] + replacement + source[end:]
-
-    path.write_text(patched, encoding="utf-8")
-    print(f"Patched framebuffer aliases: {path}")
+    print(f"  {path}")
 
 
 def patch_trace(path: Path) -> None:
@@ -199,8 +107,6 @@ def main() -> int:
         )
         return 1
 
-    patch_apple_linker_flags(root)
-
     cpp_root = root / "MobileGlues-cpp"
 
     framebuffer = cpp_root / "gl" / "framebuffer.cpp"
@@ -224,10 +130,18 @@ def main() -> int:
         return 1
 
     try:
+        patch_apple_linker_flags(root)
+
+        # Intentionally disabled for this runtime test.
         patch_framebuffer(framebuffer)
+
         patch_trace(trace)
+
     except (OSError, RuntimeError) as error:
-        print(f"MobileGlues patch failed: {error}", file=sys.stderr)
+        print(
+            f"MobileGlues patch failed: {error}",
+            file=sys.stderr,
+        )
         return 1
 
     print("MobileGlues Darwin/iOS patching complete")
