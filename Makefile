@@ -110,6 +110,7 @@ POJAV_JRE17_DIR       ?= $(SOURCEDIR)/depends/java-17-openjdk
 POJAV_JRE21_DIR       ?= $(SOURCEDIR)/depends/java-21-openjdk
 POJAV_JRE25_DIR       ?= $(SOURCEDIR)/depends/java-25-openjdk
 MOBILEGL_SOURCE_DIR   ?= $(SOURCEDIR)/Natives/external/MobileGL
+MOBILEGLUES_SOURCE_DIR ?= $(SOURCEDIR)/Natives/external/MobileGlues
 MOLTENVK_LIBRARY      ?= $(SOURCEDIR)/Natives/resources/Frameworks/libMoltenVK.dylib
 
 # Function to use later for checking dependencies
@@ -342,19 +343,19 @@ dep_mg: patch_mobileglues
 
 patch_mobileglues:
 	echo '[Amethyst v$(VERSION)] Patching MobileGlues for Darwin compatibility - start'
+	echo "Project root: $(SOURCEDIR)"
+	echo "MobileGlues path: $(MOBILEGLUES_SOURCE_DIR)"
 	if [ ! -d "$(MOBILEGLUES_SOURCE_DIR)" ]; then \
 		echo 'ERROR: MobileGlues repository not found:'; \
-		echo '       $(MOBILEGLUES_SOURCE_DIR)'; \
-		exit 1; \
-	fi
-	if [ ! -d "$(MOBILEGLUES_SOURCE_DIR)/MobileGlues-cpp" ]; then \
-		echo 'ERROR: MobileGlues-cpp directory not found:'; \
-		echo '       $(MOBILEGLUES_SOURCE_DIR)/MobileGlues-cpp'; \
+		echo "       $(MOBILEGLUES_SOURCE_DIR)"; \
+		echo 'Directories under Natives/external:'; \
+		find "$(SOURCEDIR)/Natives/external" -maxdepth 2 -type d -print; \
 		exit 1; \
 	fi
 	python3 "$(SOURCEDIR)/patch_mobileglues.py" \
 		"$(MOBILEGLUES_SOURCE_DIR)"
 	echo '[Amethyst v$(VERSION)] Patching MobileGlues for Darwin compatibility - end'
+
 
 
 
