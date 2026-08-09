@@ -98,8 +98,8 @@ GLAPI GLAPIENTRY void glFramebufferTextureLayerARB(
 }"""
 
     patched = source[:start] + replacement + source[end:]
-    path.write_text(patched, encoding="utf-8")
 
+    path.write_text(patched, encoding="utf-8")
     print(f"Patched framebuffer aliases: {path}")
 
 
@@ -134,8 +134,51 @@ def patch_trace(path: Path) -> None:
     source = source.replace(old_code, new_code, 1)
 
     path.write_text(source, encoding="utf-8")
-
     print(f"Patched Darwin thread ID handling: {path}")
+
+
+def patch_apple_linker_flags(root: Path) -> None:
+    if sys.platform != "darwin":
+        print("Skipping Apple linker patch on non-Darwin host")
+        return
+
+    replacements = 0
+
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+
+        if path.name != "CMakeLists.txt" and path.suffix != ".cmake":
+            continue
+
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        if "-Bsymbolic-functions" not in source:
+            continue
+
+        updated = source.replace(
+            "-Wl,-Bsymbolic-functions",
+            "",
+        )
+
+        updated = updated.replace(
+            "-Bsymbolic-functions",
+            "",
+        )
+
+        if updated == source:
+            continue
+
+        path.write_text(updated, encoding="utf-8")
+        replacements += 1
+
+        print(f"Removed GNU linker flag from: {path}")
+
+    if replacements == 0:
+        print("No -Bsymbolic-functions flag found in MobileGlues")
 
 
 def main() -> int:
@@ -148,6 +191,16 @@ def main() -> int:
         return 2
 
     root = Path(sys.argv[1]).expanduser().resolve()
+
+    if not root.is_dir():
+        print(
+            f"MobileGlues directory does not exist: {root}",
+            file=sys.stderr,
+        )
+        return 1
+
+    patch_apple_linker_flags(root)
+
     cpp_root = root / "MobileGlues-cpp"
 
     framebuffer = cpp_root / "gl" / "framebuffer.cpp"
