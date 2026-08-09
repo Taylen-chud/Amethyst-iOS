@@ -13,9 +13,8 @@ def patch_framebuffer(path: Path) -> None:
         return
 
     pattern = re.compile(
-        r'extern\s+"C"\s*\{.*?'
-        r'__attribute__\s*\\(\\s\*\\(\\s\*alias\\s\*\\(\\s\*"glFramebufferTextureLayer"\\s\*\\)'
-        r'\s*\)\s*\)\s*;\s*\}',
+        r'''extern\s+"C"\s*\{.*?
+__attribute__\\(\\(alias\\("glFramebufferTextureLayer"\\)\)\);\s*\}''',
         re.DOTALL,
     )
 
@@ -54,7 +53,10 @@ GLAPI GLAPIENTRY void glFramebufferRenderbufferARB(
     GLuint renderbuffer)
 {
     glFramebufferRenderbuffer(
-        target, attachment, renderbuffertarget, renderbuffer);
+        target,
+        attachment,
+        renderbuffertarget,
+        renderbuffer);
 }
 
 GLAPI GLAPIENTRY void glFramebufferTextureLayerARB(
@@ -65,7 +67,11 @@ GLAPI GLAPIENTRY void glFramebufferTextureLayerARB(
     GLint layer)
 {
     glFramebufferTextureLayer(
-        target, attachment, texture, level, layer);
+        target,
+        attachment,
+        texture,
+        level,
+        layer);
 }
 #endif
 }"""
@@ -110,6 +116,7 @@ def patch_trace(path: Path) -> None:
 #endif"""
 
     source = source.replace(old_code, new_code, 1)
+
     path.write_text(source, encoding="utf-8")
     print(f"Patched Darwin thread ID handling: {path}")
 
@@ -136,9 +143,14 @@ def main() -> int:
     ]
 
     if missing:
-        print("Required MobileGlues files were not found:", file=sys.stderr)
+        print(
+            "Required MobileGlues files were not found:",
+            file=sys.stderr,
+        )
+
         for path in missing:
             print(f"  {path}", file=sys.stderr)
+
         return 1
 
     try:
