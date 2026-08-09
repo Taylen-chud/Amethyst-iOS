@@ -342,10 +342,10 @@ dep_mg: patch_mobileglues
 
 patch_mobileglues:
 	echo '[Amethyst v$(VERSION)] Patching MobileGlues for Darwin compatibility - start'
-	if [ -f "$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/gl/framebuffer.cpp" ]; then \
-		python3 "$(SOURCEDIR)/patch_mobileglues.py" "$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/gl/framebuffer.cpp"; \
+	if [ -d "$(SOURCEDIR)/Natives/external/MobileGlues" ]; then \
+		python3 "$(SOURCEDIR)/patch_mobileglues.py" "$(SOURCEDIR)/Natives/external/MobileGlues"; \
 	else \
-		echo 'Warning: framebuffer.cpp not found at expected path'; \
+		echo 'Warning: MobileGlues source directory not found at expected path'; \
 	fi
 	echo '[Amethyst v$(VERSION)] Patching MobileGlues for Darwin compatibility - end'
 
