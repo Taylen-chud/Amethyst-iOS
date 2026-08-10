@@ -464,7 +464,12 @@ if (getPrefBool(@"video.fix_simple_voice_chat_mod")) {
         }
     }
     margv[++margc] = cacio_classpath.UTF8String;
+<<<<<<< HEAD
 // FIXME: the JVM arg is deprecated; and it is currently broken for Java 25
+=======
+
+    // FIXME: the JVM arg is deprecated; and it is currently broken for Java 25
+>>>>>>> 9212a18 (fix(JVM): append `-XX:-UseCompressedClassPointers` for all cases)
     if (!getenv("JVM_KEEP_UseCompressedClassPointers") || !getEntitlementValue(@"com.apple.developer.kernel.extended-virtual-addressing")) {
         // In jailed environment, where extended virtual addressing entitlement isn't
         // present (for free dev account), allocating compressed space fails.
