@@ -171,18 +171,56 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
         return NULL;
     }
 
-    const EGLint gles_ctx_attribs[] = {
-        EGL_CONTEXT_CLIENT_VERSION, 3,
-        EGL_NONE
-    };
     const EGLint desktop_ctx_attribs[] = {
         EGL_CONTEXT_MAJOR_VERSION, 3,
         EGL_CONTEXT_MINOR_VERSION, 3,
         EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
         EGL_NONE
     };
-    bundle->context = handle.eglCreateContext(g_EglDisplay, bundle->config, share ? share->context : EGL_NO_CONTEXT,
-        useDesktopGL ? desktop_ctx_attribs : gles_ctx_attribs);
+
+    if (useDesktopGL) {
+        bundle->context = handle.eglCreateContext(g_EglDisplay, bundle->config, share ? share->context : EGL_NO_CONTEXT,
+            desktop_ctx_attribs);
+    } else {
+        // MobileGL's DirectGLES backend runs a capability probe
+        // (PopulateFormatCapabilities -> ProbeTexture -> glTexStorage3DMultisample)
+        // as soon as the context is made current. That call is only valid on
+        // GLES 3.1+ (multisample texture storage isn't core in 3.0). If we
+        // only request EGL_CONTEXT_CLIENT_VERSION=3 with no minor version,
+        // EGL defaults the minor version to 0, i.e. a plain GLES 3.0
+        // context - and MobileGL's probe crashes touching state that was
+        // never set up for that version. Request the highest ES minor
+        // version ANGLE will give us, falling back step by step so this
+        // still works on backends that only support 3.1 or plain 3.0.
+        const EGLint gles_32_attribs[] = {
+            EGL_CONTEXT_MAJOR_VERSION, 3,
+            EGL_CONTEXT_MINOR_VERSION, 2,
+            EGL_NONE
+        };
+        const EGLint gles_31_attribs[] = {
+            EGL_CONTEXT_MAJOR_VERSION, 3,
+            EGL_CONTEXT_MINOR_VERSION, 1,
+            EGL_NONE
+        };
+        const EGLint gles_30_attribs[] = {
+            EGL_CONTEXT_CLIENT_VERSION, 3,
+            EGL_NONE
+        };
+
+        bundle->context = handle.eglCreateContext(g_EglDisplay, bundle->config, share ? share->context : EGL_NO_CONTEXT,
+            gles_32_attribs);
+        if (!bundle->context) {
+            NSLog(@"EGLBridge: GLES 3.2 context request failed (0x%x), trying 3.1", handle.eglGetError());
+            bundle->context = handle.eglCreateContext(g_EglDisplay, bundle->config, share ? share->context : EGL_NO_CONTEXT,
+                gles_31_attribs);
+        }
+        if (!bundle->context) {
+            NSLog(@"EGLBridge: GLES 3.1 context request failed (0x%x), falling back to 3.0", handle.eglGetError());
+            bundle->context = handle.eglCreateContext(g_EglDisplay, bundle->config, share ? share->context : EGL_NO_CONTEXT,
+                gles_30_attribs);
+        }
+    }
+
     if (!bundle->context) {
         NSLog(@"EGLBridge: Error eglCreateContext finished with error: 0x%x", handle.eglGetError());
         free(bundle);
