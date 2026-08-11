@@ -106,7 +106,19 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
 
     NSString *renderer = NSProcessInfo.processInfo.environment[@"POJAV_RENDERER"];
     BOOL angleDesktopGL = [renderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE];
+    // isMobileGLRenderer()/mobileGL covers BOTH libMobileGL.dylib and
+    // libMobileGL-gles.dylib, since they're the same binary under two names.
+    // That's fine for things like surface sizing attribs below, but the EGL
+    // client API MUST NOT be collapsed the same way: libMobileGL-gles.dylib
+    // is backed by ANGLE's libGLESv2 and has to be driven via the real
+    // EGL_OPENGL_ES_API path (like MobileGlues), while only the plain,
+    // non-gles libMobileGL.dylib build wants the desktop EGL_OPENGL_API path
+    // alongside tinygl4angle. Binding the gles variant through the desktop
+    // path mismatches ANGLE's internal ES-typed state and segfaults inside
+    // libGLESv2 (gl::State::getTargetTexture) as soon as it's touched.
     BOOL mobileGL = gl_is_mobilegl_renderer();
+    BOOL mobileGLDesktop = [renderer isEqualToString:@ RENDERER_NAME_MOBILEGL];
+    BOOL useDesktopGL = angleDesktopGL || mobileGLDesktop;
 
     const EGLint attribs[] = {
         EGL_RED_SIZE, 8,
@@ -115,7 +127,7 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
         EGL_ALPHA_SIZE, 8,
         EGL_DEPTH_SIZE, 24,
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT|EGL_PBUFFER_BIT,
-        EGL_RENDERABLE_TYPE, (angleDesktopGL || mobileGL) ? EGL_OPENGL_BIT : EGL_OPENGL_ES3_BIT,
+        EGL_RENDERABLE_TYPE, useDesktopGL ? EGL_OPENGL_BIT : EGL_OPENGL_ES3_BIT,
         EGL_NONE
     };
 
@@ -136,7 +148,7 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
     }
 
     EGLBoolean bindResult;
-    if (angleDesktopGL || mobileGL) {
+    if (useDesktopGL) {
         NSLog(@"EGLBridge: Binding to desktop OpenGL");
         bindResult = handle.eglBindAPI(EGL_OPENGL_API);
     } else {
@@ -170,7 +182,7 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
         EGL_NONE
     };
     bundle->context = handle.eglCreateContext(g_EglDisplay, bundle->config, share ? share->context : EGL_NO_CONTEXT,
-        mobileGL ? desktop_ctx_attribs : gles_ctx_attribs);
+        useDesktopGL ? desktop_ctx_attribs : gles_ctx_attribs);
     if (!bundle->context) {
         NSLog(@"EGLBridge: Error eglCreateContext finished with error: 0x%x", handle.eglGetError());
         free(bundle);
