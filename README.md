@@ -11,9 +11,6 @@ Fork of https://github.com/AngelAuraMC/Amethyst-iOS
 
   This repo is meant to bring 26.x support and quality of life improvements
 
-  > [!NOTE]
->
-> Probably not maintaining this anymore ai can only get you so far🫩 and this barley works anyway
 
 ## Introduction
 Amethyst is a Minecraft: Java Edition launcher for Android, iOS, and iPadOS, based off of zhuowei's [Boardwalk](https://github.com/zhuowei/Boardwalk) project.
