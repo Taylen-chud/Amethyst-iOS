@@ -36,6 +36,40 @@ BOOL validateVirtualMemorySpace(size_t size) {
     return YES;
 }
 
+// Some builds of libMobileGL.dylib reference __ZNSt3__113__hash_memoryEPKvm
+// (std::__1::__hash_memory) as a two-level-namespace symbol expected to live
+// in /usr/lib/libc++.1.dylib. On devices where the system libc++ doesn't
+// export that symbol, dyld refuses to load libMobileGL.dylib at all with
+// "Symbol not found: __ZNSt3__113__hash_memoryEPKvm", which surfaces to us
+// as an UnsatisfiedLinkError when LWJGL tries to load OpenGL.
+//
+// We can't edit libMobileGL itself, so instead we:
+//   1. dlopen() a small shim dylib (libcxx_hash_shim.dylib, bundled in
+//      Frameworks/) with RTLD_GLOBAL, which exports that exact symbol.
+//   2. Set DYLD_FORCE_FLAT_NAMESPACE=1 so dyld resolves the unresolved
+//      reference against any loaded image (our shim) instead of insisting
+//      on libc++.1.dylib specifically.
+//
+// This must run before anything dlopen()s libMobileGL.dylib - in practice
+// that happens later, inside LWJGL's native library loader once the JVM is
+// running - so doing it here, before JLI_Launch, is early enough.
+static void init_libcxxHashShim() {
+    setenv("DYLD_FORCE_FLAT_NAMESPACE", "1", 1);
+
+    NSString *shimPath = [NSString stringWithFormat:@"%@/Frameworks/libcxx_hash_shim.dylib", NSBundle.mainBundle.bundlePath];
+    if (![fm fileExistsAtPath:shimPath]) {
+        NSLog(@"[JavaLauncher] libcxx_hash_shim.dylib not found at %@, skipping (MobileGL may fail to load on this device)", shimPath);
+        return;
+    }
+
+    void *shim = dlopen(shimPath.UTF8String, RTLD_GLOBAL | RTLD_NOW);
+    if (!shim) {
+        NSLog(@"[JavaLauncher] Failed to load libcxx_hash_shim.dylib: %s", dlerror());
+        return;
+    }
+    NSLog(@"[JavaLauncher] Loaded libcxx_hash_shim.dylib for MobileGL libc++ symbol compatibility");
+}
+
 void init_loadDefaultEnv() {
     /* Define default env */
 
@@ -109,6 +143,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
 
     init_loadDefaultEnv();
     init_loadCustomEnv();
+    init_libcxxHashShim();
 
     BOOL requiresTXMWorkaround = DeviceHasJITFlags(JIT_FLAG_FORCE_MIRRORED | JIT_FLAG_HAS_TXM);
     BOOL jit26AlwaysAttached = getPrefBool(@"debug.debug_always_attached_jit");

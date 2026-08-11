@@ -111,6 +111,7 @@ POJAV_JRE21_DIR       ?= $(SOURCEDIR)/depends/java-21-openjdk
 POJAV_JRE25_DIR       ?= $(SOURCEDIR)/depends/java-25-openjdk
 MOBILEGL_SOURCE_DIR   ?= $(SOURCEDIR)/Natives/external/MobileGL
 MOLTENVK_LIBRARY      ?= $(SOURCEDIR)/Natives/resources/Frameworks/libMoltenVK.dylib
+LIBCXX_SHIM_SOURCE    ?= $(SOURCEDIR)/Natives/libcxx_hash_shim.cpp
 
 # Function to use later for checking dependencies
 METHOD_DEPCHECK   = $(shell $(1) >/dev/null 2>&1 && echo 1)
@@ -385,6 +386,33 @@ dep_mobilegl:
 	install_name_tool -id @rpath/libMobileGL-gles.dylib $(WORKINGDIR)/libMobileGL-gles.dylib
 	echo '[Amethyst v$(VERSION)] dep_mobilegl - end'
 
+# Builds a small shim dylib that exports __ZNSt3__113__hash_memoryEPKvm
+# (std::__1::__hash_memory), which some libMobileGL.dylib builds expect to
+# find in the system libc++.1.dylib but which isn't always exported there.
+# Without this, MobileGL fails to dlopen with "Symbol not found" and LWJGL's
+# OpenGL loader throws UnsatisfiedLinkError before the game ever starts.
+# The resulting dylib is dropped straight into $(WORKINGDIR), so the
+# existing `cp $(WORKINGDIR)/*.dylib .../Frameworks/` step in `payload`
+# picks it up automatically - no separate copy rule needed here.
+dep_libcxx_shim:
+	echo '[Amethyst v$(VERSION)] dep_libcxx_shim - start'
+	if [ ! -f "$(LIBCXX_SHIM_SOURCE)" ]; then \
+		echo 'libcxx_hash_shim.cpp not found: $(LIBCXX_SHIM_SOURCE)'; \
+		exit 1; \
+	fi
+	mkdir -p $(WORKINGDIR)
+	clang++ \
+		-arch arm64 \
+		-isysroot "$(SDKPATH)" \
+		-mios-version-min=14.0 \
+		-stdlib=libc++ \
+		-dynamiclib \
+		-O2 \
+		-install_name @rpath/libcxx_hash_shim.dylib \
+		-o $(WORKINGDIR)/libcxx_hash_shim.dylib \
+		$(LIBCXX_SHIM_SOURCE)
+	echo '[Amethyst v$(VERSION)] dep_libcxx_shim - end'
+
 assets:
 	echo '[Amethyst v$(VERSION)] assets - start'
 	if [ '$(IOS)' = '0' ] && [ '$(DETECTPLAT)' = 'Darwin' ]; then \
@@ -400,7 +428,7 @@ assets:
 	fi
 	echo '[Amethyst v$(VERSION)] assets - end'
 
-payload: native dep_mg dep_mobilegl java jre assets
+payload: native dep_mg dep_mobilegl dep_libcxx_shim java jre assets
 	echo '[Amethyst v$(VERSION)] payload - start'
 	$(call METHOD_DIRCHECK,$(WORKINGDIR)/AngelAuraAmethyst.app/libs)
 	$(call METHOD_DIRCHECK,$(WORKINGDIR)/AngelAuraAmethyst.app/libs_caciocavallo)
@@ -497,4 +525,4 @@ clean:
 	rm -rf $(OUTPUTDIR)
 	echo '[Amethyst v$(VERSION)] clean - end'
 
-.PHONY: all clean check native java jre package dsym deploy help
+.PHONY: all clean check native java jre package dsym deploy help dep_mg dep_mobilegl dep_libcxx_shim
