@@ -337,26 +337,24 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             // workaround only applies to 1.20.2+
             glLibName = RENDERER_NAME_MTL_ANGLE;
         }
-    
-        NSString *glLibNameStr = @(glLibName);
-        // LWJGL's Library.loadNative() does exactly one unconditional
-        // Platform.mapLibraryName(name) pass, which blindly prepends "lib"
-        // and appends ".dylib" - it does NOT check whether those are
-        // already present. So whatever we hand it here must be the bare
-        // name with zero decoration, or it comes out doubled
-        // ("liblibMobileGL-gles.dylib.dylib") and fails to load. Strip in a
-        // loop (not a single if) so this is robust even if glLibNameStr
-        // somehow already went through this once (e.g. a stale/duplicated
-        // POJAV_RENDERER value), instead of silently passing through a
-        // still-decorated name.
-        while ([glLibNameStr hasPrefix:@"lib"]) {
-            glLibNameStr = [glLibNameStr substringFromIndex:3];
-        }
-        while ([glLibNameStr hasSuffix:@".dylib"]) {
-            glLibNameStr = [glLibNameStr substringToIndex:glLibNameStr.length - 6];
-        }
-        NSLog(@"[JavaLauncher] POJAV_RENDERER=%s -> org.lwjgl.opengl.libname=%@", glLibName, glLibNameStr);
-        margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%@", glLibNameStr].UTF8String;
+
+        // Pass the FULL ABSOLUTE PATH to the renderer dylib rather than a bare
+        // name. LWJGL's Library.loadNative() has an isAbsolute() fast path
+        // that, when it matches, loads the file directly with zero name
+        // decoration - completely skipping Platform.mapLibraryName() /
+        // System.mapLibraryName(). That matters here because on this custom
+        // iOS OpenJDK build, System.mapLibraryName() has been observed to
+        // double-decorate an already-bare name (e.g. "MobileGL-gles" comes
+        // back as "liblibMobileGL-gles.dylib.dylib" instead of
+        // "libMobileGL-gles.dylib"), which is a bug in the JDK build itself,
+        // not something fixable from this side - so instead of feeding it a
+        // name for it to decorate (correctly or not), we skip that whole
+        // codepath. glLibName here (e.g. "libMobileGL-gles.dylib") is always
+        // exactly the filename the Makefile copies into Frameworks/, so we
+        // can point straight at it.
+        NSString *glLibPath = [NSString stringWithFormat:@"%@/Frameworks/%s", NSBundle.mainBundle.bundlePath, glLibName];
+        NSLog(@"[JavaLauncher] POJAV_RENDERER=%s -> org.lwjgl.opengl.libname=%@", glLibName, glLibPath);
+        margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%@", glLibPath].UTF8String;
     }
 
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
