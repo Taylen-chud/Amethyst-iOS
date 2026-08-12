@@ -24,8 +24,23 @@ int clientAPI;
 void JNI_LWJGL_changeRenderer(const char* value_c) {
     JNIEnv *env;
     (*runtimeJavaVMPtr)->GetEnv(runtimeJavaVMPtr, (void **)&env, JNI_VERSION_1_4);
+    // THIS is the call that actually decides what LWJGL loads - it fires
+    // from GLFW's native init sequence (pojavInitOpenGL / pojavSetWindowHint),
+    // well after JavaLauncher.m's -Dorg.lwjgl.opengl.libname JVM flag was
+    // already set at startup, and unconditionally overwrites that property
+    // via System.setProperty() with whatever raw name is passed in here. So
+    // JavaLauncher.m's flag was never the thing GL.create() actually saw -
+    // this was. Build the same Frameworks-relative absolute path here that
+    // JavaLauncher.m builds, for the same reason: LWJGL's Library.loadNative
+    // has an isAbsolute() fast path that skips Platform.mapLibraryName()
+    // entirely, sidestepping the custom iOS JDK's System.mapLibraryName
+    // double-decoration bug ("liblibMobileGL-gles.dylib.dylib"). Passing a
+    // bare name here (like every call site previously did) re-triggers
+    // exactly that bug regardless of what JavaLauncher.m set.
+    NSString *rendererPath = [NSString stringWithFormat:@"%@/Frameworks/%s", NSBundle.mainBundle.bundlePath, value_c];
+    NSLog(@"[EGLBridge] JNI_LWJGL_changeRenderer(%s) -> org.lwjgl.opengl.libname=%@", value_c, rendererPath);
     jstring key = (*env)->NewStringUTF(env, "org.lwjgl.opengl.libname");
-    jstring value = (*env)->NewStringUTF(env, value_c);
+    jstring value = (*env)->NewStringUTF(env, rendererPath.UTF8String);
     jclass clazz = (*env)->FindClass(env, "java/lang/System");
     jmethodID method = (*env)->GetStaticMethodID(env, clazz, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
     (*env)->CallStaticObjectMethod(env, clazz, method, key, value);
