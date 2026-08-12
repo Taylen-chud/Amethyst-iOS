@@ -359,6 +359,13 @@ dep_mobilegl:
 	if [ -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang" ]; then \
 		cd $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang && python3 update_glslang_sources.py; \
 	fi
+	# Patch glslang's convertSwizzle() to null-check the swizzle index nodes
+	# instead of unconditionally dereferencing getAsConstantUnion(). On some
+	# shaders that returns null and crashes the whole JVM with a SIGSEGV in
+	# libMobileGL.dylib (TGlslangToSpvTraverser::convertSwizzle). Idempotent.
+	if [ -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang" ]; then \
+		python3 $(SOURCEDIR)/Natives/patch_glslang.py $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang; \
+	fi
 	mkdir -p $(WORKINGDIR)/mobilegl
 	cd $(WORKINGDIR)/mobilegl && cmake \
 		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
