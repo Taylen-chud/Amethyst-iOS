@@ -329,19 +329,13 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = "-Dorg.lwjgl.spvc.libname=spirv-cross-c-shared.0.68.0";
     margv[++margc] = "-Dorg.lwjgl.util.NoChecks=true";
     margv[++margc] = "-Dlog4j2.formatMsgNoLookups=true";
-    // TEMPORARY DIAGNOSTIC: two failed attempts (bare stripped name, then a
-    // full absolute path) at fixing the "liblibMobileGL-gles.dylib.dylib"
-    // UnsatisfiedLinkError produced the exact same final error string both
-    // times - meaning our -Dorg.lwjgl.opengl.libname value likely isn't even
-    // the thing driving the failing load path. Rather than keep guessing
-    // from decompiled source, turn on LWJGL's own resolution logging so the
-    // next crash log shows us, directly from LWJGL itself: which Platform
-    // branch it took, what name(s) it actually tried, and in what order.
-    // Remove these two lines once the root cause is confirmed.
-    margv[++margc] = "-Dorg.lwjgl.util.Debug=true";
-    margv[++margc] = "-Dorg.lwjgl.util.DebugLoader=true";
-
-    // Preset OpenGL libname
+    // Preset OpenGL libname. NOTE: this is only the initial value - GLFW's
+    // native init (pojavInitOpenGL/pojavSetWindowHint in egl_bridge.m) calls
+    // JNI_LWJGL_changeRenderer() later, on the render thread, which
+    // overwrites this same system property via a direct JNI
+    // System.setProperty() call. That's the one GL.create() actually ends up
+    // seeing in practice, so the equivalent absolute-path fix needs to stay
+    // in sync in both places - see the comment on JNI_LWJGL_changeRenderer.
     const char *glLibName = getenv("POJAV_RENDERER");
     if (glLibName) {
         if (!strcmp(glLibName, "auto")) {
