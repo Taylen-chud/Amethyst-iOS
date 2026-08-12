@@ -365,7 +365,19 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         // can point straight at it.
         NSString *glLibPath = [NSString stringWithFormat:@"%@/Frameworks/%s", NSBundle.mainBundle.bundlePath, glLibName];
         NSLog(@"[JavaLauncher] POJAV_RENDERER=%s -> org.lwjgl.opengl.libname=%@", glLibName, glLibPath);
-        margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%@", glLibPath].UTF8String;
+        // NOTE: .UTF8String on a temporary/autoreleased NSString returns a
+        // pointer into THAT OBJECT'S OWN internal buffer - valid only as
+        // long as the object itself stays alive. margv is read much later,
+        // at the very bottom of this function, after dozens more NSString
+        // allocations happen in between (Caciocavallo classpath, custom JVM
+        // flags, etc). If this particular autoreleased string's backing
+        // memory gets reclaimed/reused before then, margv ends up pointing
+        // at stale data instead of what we just logged above. strdup() onto
+        // the heap so this entry can't be invalidated by anything that
+        // happens later in this function - it's a small permanent
+        // allocation, intentionally never freed, same lifetime as the
+        // process.
+        margv[++margc] = strdup([NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%@", glLibPath].UTF8String);
     }
 
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
