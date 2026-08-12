@@ -339,12 +339,23 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         }
     
         NSString *glLibNameStr = @(glLibName);
-        if ([glLibNameStr hasPrefix:@"lib"]) {
+        // LWJGL's Library.loadNative() does exactly one unconditional
+        // Platform.mapLibraryName(name) pass, which blindly prepends "lib"
+        // and appends ".dylib" - it does NOT check whether those are
+        // already present. So whatever we hand it here must be the bare
+        // name with zero decoration, or it comes out doubled
+        // ("liblibMobileGL-gles.dylib.dylib") and fails to load. Strip in a
+        // loop (not a single if) so this is robust even if glLibNameStr
+        // somehow already went through this once (e.g. a stale/duplicated
+        // POJAV_RENDERER value), instead of silently passing through a
+        // still-decorated name.
+        while ([glLibNameStr hasPrefix:@"lib"]) {
             glLibNameStr = [glLibNameStr substringFromIndex:3];
         }
-        if ([glLibNameStr hasSuffix:@".dylib"]) {
+        while ([glLibNameStr hasSuffix:@".dylib"]) {
             glLibNameStr = [glLibNameStr substringToIndex:glLibNameStr.length - 6];
         }
+        NSLog(@"[JavaLauncher] POJAV_RENDERER=%s -> org.lwjgl.opengl.libname=%@", glLibName, glLibNameStr);
         margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%@", glLibNameStr].UTF8String;
     }
 
