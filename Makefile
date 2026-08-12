@@ -349,6 +349,12 @@ dep_mobilegl:
 	fi
 	# Initialize base submodules first
 	git -C $(MOBILEGL_SOURCE_DIR) submodule update --init --recursive --force
+	# Patch ProbeTexture's multisample-storage probe to gate on the actual
+	# negotiated GLES version instead of just function-pointer presence -
+	# without this, MobileGL segfaults inside ANGLE (gl::State::getTargetTexture)
+	# the first time InitCapabilities runs on a context that exports but can't
+	# back GL_TEXTURE_2D_MULTISAMPLE(_ARRAY) storage. Idempotent, safe to re-run.
+	python3 $(SOURCEDIR)/Natives/patch_mobilegl.py $(MOBILEGL_SOURCE_DIR)
 	# Force glslang to fetch its own missing validation tool dependencies directly
 	if [ -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang" ]; then \
 		cd $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang && python3 update_glslang_sources.py; \
