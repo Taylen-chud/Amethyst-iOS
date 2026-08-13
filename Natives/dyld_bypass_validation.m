@@ -268,13 +268,55 @@ void init_bypassDyldLibValidation() {
     // dopamine already hooked it, try to find its hook instead
     if(!fcntlPatchSuccess) {
         char* fcntlAddr = 0;
-        // search all syscalls and see if the the instruction before it is a branch instruction
+        void* candidateOrigFcntl = 0;
+        // Search all syscalls and see if the instruction before it is a branch
+        // instruction. dyld contains many syscall wrappers (mmap, open, read,
+        // close, mprotect, fcntl, ...), so a bare "syscall preceded by a
+        // branch" match isn't unique to fcntl - if Dopamine hooks more than
+        // one syscall this way (common), the first match in scan order isn't
+        // guaranteed to be fcntl's. Patching the wrong one still "succeeds"
+        // mechanically (the memory write itself doesn't fail) while leaving
+        // dyld's real F_CHECK_LV/F_ADDFILESIGS_RETURN codesigning checks
+        // never actually intercepted - which looks exactly like this: the
+        // hook logs success, yet a later dlopen() of an unsigned/ad-hoc
+        // dylib (libMobileGL.dylib) still fails validation with an opaque
+        // "error = null". So: keep scanning past the first hit and only
+        // accept a candidate whose decoded branch target actually looks like
+        // a real function entry point (a plausible ARM64 prologue), instead
+        // of trusting the first syscall+branch pattern found.
         for(int i=0; i < 0x80000; i+=4) {
             if (dyldBase[i] == syscallSig[0] && memcmp(dyldBase+i, syscallSig, 4) == 0) {
                 char* syscallAddr = dyldBase + i;
                 uint32_t* prev = (uint32_t*)(syscallAddr - 4);
                 if(*prev >> 26 == 0x5) {
+                    int32_t offset = ((int32_t)((*prev)<<6))>>4;
+                    char* target = (char*)prev + offset;
+                    // Bounds check: the branch target should land back inside
+                    // the same dyld image, not point somewhere wild.
+                    if (target < dyldBase || target > dyldBase + 0x400000) {
+                        NSDebugLog(@"[DyldLVBypass] candidate at %p rejected: target %p out of range", prev, target);
+                        continue;
+                    }
+                    // Prologue check: real ARM64 function entries overwhelmingly
+                    // start with one of a small set of instruction classes -
+                    // stp/pacibsp/sub sp (frame setup) or bti (branch target
+                    // identification landing pad). If the decoded target
+                    // doesn't look like any of these, this candidate is very
+                    // likely the wrong syscall's trampoline, not fcntl's.
+                    uint32_t firstInsn = *(uint32_t*)target;
+                    BOOL looksLikeFunctionEntry =
+                        (firstInsn & 0xFFC00000) == 0xA9800000 || // stp (pre/post-indexed pair, common prologue)
+                        (firstInsn & 0xFFC00000) == 0xA9000000 || // stp (signed offset pair)
+                        firstInsn == 0xD503237F ||                // pacibsp
+                        (firstInsn & 0xFFFFFC1F) == 0xD503241F ||  // bti variants
+                        (firstInsn & 0xFFC003FF) == 0xD10003FF;    // sub sp, sp, #imm
+                    if (!looksLikeFunctionEntry) {
+                        NSDebugLog(@"[DyldLVBypass] candidate at %p rejected: target %p (insn 0x%08x) doesn't look like a function entry", prev, target, firstInsn);
+                        continue;
+                    }
                     fcntlAddr = (char*)prev;
+                    candidateOrigFcntl = target;
+                    NSDebugLog(@"[DyldLVBypass] candidate at %p accepted: target %p looks like a real function entry", prev, target);
                     break;
                 }
             }
@@ -284,10 +326,13 @@ void init_bypassDyldLibValidation() {
             uint32_t* inst = (uint32_t*)fcntlAddr;
             int32_t offset = ((int32_t)((*inst)<<6))>>4;
             NSLog(@"[DyldLVBypass] Dopamine hook offset = %x", offset);
-            orig_fcntl = (void*)((char*)fcntlAddr + offset);
-            redirectFunction("dyld_fcntl (Dopamine)", fcntlAddr, hooked___fcntl);
+            orig_fcntl = candidateOrigFcntl;
+            bool dopamineHookSuccess = redirectFunction("dyld_fcntl (Dopamine)", fcntlAddr, hooked___fcntl);
+            if (!dopamineHookSuccess) {
+                NSLog(@"[DyldLVBypass] Dopamine hook patch failed - library validation bypass is NOT active. Loading unsigned dylibs (e.g. libMobileGL.dylib) will fail codesigning.");
+            }
         } else {
-            NSLog(@"[DyldLVBypass] Dopamine hook not found");
+            NSLog(@"[DyldLVBypass] Dopamine hook not found (no candidate passed verification) - library validation bypass is NOT active. Loading unsigned dylibs (e.g. libMobileGL.dylib) will fail codesigning.");
         }
     }
 }
