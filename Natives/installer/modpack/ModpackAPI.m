@@ -26,13 +26,18 @@
     [self doesNotRecognizeSelector:_cmd];
 }
 
+- (NSDictionary *)requestHeaders {
+    return nil;
+}
+
 - (id)getEndpoint:(NSString *)endpoint params:(NSDictionary *)params {
     __block id result;
     dispatch_group_t group = dispatch_group_create();
     dispatch_group_enter(group);
+    self.lastError = nil;
     NSString *url = [self.baseURL stringByAppendingPathComponent:endpoint];
     AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
-    [manager GET:url parameters:params headers:nil progress:nil
+    [manager GET:url parameters:params headers:[self requestHeaders] progress:nil
     success:^(NSURLSessionTask *task, id obj) {
         result = obj;
         dispatch_group_leave(group);
@@ -43,6 +48,46 @@
     dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
     //NSLog(@"%@", result);
     return result;
+}
+
+- (id)postEndpoint:(NSString *)endpoint body:(NSDictionary *)body {
+    __block id result;
+    dispatch_group_t group = dispatch_group_create();
+    dispatch_group_enter(group);
+    self.lastError = nil;
+    NSString *url = [self.baseURL stringByAppendingPathComponent:endpoint];
+    AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
+    manager.requestSerializer = [AFJSONRequestSerializer serializer];
+    [manager POST:url parameters:body headers:[self requestHeaders] progress:nil
+    success:^(NSURLSessionTask *task, id obj) {
+        result = obj;
+        dispatch_group_leave(group);
+    } failure:^(NSURLSessionTask *operation, NSError *error) {
+        self.lastError = error;
+        dispatch_group_leave(group);
+    }];
+    dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+    return result;
+}
+
+- (NSString *)downloadURLForModDetail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion {
+    NSArray *urls = modDetail[@"versionUrls"];
+    if (![urls isKindOfClass:NSArray.class]) {
+        return nil;
+    }
+    if (selectedVersion >= urls.count) {
+        return nil;
+    }
+
+    NSString *url = urls[selectedVersion];
+    if (![url isKindOfClass:NSString.class] || url.length == 0) {
+        return nil;
+    }
+    return url;
+}
+
+- (NSString *)manualDownloadPageURLForModDetail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion {
+    return nil;
 }
 
 - (void)installModpackFromDetail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion {

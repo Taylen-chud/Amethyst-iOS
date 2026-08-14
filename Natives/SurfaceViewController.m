@@ -427,10 +427,7 @@ static GameSurfaceView* pojavWindow;
 
 - (void)launchMinecraft {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        int minVersion = [self.metadata[@"javaVersion"][@"majorVersion"] intValue];
-        if (minVersion == 0) {
-            minVersion = [self.metadata[@"javaVersion"][@"version"] intValue];
-        }
+        int minVersion = [MinecraftResourceUtils minimumJavaVersionForMetadata:self.metadata];
         launchJVM(
             BaseAuthenticator.current.authData[@"username"],
             self.metadata,

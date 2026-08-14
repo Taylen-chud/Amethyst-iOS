@@ -15,6 +15,7 @@
 #import "installer/FabricInstallViewController.h"
 #import "installer/ForgeInstallViewController.h"
 #import "installer/ModpackInstallViewController.h"
+#import "installer/mods/ModManagerViewController.h"
 #import "ios_uikit_bridge.h"
 #import "utils.h"
 
@@ -124,6 +125,12 @@ typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
     [self presentNavigatedViewController:vc];
 }
 
+- (void)actionManageModsForProfile:(NSMutableDictionary *)profile {
+    NSString *profileName = profile[@"name"];
+    ModManagerViewController *vc = [[ModManagerViewController alloc] initWithProfileName:profileName profile:profile];
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
 - (void)presentNavigatedViewController:(UIViewController *)vc {
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
     //nav.navigationBar.prefersLargeTitles = YES;
@@ -230,32 +237,62 @@ typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
 
 #pragma mark Context Menu configuration
 
-- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath
+- (void)confirmDeleteProfileAtIndexPath:(NSIndexPath *)indexPath sourceView:(UIView *)sourceView
 {
-    if (editingStyle != UITableViewCellEditingStyleDelete) return;
-
     UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:indexPath];
+    NSString *profileName = cell.textLabel.text ?: PLProfiles.current.profiles.allKeys[indexPath.row];
     NSString *title = localize(@"preference.title.confirm", nil);
-    // reusing the delete runtime message
-    NSString *message = [NSString stringWithFormat:localize(@"preference.title.confirm.delete_runtime", nil), cell.textLabel.text];
+    NSString *message = [NSString stringWithFormat:localize(@"preference.title.confirm.delete_runtime", nil), profileName];
     UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleActionSheet];
-    confirmAlert.popoverPresentationController.sourceView = cell;
-    confirmAlert.popoverPresentationController.sourceRect = cell.bounds;
+    confirmAlert.popoverPresentationController.sourceView = sourceView ?: cell;
+    confirmAlert.popoverPresentationController.sourceRect = (sourceView ?: cell).bounds;
     UIAlertAction *ok = [UIAlertAction actionWithTitle:localize(@"OK", nil) style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
-        [PLProfiles.current.profiles removeObjectForKey:cell.textLabel.text];
-        if ([PLProfiles.current.selectedProfileName isEqualToString:cell.textLabel.text]) {
-            // The one being deleted is the selected one, switch to the random one now
+        [PLProfiles.current.profiles removeObjectForKey:profileName];
+        if ([PLProfiles.current.selectedProfileName isEqualToString:profileName]) {
             PLProfiles.current.selectedProfileName = PLProfiles.current.profiles.allKeys[0];
             [self.navigationController performSelector:@selector(reloadProfileList)];
         } else {
             [PLProfiles.current save];
         }
-        [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
+        [self.tableView reloadData];
     }];
     UIAlertAction *cancel = [UIAlertAction actionWithTitle:localize(@"Cancel", nil) style:UIAlertActionStyleCancel handler:nil];
     [confirmAlert addAction:cancel];
     [confirmAlert addAction:ok];
     [self presentViewController:confirmAlert animated:YES completion:nil];
+}
+
+- (UIContextMenuConfiguration *)tableView:(UITableView *)tableView contextMenuConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath point:(CGPoint)point
+{
+    if (indexPath.section != kProfiles) {
+        return nil;
+    }
+
+    NSMutableDictionary *profile = PLProfiles.current.profiles.allValues[indexPath.row];
+    return [UIContextMenuConfiguration configurationWithIdentifier:nil previewProvider:nil actionProvider:^UIMenu * _Nullable(NSArray<UIMenuElement *> * _Nonnull suggestedActions) {
+        UIAction *manageMods = [UIAction actionWithTitle:@"Manage Mods" image:[UIImage systemImageNamed:@"square.stack.3d.up"] identifier:nil handler:^(UIAction *action) {
+            [self actionManageModsForProfile:profile];
+        }];
+        UIAction *edit = [UIAction actionWithTitle:@"Edit Profile" image:[UIImage systemImageNamed:@"pencil"] identifier:nil handler:^(UIAction *action) {
+            [self actionEditProfile:profile];
+        }];
+        NSMutableArray *children = @[manageMods, edit].mutableCopy;
+        if (PLProfiles.current.profiles.count > 1) {
+            UIAction *delete = [UIAction actionWithTitle:localize(@"Delete", nil) image:[UIImage systemImageNamed:@"trash"] identifier:nil handler:^(UIAction *action) {
+                UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+                [self confirmDeleteProfileAtIndexPath:indexPath sourceView:cell];
+            }];
+            delete.attributes = UIMenuElementAttributesDestructive;
+            [children addObject:delete];
+        }
+        return [UIMenu menuWithTitle:profile[@"name"] ?: @"" children:children];
+    }];
+}
+
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    if (editingStyle != UITableViewCellEditingStyleDelete) return;
+    [self confirmDeleteProfileAtIndexPath:indexPath sourceView:[self.tableView cellForRowAtIndexPath:indexPath]];
 }
 
 - (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath

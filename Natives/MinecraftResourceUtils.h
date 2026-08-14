@@ -10,6 +10,7 @@
 
 + (void)processVersion:(NSMutableDictionary *)json inheritsFrom:(NSMutableDictionary *)inheritsFrom;
 + (void)tweakVersionJson:(NSMutableDictionary *)json;
++ (int)minimumJavaVersionForMetadata:(NSDictionary *)metadata;
 
 + (NSObject *)findVersion:(NSString *)version inList:(NSArray *)list;
 + (NSObject *)findNearestVersion:(NSObject *)version expectedType:(int)type;

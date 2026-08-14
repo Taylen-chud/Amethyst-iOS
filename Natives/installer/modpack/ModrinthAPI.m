@@ -1,6 +1,10 @@
 #import "MinecraftResourceDownloadTask.h"
 #import "ModrinthAPI.h"
+#import "ModpackUtils.h"
 #import "PLProfiles.h"
+#import "utils.h"
+
+static NSString * const kModManagerMetadataFileName = @"amethyst_mods.json";
 
 @implementation ModrinthAPI
 
@@ -13,15 +17,22 @@
 
     NSMutableString *facetString = [NSMutableString new];
     [facetString appendString:@"["];
-    [facetString appendFormat:@"[\"project_type:%@\"]", searchFilters[@"isModpack"].boolValue ? @"modpack" : @"mod"];
-    if (searchFilters[@"mcVersion"].length > 0) {
-        [facetString appendFormat:@",[\"versions:%@\"]", searchFilters[@"mcVersion"]];
+    BOOL isModpackFilter = [searchFilters[@"isModpack"] respondsToSelector:@selector(boolValue)] && [searchFilters[@"isModpack"] boolValue];
+    [facetString appendFormat:@"[\"project_type:%@\"]", isModpackFilter ? @"modpack" : @"mod"];
+    NSString *mcVersion = [searchFilters[@"mcVersion"] isKindOfClass:NSString.class] ? searchFilters[@"mcVersion"] : @"";
+    if (mcVersion.length > 0) {
+        [facetString appendFormat:@",[\"versions:%@\"]", mcVersion];
+    }
+    NSString *loader = [searchFilters[@"loader"] isKindOfClass:NSString.class] ? searchFilters[@"loader"] : @"";
+    if (loader.length > 0) {
+        [facetString appendFormat:@",[\"categories:%@\"]", loader.lowercaseString];
     }
     [facetString appendString:@"]"];
 
+    NSString *query = [searchFilters[@"name"] isKindOfClass:NSString.class] ? searchFilters[@"name"] : @"";
     NSDictionary *params = @{
         @"facets": facetString,
-        @"query": [searchFilters[@"name"] stringByReplacingOccurrencesOfString:@" " withString:@"+"],
+        @"query": [query stringByReplacingOccurrencesOfString:@" " withString:@"+"],
         @"limit": @(limit),
         @"index": @"relevance",
         @"offset": @(modrinthSearchResult.count)
@@ -30,20 +41,36 @@
     if (!response) {
         return nil;
     }
+    if (![response isKindOfClass:NSDictionary.class]) {
+        self.lastError = [NSError errorWithDomain:@"ModrinthAPI"
+            code:500
+            userInfo:@{NSLocalizedDescriptionKey: @"Modrinth returned invalid search results."}];
+        return nil;
+    }
+    NSArray *hits = [response[@"hits"] isKindOfClass:NSArray.class] ? response[@"hits"] : @[];
 
     NSMutableArray *result = modrinthSearchResult ?: [NSMutableArray new];
-    for (NSDictionary *hit in response[@"hits"]) {
+    for (NSDictionary *hit in hits) {
+        if (![hit isKindOfClass:NSDictionary.class]) {
+            continue;
+        }
         BOOL isModpack = [hit[@"project_type"] isEqualToString:@"modpack"];
+        NSString *projectID = [hit[@"project_id"] isKindOfClass:NSString.class] ? hit[@"project_id"] : @"";
+        NSString *title = [hit[@"title"] isKindOfClass:NSString.class] ? hit[@"title"] : @"";
+        NSString *description = [hit[@"description"] isKindOfClass:NSString.class] ? hit[@"description"] : @"";
+        NSString *imageUrl = [hit[@"icon_url"] isKindOfClass:NSString.class] ? hit[@"icon_url"] : @"";
         [result addObject:@{
             @"apiSource": @(1), // Constant MODRINTH
             @"isModpack": @(isModpack),
-            @"id": hit[@"project_id"],
-            @"title": hit[@"title"],
-            @"description": hit[@"description"],
-            @"imageUrl": hit[@"icon_url"]
+            @"id": projectID,
+            @"title": title,
+            @"description": description,
+            @"imageUrl": imageUrl,
+            @"projectType": hit[@"project_type"] ?: @""
         }.mutableCopy];
     }
-    self.reachedLastPage = result.count >= [response[@"total_hits"] unsignedLongValue];
+    NSUInteger totalHits = [response[@"total_hits"] respondsToSelector:@selector(unsignedLongValue)] ? [response[@"total_hits"] unsignedLongValue] : result.count;
+    self.reachedLastPage = result.count >= totalHits;
     return result;
 }
 
@@ -52,20 +79,44 @@
     if (!response) {
         return;
     }
-    NSArray<NSString *> *names = [response valueForKey:@"name"];
+    if (![response isKindOfClass:NSArray.class]) {
+        self.lastError = [NSError errorWithDomain:@"ModrinthAPI"
+            code:500
+            userInfo:@{NSLocalizedDescriptionKey: @"Modrinth returned an invalid version list."}];
+        return;
+    }
+    NSMutableArray<NSString *> *names = [NSMutableArray new];
     NSMutableArray<NSString *> *mcNames = [NSMutableArray new];
     NSMutableArray<NSString *> *urls = [NSMutableArray new];
-    NSMutableArray<NSString *> *hashes = [NSMutableArray new];
-    NSMutableArray<NSString *> *sizes = [NSMutableArray new];
+    NSMutableArray *hashes = [NSMutableArray new];
+    NSMutableArray *sizes = [NSMutableArray new];
     [response enumerateObjectsUsingBlock:
   ^(NSDictionary *version, NSUInteger i, BOOL *stop) {
-        NSDictionary *file = [version[@"files"] firstObject];
-        mcNames[i] = [version[@"game_versions"] firstObject];
-        sizes[i] = file[@"size"];
-        urls[i] = file[@"url"];
-        NSDictionary *hashesMap = file[@"hashes"];
-        hashes[i] = hashesMap[@"sha1"] ?: [NSNull null];
+        if (![version isKindOfClass:NSDictionary.class]) {
+            return;
+        }
+        NSArray *files = [version[@"files"] isKindOfClass:NSArray.class] ? version[@"files"] : @[];
+        NSDictionary *file = [files.firstObject isKindOfClass:NSDictionary.class] ? files.firstObject : nil;
+        if (!file) {
+            return;
+        }
+
+        NSString *versionName = [version[@"name"] isKindOfClass:NSString.class] ? version[@"name"] : @"";
+        [names addObject:versionName];
+        NSArray *gameVersions = [version[@"game_versions"] isKindOfClass:NSArray.class] ? version[@"game_versions"] : @[];
+        [mcNames addObject:[gameVersions.firstObject isKindOfClass:NSString.class] ? gameVersions.firstObject : @""];
+        [sizes addObject:[file[@"size"] isKindOfClass:NSNumber.class] ? file[@"size"] : @0];
+        NSString *url = [file[@"url"] isKindOfClass:NSString.class] ? file[@"url"] : @"";
+        [urls addObject:url];
+        NSDictionary *hashesMap = [file[@"hashes"] isKindOfClass:NSDictionary.class] ? file[@"hashes"] : nil;
+        [hashes addObject:hashesMap[@"sha1"] ?: NSNull.null];
     }];
+    if (names.count == 0) {
+        self.lastError = [NSError errorWithDomain:@"ModrinthAPI"
+            code:404
+            userInfo:@{NSLocalizedDescriptionKey: @"No downloadable Modrinth files were found for this project."}];
+        return;
+    }
     item[@"versionNames"] = names;
     item[@"mcVersionNames"] = mcNames;
     item[@"versionSizes"] = sizes;
@@ -74,8 +125,48 @@
     item[@"versionDetailsLoaded"] = @(YES);
 }
 
+- (void)saveModManagerMetadataRecords:(NSArray<NSDictionary *> *)records toPath:(NSString *)destPath {
+    if (records.count == 0) {
+        return;
+    }
+    NSMutableDictionary *mods = [NSMutableDictionary new];
+    for (NSDictionary *record in records) {
+        NSString *fileName = record[@"fileName"];
+        if ([fileName isKindOfClass:NSString.class] && fileName.length > 0) {
+            mods[fileName] = record;
+        }
+    }
+    NSError *error = saveJSONToFile(@{@"version": @1, @"mods": mods}, [destPath stringByAppendingPathComponent:kModManagerMetadataFileName]);
+    if (error) {
+        NSLog(@"[Modrinth] Failed to save mod manager metadata: %@", error.localizedDescription);
+    }
+}
+
+- (NSString *)modManagerSourceForDownloadURLs:(NSArray *)downloads {
+    for (NSString *download in downloads) {
+        if (![download isKindOfClass:NSString.class] || download.length == 0) {
+            continue;
+        }
+        NSURL *url = [NSURL URLWithString:download];
+        NSString *host = url.host.lowercaseString ?: @"";
+        NSString *urlString = download.lowercaseString;
+        if ([host containsString:@"modrinth.com"] || [urlString containsString:@"modrinth.com/"]) {
+            return @"modrinth";
+        }
+        if ([host containsString:@"curseforge.com"] ||
+            [host containsString:@"forgecdn.net"] ||
+            [host containsString:@"cursecdn.com"] ||
+            [urlString containsString:@"curseforge.com/"] ||
+            [urlString containsString:@"forgecdn.net/"] ||
+            [urlString containsString:@"cursecdn.com/"]) {
+            return @"curseforge";
+        }
+    }
+    return @"manual";
+}
+
 - (void)downloader:(MinecraftResourceDownloadTask *)downloader submitDownloadTasksFromPackage:(NSString *)packagePath toPath:(NSString *)destPath {
-    NSError *error;
+    NSError *error = nil;
     UZKArchive *archive = [[UZKArchive alloc] initWithPath:packagePath error:&error];
     if (error) {
         [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to open modpack package: %@", error.localizedDescription]];
@@ -83,35 +174,87 @@
     }
 
     NSData *indexData = [archive extractDataFromFile:@"modrinth.index.json" error:&error];
+    if (!indexData || error) {
+        [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to read modrinth.index.json: %@", error.localizedDescription ?: @"missing modrinth.index.json"]];
+        return;
+    }
     NSDictionary* indexDict = [NSJSONSerialization JSONObjectWithData:indexData options:kNilOptions error:&error];
-    if (error) {
+    if (![indexDict isKindOfClass:NSDictionary.class] || error) {
         [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to parse modrinth.index.json: %@", error.localizedDescription]];
         return;
     }
+    NSArray *indexFiles = [indexDict[@"files"] isKindOfClass:NSArray.class] ? indexDict[@"files"] : nil;
+    if (!indexFiles) {
+        [downloader finishDownloadWithErrorString:@"modrinth.index.json is missing a valid files section."];
+        return;
+    }
 
-    downloader.progress.totalUnitCount = [indexDict[@"files"] count];
-    for (NSDictionary *indexFile in indexDict[@"files"]) {
+    BOOL createdDir = [NSFileManager.defaultManager createDirectoryAtPath:destPath
+        withIntermediateDirectories:YES
+        attributes:nil
+        error:&error];
+    if (!createdDir) {
+        [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to create modpack directory: %@", error.localizedDescription]];
+        return;
+    }
+
+    for (NSString *managedDirectory in @[@"mods", @"resourcepacks", @"shaderpacks"]) {
+        [NSFileManager.defaultManager removeItemAtPath:[destPath stringByAppendingPathComponent:managedDirectory] error:nil];
+    }
+
+    NSMutableArray *modManagerRecords = [NSMutableArray new];
+    for (NSDictionary *indexFile in indexFiles) {
+        if (![indexFile isKindOfClass:NSDictionary.class]) {
+            [downloader finishDownloadWithErrorString:@"modrinth.index.json contains an invalid file entry."];
+            return;
+        }
 /*
         if ([indexFile[@"downloads"] count] > 1) {
             [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"Unhandled multiple files download %@", indexFile[@"downloads"]]];
             return;
         }
 */
-        NSString *url = [indexFile[@"downloads"] firstObject];
-        NSString *sha = indexFile[@"hashes"][@"sha1"];
-        NSString *path = [destPath stringByAppendingPathComponent:indexFile[@"path"]];
-        NSUInteger size = [indexFile[@"fileSize"] unsignedLongLongValue];
-        NSURLSessionDownloadTask *task = [downloader createDownloadTask:url size:size sha:sha altName:nil toPath:path];
+        NSString *relativePath = indexFile[@"path"];
+        if (![ModpackUtils isSafeRelativePath:relativePath]) {
+            [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"Unsafe path in modrinth.index.json: %@", relativePath]];
+            return;
+        }
+        NSArray *downloads = [indexFile[@"downloads"] isKindOfClass:NSArray.class] ? indexFile[@"downloads"] : @[];
+        NSString *url = [downloads.firstObject isKindOfClass:NSString.class] ? downloads.firstObject : nil;
+        if (url.length == 0) {
+            [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"Missing download URL for %@", relativePath]];
+            return;
+        }
+        NSDictionary *hashesMap = [indexFile[@"hashes"] isKindOfClass:NSDictionary.class] ? indexFile[@"hashes"] : nil;
+        NSString *sha = hashesMap[@"sha1"];
+        if (![sha isKindOfClass:NSString.class]) {
+            sha = nil;
+        }
+        NSString *fileName = relativePath.lastPathComponent;
+        NSString *lowerFileName = fileName.lowercaseString;
+        if ([relativePath hasPrefix:@"mods/"] &&
+            ([lowerFileName hasSuffix:@".jar"] || [lowerFileName hasSuffix:@".zip"])) {
+            NSString *source = [self modManagerSourceForDownloadURLs:downloads];
+            [modManagerRecords addObject:@{
+                @"source": source,
+                @"fileName": fileName,
+                @"downloadUrl": url,
+                @"sha1": sha ?: @"",
+                @"size": [indexFile[@"fileSize"] respondsToSelector:@selector(unsignedLongLongValue)] ? indexFile[@"fileSize"] : @0,
+                @"artifactType": @"mod",
+                @"installDirectory": @"mods",
+                @"enabled": @YES
+            }];
+        }
+        NSString *path = [destPath stringByAppendingPathComponent:relativePath];
+        NSUInteger size = [indexFile[@"fileSize"] respondsToSelector:@selector(unsignedLongLongValue)] ? [indexFile[@"fileSize"] unsignedLongLongValue] : 0;
+        NSURLSessionDownloadTask *task = [downloader createDownloadTask:url size:size sha:sha altName:relativePath toPath:path];
         if (task) {
-            [downloader.fileList addObject:indexFile[@"path"]];
             [task resume];
-        } else if (!downloader.progress.cancelled) {
-            downloader.progress.completedUnitCount++;
-        } else {
+        } else if (downloader.progress.cancelled) {
             return; // cancelled
         }
     }
-
     [ModpackUtils archive:archive extractDirectory:@"overrides" toPath:destPath error:&error];
     if (error) {
         [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to extract overrides from modpack package: %@", error.localizedDescription]];
@@ -123,30 +266,65 @@
         [downloader finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to extract client-overrides from modpack package: %@", error.localizedDescription]];
         return;
     }
+    [self saveModManagerMetadataRecords:modManagerRecords toPath:destPath];
 
     // Delete package cache
     [NSFileManager.defaultManager removeItemAtPath:packagePath error:nil];
 
     // Download dependency client json (if available)
     NSDictionary<NSString *, NSString *> *depInfo = [ModpackUtils infoForDependencies:indexDict[@"dependencies"]];
+    NSDictionary *dependencies = [indexDict[@"dependencies"] isKindOfClass:NSDictionary.class] ? indexDict[@"dependencies"] : nil;
+    NSString *minecraftVersion = dependencies[@"minecraft"];
+    if (![minecraftVersion isKindOfClass:NSString.class]) {
+        minecraftVersion = @"";
+    }
+    NSString *versionId = depInfo[@"id"];
+    if (![versionId isKindOfClass:NSString.class] || versionId.length == 0) {
+        versionId = minecraftVersion;
+    }
     if (depInfo[@"json"]) {
         NSString *jsonPath = [NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), depInfo[@"id"]];
         NSURLSessionDownloadTask *task = [downloader createDownloadTask:depInfo[@"json"] size:0 sha:nil altName:nil toPath:jsonPath];
-        [task resume];
+        if (task) {
+            [task resume];
+        } else if (downloader.progress.cancelled) {
+            return;
+        }
     }
-    // TODO: automation for Forge
-
+    NSString *installerURL = depInfo[@"installer"];
+    if ([installerURL isKindOfClass:NSString.class] && installerURL.length > 0 &&
+        versionId.length > 0 && ![ModpackUtils isVersionInstalled:versionId]) {
+        NSString *installerName = [ModpackUtils isSafeRelativePath:versionId] ? [NSString stringWithFormat:@"%@-installer.jar", versionId] : @"modpack-loader-installer.jar";
+        NSString *installerPath = [NSTemporaryDirectory() stringByAppendingPathComponent:installerName];
+        [NSFileManager.defaultManager removeItemAtPath:installerPath error:nil];
+        NSURLSessionDownloadTask *task = [downloader createDownloadTask:installerURL size:0 sha:nil altName:installerName toPath:installerPath];
+        if (task) {
+            downloader.postInstallInstallerPath = installerPath;
+            downloader.postInstallHitEnter = YES;
+            [task resume];
+        } else if (downloader.progress.cancelled) {
+            return;
+        }
+    }
     // Create profile
+    NSString *profileName = indexDict[@"name"];
+    if (![profileName isKindOfClass:NSString.class] || profileName.length == 0) {
+        profileName = @"Modrinth Modpack";
+    }
     NSString *tmpIconPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"icon.png"];
-    PLProfiles.current.profiles[indexDict[@"name"]] = @{
+    NSData *iconData = [NSData dataWithContentsOfFile:tmpIconPath];
+    NSString *icon = @"";
+    if (iconData) {
+        icon = [NSString stringWithFormat:@"data:image/png;base64,%@", [iconData base64EncodedStringWithOptions:0]];
+    }
+    PLProfiles.current.profiles[profileName] = @{
         @"gameDir": [NSString stringWithFormat:@"./custom_gamedir/%@", destPath.lastPathComponent],
-        @"name": indexDict[@"name"],
-        @"lastVersionId": depInfo[@"id"],
-        @"icon": [NSString stringWithFormat:@"data:image/png;base64,%@",
-            [[NSData dataWithContentsOfFile:tmpIconPath]
-            base64EncodedStringWithOptions:0]]
+        @"name": profileName,
+        @"lastVersionId": versionId,
+        @"icon": icon
     }.mutableCopy;
-    PLProfiles.current.selectedProfileName = indexDict[@"name"];
+    PLProfiles.current.selectedProfileName = profileName;
+    [downloader finishAddingDownloadTasks];
 }
 
 @end

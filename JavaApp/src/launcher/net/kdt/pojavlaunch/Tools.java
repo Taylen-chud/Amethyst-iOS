@@ -221,7 +221,8 @@ public final class Tools {
             }
             libStr.append(perJar + ":");
         }
-        libStr.append(DIR_HOME_VERSION + "/" + info.id + "/" + info.id + ".jar");
+        String clientVersion = (info.inheritsFrom != null && !info.inheritsFrom.isEmpty()) ? info.inheritsFrom : info.id;
+        libStr.append(DIR_HOME_VERSION + "/" + clientVersion + "/" + clientVersion + ".jar");
 
         return libStr.toString();
     }
@@ -319,10 +320,11 @@ createLibraryInfo(libItem);
                 inheritsVer.inheritsFrom = inheritsVer.id;
                 
                 insertSafety(inheritsVer, customVer,
-                             "assetIndex", "assets", "id",
-                             "mainClass", "minecraftArguments",
-                             "releaseTime", "time", "type"
-                             );
+                              "assetIndex", "assets", "id",
+                              "mainClass", "minecraftArguments",
+                              "releaseTime", "time", "type",
+                              "javaVersion"
+                              );
 
                 // Go through the libraries, remove the ones overridden by the custom version
                 List<DependentLibrary> inheritLibraryList = new ArrayList<>(Arrays.asList(inheritsVer.libraries));

@@ -13,6 +13,7 @@ VERSION     := 1.0
 BRANCH      := $(shell git branch --show-current)
 COMMIT      := $(shell git log --oneline | sed '2,10000000d' | cut -b 1-7)
 PLATFORM    ?= 2
+CURSEFORGE_API_KEY ?=
 
 # Release vs Debug
 RELEASE ?= 0
@@ -271,6 +272,7 @@ native: dep_mg
 		-DCONFIG_BRANCH="$(BRANCH)" \
 		-DCONFIG_COMMIT="$(COMMIT)" \
 		-DCONFIG_RELEASE=$(RELEASE) \
+		-DCONFIG_CURSEFORGE_API_KEY='$(value CURSEFORGE_API_KEY)' \
 		..
 
 	cmake --build $(WORKINGDIR) --config $(CMAKE_BUILD_TYPE) -j$(JOBS)
