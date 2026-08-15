@@ -355,7 +355,7 @@ dep_mobilegl:
 		-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
 		-DCMAKE_C_FLAGS="-arch arm64" \
 		-DCMAKE_CXX_FLAGS="-arch arm64" \
-		-DENABLE_OPT=ON \
+		-DENABLE_OPT=OFF \
 		-DMOBILEGL_IOS=ON \
 		-DMOBILEGL_BUILD_TEST=OFF \
 		-DMOBILEGL_BUILD_BENCHMARK=OFF \
@@ -504,7 +504,3 @@ clean:
 	rm -rf JavaApp/build
 	rm -rf $(OUTPUTDIR)
 	echo '[Amethyst v$(VERSION)] clean - end'
-
-		
-
-.PHONY: all clean check native java jre package dsym deploy help dep_mg dep_mobilegl dep_libcxx_shim
