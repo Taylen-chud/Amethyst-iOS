@@ -4,22 +4,22 @@
 #import "UIKit+AFNetworking.h"
 #import "UIKit+hook.h"
 #import "WFWorkflowProgressView.h"
+#import "modpack/CurseForgeAPI.h"
+#import "modpack/ModpackAPI.h"
 #import "modpack/ModrinthAPI.h"
-#import "config.h"
 #import "ios_uikit_bridge.h"
 #import "utils.h"
 #include <dlfcn.h>
 
-#define kCurseForgeGameIDMinecraft 432
-#define kCurseForgeClassIDModpack 4471
-#define kCurseForgeClassIDMod 6
-
 @interface ModpackInstallViewController()<UIContextMenuInteractionDelegate>
 @property(nonatomic) UISearchController *searchController;
+@property(nonatomic) UISegmentedControl *sourceControl;
 @property(nonatomic) UIMenu *currentMenu;
 @property(nonatomic) NSMutableArray *list;
 @property(nonatomic) NSMutableDictionary *filters;
+@property ModpackAPI *currentAPI;
 @property ModrinthAPI *modrinth;
+@property CurseForgeAPI *curseforge;
 @end
 
 @implementation ModpackInstallViewController
@@ -27,12 +27,18 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    //NSString *curseforgeAPIKey = CONFIG_CURSEFORGE_API_KEY;
+    self.sourceControl = [[UISegmentedControl alloc] initWithItems:@[@"Modrinth", @"CurseForge"]];
+    self.sourceControl.selectedSegmentIndex = 0;
+    [self.sourceControl addTarget:self action:@selector(actionSourceChanged:) forControlEvents:UIControlEventValueChanged];
+    self.navigationItem.titleView = self.sourceControl;
+
     self.searchController = [[UISearchController alloc] initWithSearchResultsController:nil];
     self.searchController.searchResultsUpdater = self;
     self.searchController.obscuresBackgroundDuringPresentation = NO;
     self.navigationItem.searchController = self.searchController;
     self.modrinth = [ModrinthAPI new];
+    self.curseforge = [CurseForgeAPI new];
+    self.currentAPI = self.modrinth;
     self.filters = @{
         @"isModpack": @(YES),
         @"name": @" "
@@ -47,16 +53,23 @@
         return;
     }
 
+    ModpackAPI *api = self.currentAPI;
+    NSMutableDictionary *filters = self.filters.mutableCopy;
+    filters[@"name"] = name ?: @"";
     [self switchToLoadingState];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        self.filters[@"name"] = name;
-        self.list = [self.modrinth searchModWithFilters:self.filters previousPageResult:prevList ? self.list : nil];
+        NSMutableArray *list = [api searchModWithFilters:filters previousPageResult:prevList ? self.list : nil];
         dispatch_async(dispatch_get_main_queue(), ^{
+            if (api != self.currentAPI) {
+                return;
+            }
+            self.filters = filters;
+            self.list = list;
             if (self.list) {
                 [self switchToReadyState];
                 [self.tableView reloadData];
             } else {
-                showDialog(localize(@"Error", nil), self.modrinth.lastError.localizedDescription);
+                showDialog(localize(@"Error", nil), api.lastError.localizedDescription);
                 [self actionClose];
             }
         });
@@ -74,6 +87,20 @@
 
 - (void)actionClose {
     [self.navigationController dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)actionSourceChanged:(UISegmentedControl *)sender {
+    if (sender.selectedSegmentIndex == 1 && ![CurseForgeAPI isConfigured]) {
+        sender.selectedSegmentIndex = 0;
+        showDialog(localize(@"Error", nil), @"CurseForge API key is not configured for this build.");
+        return;
+    }
+
+    self.currentAPI = sender.selectedSegmentIndex == 1 ? self.curseforge : self.modrinth;
+    [self.list removeAllObjects];
+    self.filters[@"name"] = @" ";
+    [self.tableView reloadData];
+    [self updateSearchResults];
 }
 
 - (void)switchToLoadingState {
@@ -132,7 +159,7 @@
     UIImage *fallbackImage = [UIImage imageNamed:@"DefaultProfile"];
     [cell.imageView setImageWithURL:[NSURL URLWithString:item[@"imageUrl"]] placeholderImage:fallbackImage];
 
-    if (!self.modrinth.reachedLastPage && indexPath.row == self.list.count-1) {
+    if (!self.currentAPI.reachedLastPage && indexPath.row == self.list.count-1) {
         [self loadSearchResultsWithPrevList:YES];
     }
 
@@ -141,6 +168,8 @@
 
 - (void)showDetails:(NSDictionary *)details atIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:indexPath];
+    ModpackAPI *api = self.currentAPI;
+    NSDictionary *item = self.list[indexPath.row];
 
     NSMutableArray<UIAction *> *menuItems = [[NSMutableArray alloc] init];
     [details[@"versionNames"] enumerateObjectsUsingBlock:
@@ -157,7 +186,7 @@
             [self actionClose];
             NSString *tmpIconPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"icon.png"];
                 [UIImagePNGRepresentation([cell.imageView.image _imageWithSize:CGSizeMake(40, 40)]) writeToFile:tmpIconPath atomically:YES];
-            [self.modrinth installModpackFromDetail:self.list[indexPath.row] atIndex:i];
+            [api installModpackFromDetail:item atIndex:i];
         }]];
     }];
 
@@ -168,21 +197,25 @@
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    NSDictionary *item = self.list[indexPath.row];
+    NSMutableDictionary *item = self.list[indexPath.row];
     if ([item[@"versionDetailsLoaded"] boolValue]) {
         [self showDetails:item atIndexPath:indexPath];
         return;
     }
     [tableView deselectRowAtIndexPath:indexPath animated:NO];
     [self switchToLoadingState];
-dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [self.modrinth loadDetailsOfMod:self.list[indexPath.row]];
+    ModpackAPI *api = self.currentAPI;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [api loadDetailsOfMod:item];
         dispatch_async(dispatch_get_main_queue(), ^{
+            if (api != self.currentAPI) {
+                return;
+            }
             [self switchToReadyState];
             if ([item[@"versionDetailsLoaded"] boolValue]) {
                 [self showDetails:item atIndexPath:indexPath];
             } else {
-                showDialog(localize(@"Error", nil), self.modrinth.lastError.localizedDescription);
+                showDialog(localize(@"Error", nil), api.lastError.localizedDescription);
             }
         });
     });
