@@ -9,7 +9,7 @@ OUTPUTDIR   := $(SOURCEDIR)/artifacts
 WORKINGDIR  := $(SOURCEDIR)/Natives/build
 DETECTPLAT  := $(shell uname -s)
 DETECTARCH  := $(shell uname -m)
-VERSION     := 1.1.1
+VERSION     := 1.1.0
 BRANCH      := $(shell git branch --show-current)
 COMMIT      := $(shell git log --oneline | sed '2,10000000d' | cut -b 1-7)
 PLATFORM    ?= 2
@@ -25,6 +25,11 @@ SLIMMED ?= 0
 
 # Check if slimmed should be built, and additionally skip normal build
 SLIMMED_ONLY ?= 0
+
+# EXPERIMENTAL / testing-branch only: MobileGL headless-present mode (bypasses
+# the real VkSwapchainKHR to work around iOS enforcing vsync unconditionally
+# on CAMetalLayer). See patch_mobilegl_headless_present.py. Off by default.
+MOBILEGL_HEADLESS_PRESENT ?= 0
 
 # If not in a GitHub repository, default to these
 # so that compiling doesn't fail
@@ -365,6 +370,13 @@ dep_mobilegl:
 	# libMobileGL.dylib (TGlslangToSpvTraverser::convertSwizzle). Idempotent.
 	if [ -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang" ]; then \
 		python3 $(SOURCEDIR)/Natives/patch_glslang.py $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang; \
+	fi
+	# EXPERIMENTAL / testing-branch only: bypasses MobileGL's real VkSwapchainKHR
+	# (CAMetalLayer-backed, unconditionally vsync-gated on iOS) with a manual
+	# IOSurface/CALayer present path. Opt-in via MOBILEGL_HEADLESS_PRESENT=1 -
+	# leave this off on any build meant to actually ship. Idempotent.
+	if [ "$(MOBILEGL_HEADLESS_PRESENT)" = "1" ]; then \
+		python3 $(SOURCEDIR)/Natives/patch_mobilegl_headless_present.py $(MOBILEGL_SOURCE_DIR); \
 	fi
 	mkdir -p $(WORKINGDIR)/mobilegl
 	cd $(WORKINGDIR)/mobilegl && cmake \

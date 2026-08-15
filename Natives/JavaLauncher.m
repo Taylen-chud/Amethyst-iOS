@@ -251,9 +251,23 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
                 NSString *mobileGLLogPath = [NSString stringWithFormat:@"%s/mobilegl.log", pojavHome];
                 setenv("MOBILEGL_LOG_FILE_PATH", mobileGLLogPath.UTF8String, 1);
             }
+            // EXPERIMENTAL / testing-branch only: bypasses MobileGL's real
+            // VkSwapchainKHR (CAMetalLayer-backed, and iOS enforces vsync on
+            // CAMetalLayer unconditionally - there's no supported opt-out) in
+            // favor of a manual IOSurface/CALayer present path that isn't
+            // subject to that. See SwapchainObject::IsHeadless in MobileGL and
+            // Natives/ctxbridges/headless_present_bridge.m. Not exposed in the
+            // preferences UI on purpose - toggle by hand for testing.
+            if (getPrefBool(@"debug.mobilegl_no_swapchain")) {
+                setenv("MOBILEGL_NO_SWAPCHAIN", "1", 1);
+                NSLog(@"[JavaLauncher] MOBILEGL_NO_SWAPCHAIN is set - MobileGL will use the experimental headless present path instead of a real swapchain");
+            } else {
+                unsetenv("MOBILEGL_NO_SWAPCHAIN");
+            }
         } else {
             unsetenv("MOBILEGL_BACKEND_TYPE");
             unsetenv("MOBILEGL_LOG_FILE_PATH");
+            unsetenv("MOBILEGL_NO_SWAPCHAIN");
         }
         // Setup gameDir
         gameDir = [NSString stringWithFormat:@"%s/instances/%@/%@",
