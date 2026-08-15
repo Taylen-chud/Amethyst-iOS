@@ -43,8 +43,9 @@
 #define RENDERER_NAME_VK_ZINK "libOSMesa.8.dylib"
 
 static inline bool isMobileGLRenderer(const char *renderer) {
-    return renderer && (!strcmp(renderer, RENDERER_NAME_MOBILEGL) || !strcmp(renderer, RENDERER_NAME_MOBILEGL_GLES));
+    return renderer && !strcmp(renderer, RENDERER_NAME_MOBILEGL);
 }
+
 
 #define SPECIALBTN_KEYBOARD -1
 #define SPECIALBTN_TOGGLECTRL -2
@@ -73,6 +74,7 @@ void* JIT26PrepareRegion(void *addr, size_t len);
 void JIT26PrepareRegionForPatching(void *addr, size_t len);
 void JIT26SetDetachAfterFirstBr(BOOL value);
 void JIT26SendJITScript(NSString* script);
+BOOL JIT26IsLikelyDebuggerKeepAttached(void);
 
 // Device JIT flags
 typedef enum {
@@ -93,6 +95,7 @@ BOOL PLPatchMachOPlatformForFile(const char *path);
 
 UIViewController* currentVC();
 void openLink(UIViewController* sender, NSURL* link);
+void handle_fatal_exit(int code);
 
 NSString* localize(NSString* key, NSString* comment);
 NSMutableDictionary* parseJSONFromFile(NSString *path);
