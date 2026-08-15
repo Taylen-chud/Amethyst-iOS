@@ -344,9 +344,8 @@ dep_mobilegl:
 		echo 'MobileGL source directory not found: $(MOBILEGL_SOURCE_DIR)'; \
 		exit 1; \
 	fi
-	if [ ! -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang/External/spirv-tools" ]; then \
-		echo '[Amethyst v$(VERSION)] fetching glslang External deps (SPIRV-Tools, SPIRV-Headers)'; \
-		python3 $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang/update_glslang_sources.py --dir $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang; \
+	if [ -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang" ]; then \
+		cd $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang && python3 update_glslang_sources.py; \
 	fi
 	mkdir -p $(WORKINGDIR)/mobilegl
 	cd $(WORKINGDIR)/mobilegl && cmake \
