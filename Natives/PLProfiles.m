@@ -21,9 +21,11 @@ static NSString * const kPLProfilesLegacyDirectoryPrefix = @"./profile_gamedirs/
     NSMutableDictionary *profiles = @{
         @"(Default)": defaultProfile
     }.mutableCopy;
+    NSMutableDictionary *result = @{
         @"profiles": profiles,
         @"selectedProfile": @"(Default)"
     }.mutableCopy;
+    return result;
 }
 
 + (PLProfiles *)current {
