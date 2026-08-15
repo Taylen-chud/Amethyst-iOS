@@ -504,3 +504,7 @@ clean:
 	rm -rf JavaApp/build
 	rm -rf $(OUTPUTDIR)
 	echo '[Amethyst v$(VERSION)] clean - end'
+
+		
+
+.PHONY: all clean check native java jre package dsym deploy help dep_mg dep_mobilegl dep_libcxx_shim
