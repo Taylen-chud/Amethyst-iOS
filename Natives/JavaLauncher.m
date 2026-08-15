@@ -53,8 +53,6 @@ static void init_libcxxHashShim() {
     NSLog(@"[JavaLauncher] Loaded libcxx_hash_shim.dylib for MobileGL libc++ symbol compatibility");
 }
 
-}
-
 void init_loadDefaultEnv() {
     /* Define default env */
 
