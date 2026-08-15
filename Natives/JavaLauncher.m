@@ -36,6 +36,23 @@ BOOL validateVirtualMemorySpace(size_t size) {
     return YES;
 }
 
+// Some builds of libMobileGL.dylib reference __ZNSt3__113__hash_memoryEPKvm
+// (std::__1::__hash_memory) as a two-level-namespace symbol expected to live
+// in /usr/lib/libc++.1.dylib. On devices where the system libc++ doesn't
+// export that symbol, dyld refuses to load libMobileGL.dylib at all with
+// "Symbol not found: __ZNSt3__113__hash_memoryEPKvm", which surfaces to us
+// as an UnsatisfiedLinkError when LWJGL tries to load OpenGL.
+//
+// We can't edit libMobileGL itself, so instead we:
+//   1. dlopen() a small shim dylib (libcxx_hash_shim.dylib, bundled in
+//      Frameworks/) with RTLD_GLOBAL, which exports that exact symbol.
+//   2. Set DYLD_FORCE_FLAT_NAMESPACE=1 so dyld resolves the unresolved
+//      reference against any loaded image (our shim) instead of insisting
+//      on libc++.1.dylib specifically.
+//
+// This must run before anything dlopen()s libMobileGL.dylib - in practice
+// that happens later, inside LWJGL's native library loader once the JVM is
+// running - so doing it here, before JLI_Launch, is early enough.
 static void init_libcxxHashShim() {
     setenv("DYLD_FORCE_FLAT_NAMESPACE", "1", 1);
 
@@ -174,6 +191,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     BOOL launchJar = NO;
     NSString *gameDir;
     NSString *defaultJRETag;
+    NSString *lwjglFolder = @"lwjgl-3.3.3";
     NSCAssert(launchTarget, @"Unexpected nil launchTarget");
     if ([launchTarget isKindOfClass:NSDictionary.class]) {
         // Get preferred Java version from current profile
@@ -191,6 +209,35 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         } else {
             defaultJRETag = @"1_17_newer";
         }
+
+        // Determine LWJGL version based on explicitly recorded lwjglVersion or fallback rules
+        NSString *lwjglVersionStr = launchTarget[@"lwjglVersion"];
+        if ([lwjglVersionStr isKindOfClass:NSString.class] && lwjglVersionStr.length > 0) {
+            NSArray<NSString *> *lwjglVersion = [lwjglVersionStr componentsSeparatedByString:@"."];
+            int lwjglMajor = lwjglVersion.count > 0 ? [lwjglVersion[0] intValue] : 0;
+            int lwjglMinor = lwjglVersion.count > 1 ? [lwjglVersion[1] intValue] : 0;
+            if (lwjglMajor > 3 || (lwjglMajor == 3 && lwjglMinor >= 4)) {
+                lwjglFolder = @"lwjgl-3.4.1";
+            } else {
+                lwjglFolder = @"lwjgl-3.3.3";
+            }
+        } else {
+            // Fallback: Parse Minecraft version ID cleanly (e.g. "1.21.11" or "26.1")
+            NSString *versionId = launchTarget[@"id"];
+            lwjglFolder = @"lwjgl-3.3.3"; // Default safety net for 1.x versions
+
+            if ([versionId isKindOfClass:NSString.class]) {
+                NSArray<NSString *> *components = [versionId componentsSeparatedByString:@"."];
+                if (components.count > 0) {
+                    int major = [components[0] intValue];
+                    // If major version is >= 26 force 3.4.1
+                    if (major >= 26) {
+                        lwjglFolder = @"lwjgl-3.4.1";
+                    }
+                }
+            }
+        }
+        NSLog(@"[JavaLauncher] Using LWJGL from %@", lwjglFolder);
 
         // Setup POJAV_RENDERER
         NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
@@ -214,6 +261,8 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             getenv("POJAV_HOME"), getPrefObject(@"general.game_directory"),
             [PLProfiles resolveKeyForCurrentProfile:@"gameDir"]]
             .stringByStandardizingPath;
+
+        [MinecraftOptionUtils setupOptionsAtGameDir:gameDir];
     } else {
         defaultJRETag = @"execute_jar";
         gameDir = @(getenv("POJAV_GAME_DIR"));
@@ -229,14 +278,13 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             isExecuteJar ? [launchTarget lastPathComponent] : PLProfiles.current.selectedProfile[@"lastVersionId"], minVersion]);
         return 1;
     } else if ([javaHome hasPrefix:@(getenv("POJAV_HOME"))]) {
-        // Copy libawt_xawt.dylib
+        // Symlink libawt_xawt.dylib
         NSString *dest = [NSString stringWithFormat:@"%@/lib/libawt_xawt.dylib", javaHome];
         NSString *source = [NSString stringWithFormat:@"%@/Frameworks/libawt_xawt.dylib", NSBundle.mainBundle.bundlePath];
         NSError *error;
-        [fm removeItemAtPath:dest error:nil];
-        [fm copyItemAtPath:source toPath:dest error:&error];
+        [fm createSymbolicLinkAtPath:dest withDestinationPath:source error:&error];
         if (error) {
-            NSLog(@"[JavaLauncher] Copy libawt_xawt.dylib failed: %@", error.localizedDescription);
+            NSLog(@"[JavaLauncher] Symlink libawt_xawt.dylib failed: %@", error.localizedDescription);
         }
     }
 
@@ -261,9 +309,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         return 1;
     }
 
-    // Setup options.txt
-    [MinecraftOptionUtils setupOptionsAtGameDir:gameDir];
-    
     int margc = -1;
     const char *margv[1000];
 
@@ -274,24 +319,60 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     }
     margv[++margc] = "-Xms128M";
     margv[++margc] = [NSString stringWithFormat:@"-Xmx%dM", allocmem].UTF8String;
-    margv[++margc] = [NSString stringWithFormat:@"-Djava.library.path=%@/Frameworks", NSBundle.mainBundle.bundlePath].UTF8String;
+    NSString *lwjglNativesFolder = [lwjglFolder isEqualToString:@"lwjgl-3.4.1"] ? @"lwjgl34" : @"lwjgl33";
+    margv[++margc] = [NSString stringWithFormat:@"-Djava.library.path=%@/Frameworks:%@/Frameworks/%@", NSBundle.mainBundle.bundlePath, NSBundle.mainBundle.bundlePath, lwjglNativesFolder].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.dir=%@", gameDir].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.home=%s", getenv("POJAV_HOME")].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.timezone=%@", NSTimeZone.localTimeZone.name].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-DUIScreen.maximumFramesPerSecond=%d", (int)UIScreen.mainScreen.maximumFramesPerSecond].UTF8String;
     margv[++margc] = "-Dorg.lwjgl.glfw.checkThread0=false";
     margv[++margc] = "-Dorg.lwjgl.system.allocator=system";
-    //margv[++margc] = "-Dorg.lwjgl.util.NoChecks=true";
+    margv[++margc] = "-Dorg.lwjgl.spvc.libname=spirv-cross-c-shared.0.68.0";
+    margv[++margc] = "-Dorg.lwjgl.util.NoChecks=true";
     margv[++margc] = "-Dlog4j2.formatMsgNoLookups=true";
-
-    // Preset OpenGL libname
+    // Preset OpenGL libname. NOTE: this is only the initial value - GLFW's
+    // native init (pojavInitOpenGL/pojavSetWindowHint in egl_bridge.m) calls
+    // JNI_LWJGL_changeRenderer() later, on the render thread, which
+    // overwrites this same system property via a direct JNI
+    // System.setProperty() call. That's the one GL.create() actually ends up
+    // seeing in practice, so the equivalent absolute-path fix needs to stay
+    // in sync in both places - see the comment on JNI_LWJGL_changeRenderer.
     const char *glLibName = getenv("POJAV_RENDERER");
     if (glLibName) {
         if (!strcmp(glLibName, "auto")) {
             // workaround only applies to 1.20.2+
             glLibName = RENDERER_NAME_MTL_ANGLE;
         }
-        margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%s", glLibName].UTF8String;
+
+        // Pass the FULL ABSOLUTE PATH to the renderer dylib rather than a bare
+        // name. LWJGL's Library.loadNative() has an isAbsolute() fast path
+        // that, when it matches, loads the file directly with zero name
+        // decoration - completely skipping Platform.mapLibraryName() /
+        // System.mapLibraryName(). That matters here because on this custom
+        // iOS OpenJDK build, System.mapLibraryName() has been observed to
+        // double-decorate an already-bare name (e.g. "MobileGL-gles" comes
+        // back as "liblibMobileGL-gles.dylib.dylib" instead of
+        // "libMobileGL-gles.dylib"), which is a bug in the JDK build itself,
+        // not something fixable from this side - so instead of feeding it a
+        // name for it to decorate (correctly or not), we skip that whole
+        // codepath. glLibName here (e.g. "libMobileGL-gles.dylib") is always
+        // exactly the filename the Makefile copies into Frameworks/, so we
+        // can point straight at it.
+        NSString *glLibPath = [NSString stringWithFormat:@"%@/Frameworks/%s", NSBundle.mainBundle.bundlePath, glLibName];
+        NSLog(@"[JavaLauncher] POJAV_RENDERER=%s -> org.lwjgl.opengl.libname=%@", glLibName, glLibPath);
+        // NOTE: .UTF8String on a temporary/autoreleased NSString returns a
+        // pointer into THAT OBJECT'S OWN internal buffer - valid only as
+        // long as the object itself stays alive. margv is read much later,
+        // at the very bottom of this function, after dozens more NSString
+        // allocations happen in between (Caciocavallo classpath, custom JVM
+        // flags, etc). If this particular autoreleased string's backing
+        // memory gets reclaimed/reused before then, margv ends up pointing
+        // at stale data instead of what we just logged above. strdup() onto
+        // the heap so this entry can't be invalidated by anything that
+        // happens later in this function - it's a small permanent
+        // allocation, intentionally never freed, same lifetime as the
+        // process.
+        margv[++margc] = strdup([NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%@", glLibPath].UTF8String);
     }
 
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
@@ -299,11 +380,9 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     if(getPrefBool(@"general.cosmetica")) {
         margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/arc_dns_injector.jar=23.95.137.176", librariesPath].UTF8String;
     }
-
 if (getPrefBool(@"video.fix_simple_voice_chat_mod")) {
         margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchsvc.jar=", librariesPath].UTF8String;
     }
-
     // Workaround random stack guard allocation crashes
     margv[++margc] = "-XX:+UnlockExperimentalVMOptions";
     margv[++margc] = "-XX:+DisablePrimordialThreadGuardPages";
@@ -361,6 +440,12 @@ if (getPrefBool(@"video.fix_simple_voice_chat_mod")) {
         margv[++margc] = "--add-exports=java.desktop/sun.font=ALL-UNNAMED";
         margv[++margc] = "--add-exports=java.base/sun.security.action=ALL-UNNAMED";
         margv[++margc] = "--add-opens=java.base/java.util=ALL-UNNAMED";
+        // LWJGL's MemoryUtil prefers Unsafe, then reflection into java.nio.DirectByteBuffer,
+        // and only falls back to a native JNI call (JNINativeInterface.nNewDirectByteBuffer)
+        // as a last resort - which isn't implemented in our vendored liblwjgl.dylib. Without
+        // this add-opens, the reflection fallback is blocked by module encapsulation, so
+        // MemoryUtil falls through to that broken native path and crashes on LWJGL 3.4.1.
+        margv[++margc] = "--add-opens=java.base/java.nio=ALL-UNNAMED";
         margv[++margc] = "--add-opens=java.desktop/java.awt=ALL-UNNAMED";
         margv[++margc] = "--add-opens=java.desktop/sun.font=ALL-UNNAMED";
         margv[++margc] = "--add-opens=java.desktop/sun.java2d=ALL-UNNAMED";
@@ -380,8 +465,7 @@ if (getPrefBool(@"video.fix_simple_voice_chat_mod")) {
         }
     }
     margv[++margc] = cacio_classpath.UTF8String;
-
-    // FIXME: the JVM arg is deprecated; and it is currently broken for Java 25
+// FIXME: the JVM arg is deprecated; and it is currently broken for Java 25
     if (!getenv("JVM_KEEP_UseCompressedClassPointers") || !getEntitlementValue(@"com.apple.developer.kernel.extended-virtual-addressing")) {
         // In jailed environment, where extended virtual addressing entitlement isn't
         // present (for free dev account), allocating compressed space fails.
@@ -398,10 +482,28 @@ if (getPrefBool(@"video.fix_simple_voice_chat_mod")) {
     init_loadCustomJvmFlags(&margc, (const char **)margv);
     NSLog(@"[Init] Found JLI lib");
 
-    NSString *classpath = [NSString stringWithFormat:@"%@/*", librariesPath];
-    if (launchJar) {
-        classpath = [classpath stringByAppendingFormat:@":%@", launchTarget];
+    NSMutableString *classpath = [NSMutableString string];
+    NSArray *libJars = [fm contentsOfDirectoryAtPath:librariesPath error:nil];
+    for (NSString *jarFile in libJars) {
+        if (![jarFile hasSuffix:@".jar"]) continue;
+        if ([jarFile hasPrefix:@"lwjgl-3."]) continue; // skip both versioned lwjgl jars here
+        [classpath appendFormat:@"%@/%@:", librariesPath, jarFile];
     }
+    [classpath appendFormat:@"%@/%@/*", librariesPath, lwjglFolder];
+    if (launchJar) {
+        [classpath appendFormat:@":%@", launchTarget];
+    }
+
+    // DEBUG: dump the resolved classpath, and what's actually sitting in the
+    // top-level libs
+    NSLog(@"[JavaLauncher][DEBUG] classpath = %@", classpath);
+    NSLog(@"[JavaLauncher][DEBUG] librariesPath = %@", librariesPath);
+    NSArray *topLevelJars = [fm contentsOfDirectoryAtPath:librariesPath error:nil];
+    NSLog(@"[JavaLauncher][DEBUG] top-level libs/ contents: %@", topLevelJars);
+    NSString *lwjglSubPath = [NSString stringWithFormat:@"%@/%@", librariesPath, lwjglFolder];
+    NSArray *lwjglJars = [fm contentsOfDirectoryAtPath:lwjglSubPath error:nil];
+    NSLog(@"[JavaLauncher][DEBUG] %@ contents: %@", lwjglFolder, lwjglJars);
+
     margv[++margc] = "-cp";
     margv[++margc] = classpath.UTF8String;
     margv[++margc] = "net.kdt.pojavlaunch.PojavLauncher";
