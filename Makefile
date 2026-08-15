@@ -328,7 +328,10 @@ dep_mg:
 
 	SPIRV_LIB="$$(find $(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/libraries -type f \( -name 'libspirv-cross-c-shared*.dylib' -o -name 'libspirv-cross-c*.dylib' \) | head -n 1)"; \
 	if [ -n "$$SPIRV_LIB" ]; then \
+		cp "$$SPIRV_LIB" $(WORKINGDIR)/libspirv-cross-c-shared.dylib; \
 		cp "$$SPIRV_LIB" $(WORKINGDIR)/libspirv-cross-c-shared.0.dylib; \
+		install_name_tool -id @rpath/libspirv-cross-c-shared.dylib $(WORKINGDIR)/libspirv-cross-c-shared.dylib 2>/dev/null || true; \
+		install_name_tool -id @rpath/libspirv-cross-c-shared.0.dylib $(WORKINGDIR)/libspirv-cross-c-shared.0.dylib 2>/dev/null || true; \
 	else \
 		echo 'Warning: SPIRV-Cross shared library not found; continuing without it.'; \
 	fi
@@ -352,7 +355,7 @@ dep_mobilegl:
 		-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
 		-DCMAKE_C_FLAGS="-arch arm64" \
 		-DCMAKE_CXX_FLAGS="-arch arm64" \
-		-DENABLE_OPT=OFF \
+		-DENABLE_OPT=ON \
 		-DMOBILEGL_IOS=ON \
 		-DMOBILEGL_BUILD_TEST=OFF \
 		-DMOBILEGL_BUILD_BENCHMARK=OFF \
