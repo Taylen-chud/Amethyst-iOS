@@ -39,6 +39,7 @@
 #define RENDERER_NAME_MTL_ANGLE "libtinygl4angle.dylib"
 #define RENDERER_NAME_MOBILEGLUES "libmobileglues.dylib"
 #define RENDERER_NAME_MOBILEGL "libMobileGL.dylib"
+#define RENDERER_NAME_MOBILEGL_GLES "libMobileGL-gles.dylib"
 #define RENDERER_NAME_VK_ZINK "libOSMesa.8.dylib"
 
 static inline bool isMobileGLRenderer(const char *renderer) {
