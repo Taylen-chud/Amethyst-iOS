@@ -42,7 +42,7 @@
 #define RENDERER_NAME_VK_ZINK "libOSMesa.8.dylib"
 
 static inline bool isMobileGLRenderer(const char *renderer) {
-    return renderer && (!strcmp(renderer, RENDERER_NAME_MOBILEGL) |
+    return renderer && !strcmp(renderer, RENDERER_NAME_MOBILEGL);
 }
 
 
