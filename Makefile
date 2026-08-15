@@ -111,6 +111,7 @@ POJAV_JRE21_DIR       ?= $(SOURCEDIR)/depends/java-21-openjdk
 POJAV_JRE25_DIR       ?= $(SOURCEDIR)/depends/java-25-openjdk
 MOBILEGL_SOURCE_DIR   ?= $(SOURCEDIR)/Natives/external/MobileGL
 MOLTENVK_LIBRARY      ?= $(SOURCEDIR)/Natives/resources/Frameworks/libMoltenVK.dylib
+LIBCXX_SHIM_SOURCE    ?= $(SOURCEDIR)/Natives/libcxx_hash_shim.cpp
 
 # Function to use later for checking dependencies
 METHOD_DEPCHECK   = $(shell $(1) >/dev/null 2>&1 && echo 1)
@@ -334,7 +335,7 @@ dep_mg:
 
 	echo '[Amethyst v$(VERSION)] dep_mg - end'
 
-	dep_mobilegl:
+dep_mobilegl:
 	echo '[Amethyst v$(VERSION)] dep_mobilegl - start'
 	if [ ! -d "$(MOBILEGL_SOURCE_DIR)" ]; then \
 		echo 'MobileGL source directory not found: $(MOBILEGL_SOURCE_DIR)'; \

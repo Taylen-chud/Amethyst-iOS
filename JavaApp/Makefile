@@ -11,7 +11,7 @@ CLASSES := $(SOURCES:$(SOURCEDIR)/%.java=$(OUTPUTDIR)/%.class)
 TARGETS := $(shell find $(SOURCEDIR) -mindepth 1 -maxdepth 1 -type d)
 TARGETS := $(filter-out $(OUTPUTDIR)/lwjgl.jar,$(TARGETS:$(SOURCEDIR)/%=$(OUTPUTDIR)/%.jar))
 
-Keep patched project sources ahead of dependency jars when javac resolves implicit dependencies.
+# Keep patched project sources ahead of dependency jars when javac resolves implicit dependencies.
 SOURCEPATH := $(subst $() $(),:,$(wildcard $(SOURCEDIR)/*/))
 CLASSPATH := $(subst $() $(),:,$(OUTPUTDIR)/classes:$(wildcard libs/*/*.jar))
 JCFLAGS := -sourcepath "$(SOURCEPATH)" -cp "$(CLASSPATH)" -Xprefer:source -XDignore.symbol.file
