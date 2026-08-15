@@ -344,9 +344,9 @@ dep_mobilegl:
 		echo 'MobileGL source directory not found: $(MOBILEGL_SOURCE_DIR)'; \
 		exit 1; \
 	fi
-	if grep -q 'set(ENABLE_OPT[[:space:]]*ON[[:space:]]*CACHE BOOL "Enable SPIRV-Tools opt usage in glslang" FORCE)' $(MOBILEGL_SOURCE_DIR)/CMakeLists.txt; then \
-		sed -i.bak 's/set(ENABLE_OPT[[:space:]]*ON[[:space:]]*CACHE BOOL "Enable SPIRV-Tools opt usage in glslang" FORCE)/set(ENABLE_OPT                 OFF CACHE BOOL "Enable SPIRV-Tools opt usage in glslang" FORCE)/' $(MOBILEGL_SOURCE_DIR)/CMakeLists.txt; \
-		echo '[Amethyst v$(VERSION)] patched MobileGL CMakeLists.txt: ENABLE_OPT forced OFF'; \
+	if [ ! -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang/External/spirv-tools" ]; then \
+		echo '[Amethyst v$(VERSION)] fetching glslang External deps (SPIRV-Tools, SPIRV-Headers)'; \
+		python3 $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang/update_glslang_sources.py --dir $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang; \
 	fi
 	mkdir -p $(WORKINGDIR)/mobilegl
 	cd $(WORKINGDIR)/mobilegl && cmake \
@@ -359,7 +359,6 @@ dep_mobilegl:
 		-DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
 		-DCMAKE_C_FLAGS="-arch arm64" \
 		-DCMAKE_CXX_FLAGS="-arch arm64" \
-		-DENABLE_OPT=OFF \
 		-DMOBILEGL_IOS=ON \
 		-DMOBILEGL_BUILD_TEST=OFF \
 		-DMOBILEGL_BUILD_BENCHMARK=OFF \
