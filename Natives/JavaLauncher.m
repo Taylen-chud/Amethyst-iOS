@@ -34,8 +34,9 @@ BOOL validateVirtualMemorySpace(size_t size) {
     if(map == MAP_FAILED || munmap(map, size) != 0)
         return NO;
     return YES;
+}
 
-    static void init_libcxxHashShim() {
+static void init_libcxxHashShim() {
     setenv("DYLD_FORCE_FLAT_NAMESPACE", "1", 1);
 
     NSString *shimPath = [NSString stringWithFormat:@"%@/Frameworks/libcxx_hash_shim.dylib", NSBundle.mainBundle.bundlePath];
@@ -50,8 +51,6 @@ BOOL validateVirtualMemorySpace(size_t size) {
         return;
     }
     NSLog(@"[JavaLauncher] Loaded libcxx_hash_shim.dylib for MobileGL libc++ symbol compatibility");
-}
-
 }
 
 void init_loadDefaultEnv() {
