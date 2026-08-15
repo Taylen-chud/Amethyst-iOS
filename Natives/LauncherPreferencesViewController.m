@@ -214,8 +214,17 @@
             @{@"key": @"allow_microphone",
               @"hasDetail": @YES,
               @"icon": @"mic",
-              @"type": self.typeSwitch
+              @"type": self.typeSwitch,
+              @"requestReload": @YES
             },
+            @{@"key": @"fix_simple_voice_chat_mod",
+              @"hasDetail": @YES,
+              @"icon": @"mic.circle",
+              @"type": self.typeSwitch,
+              @"enableCondition": ^BOOL() {
+                    return getPrefBool(@"video.allow_microphone") && whenNotInGame();
+              }
+            }
         ], @[
             // Control settings
             @{@"icon": @"gamecontroller"},

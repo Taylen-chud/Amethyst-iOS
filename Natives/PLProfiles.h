@@ -3,8 +3,7 @@
 @interface PLProfiles : NSObject
 
 @property(nonatomic) NSString *profilePath;
-@property(nonatomic) NSMutableDictionary<NSString *, NSMutableDictionary<NSString *, NSMutableDictionary<NSString *, NSString *> *> *> *profileDict;
-
+@property(nonatomic) NSMutableDictionary<NSString *, id> *profileDict;
 + (PLProfiles *)current;
 + (void)updateCurrent;
 

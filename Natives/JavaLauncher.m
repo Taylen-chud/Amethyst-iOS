@@ -9,6 +9,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <mach/mach.h>
+#include <mach/task.h>
+#include <mach/thread_status.h>
+#include <mach/exception_types.h>
+
 #include "utils.h"
 
 #import "ios_uikit_bridge.h"
@@ -29,6 +34,24 @@ BOOL validateVirtualMemorySpace(size_t size) {
     if(map == MAP_FAILED || munmap(map, size) != 0)
         return NO;
     return YES;
+
+    static void init_libcxxHashShim() {
+    setenv("DYLD_FORCE_FLAT_NAMESPACE", "1", 1);
+
+    NSString *shimPath = [NSString stringWithFormat:@"%@/Frameworks/libcxx_hash_shim.dylib", NSBundle.mainBundle.bundlePath];
+    if (![fm fileExistsAtPath:shimPath]) {
+        NSLog(@"[JavaLauncher] libcxx_hash_shim.dylib not found at %@, skipping (MobileGL may fail to load on this device)", shimPath);
+        return;
+    }
+
+    void *shim = dlopen(shimPath.UTF8String, RTLD_GLOBAL | RTLD_NOW);
+    if (!shim) {
+        NSLog(@"[JavaLauncher] Failed to load libcxx_hash_shim.dylib: %s", dlerror());
+        return;
+    }
+    NSLog(@"[JavaLauncher] Loaded libcxx_hash_shim.dylib for MobileGL libc++ symbol compatibility");
+}
+
 }
 
 void init_loadDefaultEnv() {
@@ -104,6 +127,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
 
     init_loadDefaultEnv();
     init_loadCustomEnv();
+    init_libcxxHashShim();
 
     DeviceGetJITFlags(YES); // refresh JIT flags right after loading env
     BOOL requiresTXMWorkaround = DeviceHasJITFlags(JIT_FLAG_FORCE_MIRRORED | JIT_FLAG_HAS_TXM);
@@ -173,6 +197,19 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
         NSLog(@"[JavaLauncher] RENDERER is set to %@\n", renderer);
         setenv("POJAV_RENDERER", renderer.UTF8String, 1);
+        if (isMobileGLRenderer(renderer.UTF8String)) {
+            setenv("MOBILEGL_BACKEND_TYPE",
+                [renderer isEqualToString:@ RENDERER_NAME_MOBILEGL_GLES] ? "DirectGLES" : "DirectVulkan",
+                1);
+            const char *pojavHome = getenv("POJAV_HOME");
+            if (pojavHome && *pojavHome) {
+                NSString *mobileGLLogPath = [NSString stringWithFormat:@"%s/mobilegl.log", pojavHome];
+                setenv("MOBILEGL_LOG_FILE_PATH", mobileGLLogPath.UTF8String, 1);
+            }
+        } else {
+            unsetenv("MOBILEGL_BACKEND_TYPE");
+            unsetenv("MOBILEGL_LOG_FILE_PATH");
+        }
         // Setup gameDir
         gameDir = [NSString stringWithFormat:@"%s/instances/%@/%@",
             getenv("POJAV_HOME"), getPrefObject(@"general.game_directory"),
@@ -262,6 +299,10 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", librariesPath].UTF8String;
     if(getPrefBool(@"general.cosmetica")) {
         margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/arc_dns_injector.jar=23.95.137.176", librariesPath].UTF8String;
+    }
+
+if (getPrefBool(@"video.fix_simple_voice_chat_mod")) {
+        margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchsvc.jar=", librariesPath].UTF8String;
     }
 
     // Workaround random stack guard allocation crashes

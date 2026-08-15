@@ -115,6 +115,7 @@ public final class Platform {
             try {
                 matchingClasses.add(Class.forName("de.maxhenkel.voicechat.config.ClientConfig"));
                 matchingClasses.add(Class.forName("de.maxhenkel.voicechat.VoicechatClient"));
+                matchingClasses.add(Class.forName("de.maxhenkel.voicechat.voice.client.microphone.MicrophoneManager"));
                 isMacFoundVoiceChatMod = true;
             } catch (Throwable th) {}
             try {

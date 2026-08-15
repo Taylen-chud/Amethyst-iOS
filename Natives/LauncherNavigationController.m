@@ -3,6 +3,7 @@
 #import "AFNetworking.h"
 #import "ALTServerConnection.h"
 #import "CustomControlsViewController.h"
+#import "installer/modpack/CurseForgeManualDownloadViewController.h"
 #import "DownloadProgressViewController.h"
 #import "JavaGUIViewController.h"
 #import "LauncherMenuViewController.h"
@@ -10,6 +11,7 @@
 #import "LauncherPreferences.h"
 #import "MinecraftResourceDownloadTask.h"
 #import "MinecraftResourceUtils.h"
+#import "installer/mods/ModManagerStore.h"
 #import "PickTextField.h"
 #import "PLPickerView.h"
 #import "PLProfiles.h"
@@ -82,9 +84,9 @@ static void *ProgressObserverContext = &ProgressObserverContext;
         textFieldContainer = [[UIView alloc] initWithFrame:self.versionTextField.frame];
         [textFieldContainer addSubview:self.progressViewMain];
         self.buttonInstallItem = [[UIBarButtonItem alloc] initWithTitle:localize(@"Play", nil)
-                                                                  style:UIBarButtonItemStylePlain
-                                                                 target:self
-                                                                 action:@selector(performInstallOrShowDetails:)];
+                                                                 style:UIBarButtonItemStylePlain
+                                                                target:self
+                                                                action:@selector(performInstallOrShowDetails:)];
         self.buttonInstallItem.enabled = NO;
         dispatch_async(dispatch_get_main_queue(), ^{
             self.buttonInstallItem.buttonGlassView.backgroundColor = [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:0.5];
@@ -130,6 +132,10 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     [NSNotificationCenter.defaultCenter addObserver:self
         selector:@selector(receiveNotification:) 
         name:@"InstallModpack"
+        object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self
+        selector:@selector(receiveNotification:)
+        name:@"InstallMods"
         object:nil];
 
     if ([BaseAuthenticator.current isKindOfClass:MicrosoftAuthenticator.class]) {
@@ -306,17 +312,26 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     self.task = [MinecraftResourceDownloadTask new];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         __weak LauncherNavigationController *weakSelf = self;
-        self.task.handleError = ^{
+        MinecraftResourceDownloadTask *task = self.task;
+        task.handleError = ^{
             dispatch_async(dispatch_get_main_queue(), ^{
                 [weakSelf setInteractionEnabled:YES forDownloading:YES];
                 weakSelf.task = nil;
                 weakSelf.progressVC = nil;
             });
         };
-        [self.task downloadVersion:object];
+        task.allDownloadTasksFinishedHandler = ^{
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [weakSelf completeDownloadTask:task];
+            });
+        };
+        [task downloadVersion:object];
         dispatch_async(dispatch_get_main_queue(), ^{
-            self.progressViewMain.observedProgress = self.task.progress;
-            [self.task.progress addObserver:self
+            if (self.task != task) {
+                return;
+            }
+            self.progressViewMain.observedProgress = task.progress;
+            [task.progress addObserver:self
                 forKeyPath:@"fractionCompleted"
                 options:NSKeyValueObservingOptionInitial
                 context:ProgressObserverContext];
@@ -351,52 +366,115 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     }
 }
 
+- (void)completeDownloadTask:(MinecraftResourceDownloadTask *)task {
+    if (!task || self.task != task) {
+        return;
+    }
+
+    @try {
+        [task.progress removeObserver:self forKeyPath:@"fractionCompleted" context:ProgressObserverContext];
+    } @catch(id exception) {}
+    [self.progressVC dismissModalViewControllerAnimated:NO];
+
+    self.progressViewMain.observedProgress = nil;
+    self.task = nil;
+    if (task.metadata) {
+        __block NSDictionary *metadata = task.metadata;
+        [self invokeAfterJITEnabled:^{
+            UIKit_launchMinecraftSurfaceVC(self.view.window, metadata);
+        }];
+        [self setInteractionEnabled:YES forDownloading:YES];
+        return;
+    }
+
+    NSArray *manualDownloads = task.postInstallManualDownloads;
+    NSString *installerPath = task.postInstallInstallerPath;
+    BOOL hitEnter = task.postInstallHitEnter;
+    void (^finishInstall)(void) = ^{
+        [task finalizeModInstall];
+        [task finalizeModpackMetadata];
+        [self reloadProfileList];
+        if (installerPath) {
+            [self enterModInstallerWithPath:installerPath hitEnterAfterWindowShown:hitEnter];
+        }
+        [self setInteractionEnabled:YES forDownloading:YES];
+    };
+
+    if (manualDownloads.count > 0) {
+        CurseForgeManualDownloadViewController *vc = [[CurseForgeManualDownloadViewController alloc]
+            initWithDownloads:manualDownloads
+            completion:finishInstall];
+        UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
+        [self presentViewController:nav animated:YES completion:nil];
+        return;
+    }
+
+    finishInstall();
+}
+
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
     if (context != ProgressObserverContext) {
         [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
         return;
     }
 
+    MinecraftResourceDownloadTask *task = self.task;
+    if (!task || !task.progress || !task.textProgress) {
+        return;
+    }
+
     // Calculate download speed and ETA
     static CGFloat lastMsTime;
-    static NSUInteger lastSecTime, lastCompletedUnitCount;
-    NSProgress *progress = self.task.textProgress;
+    static NSInteger lastSecTime;
+    static int64_t lastCompletedUnitCount;
+    NSProgress *downloadProgress = task.progress;
+    NSProgress *progress = task.textProgress;
     struct timeval tv;
     gettimeofday(&tv, NULL); 
-    NSInteger completedUnitCount = self.task.progress.totalUnitCount * self.task.progress.fractionCompleted;
+    int64_t completedUnitCount = downloadProgress.totalUnitCount * downloadProgress.fractionCompleted;
+    if (downloadProgress.finished && progress.totalUnitCount > 0) {
+        completedUnitCount = progress.totalUnitCount;
+    } else if (progress.totalUnitCount > 0) {
+        completedUnitCount = MAX(0, MIN(completedUnitCount, progress.totalUnitCount));
+    }
     progress.completedUnitCount = completedUnitCount;
     if (lastSecTime < tv.tv_sec) {
         CGFloat currentTime = tv.tv_sec + tv.tv_usec / 1000000.0;
-        NSInteger throughput = (completedUnitCount - lastCompletedUnitCount) / (currentTime - lastMsTime);
+        CGFloat elapsedTime = currentTime - lastMsTime;
+        int64_t completedDelta = completedUnitCount - lastCompletedUnitCount;
+        NSInteger throughput = (elapsedTime > 0 && completedDelta > 0) ? completedDelta / elapsedTime : 0;
         progress.throughput = @(throughput);
-        progress.estimatedTimeRemaining = @((progress.totalUnitCount - completedUnitCount) / throughput);
+        if (throughput > 0 && progress.totalUnitCount > completedUnitCount) {
+            progress.estimatedTimeRemaining = @((progress.totalUnitCount - completedUnitCount) / throughput);
+        } else {
+            progress.estimatedTimeRemaining = nil;
+        }
         lastCompletedUnitCount = completedUnitCount;
         lastSecTime = tv.tv_sec;
         lastMsTime = currentTime;
     }
 
+    BOOL queueFinished = [task allDownloadTasksFinished];
+    if (queueFinished) {
+        [task markAllDownloadTasksComplete];
+    }
+    // Byte progress can finish before completion handlers move temp files into place.
+    BOOL finished = queueFinished;
+    if (finished && progress.totalUnitCount > 0) {
+        progress.completedUnitCount = progress.totalUnitCount;
+    }
+
     dispatch_async(dispatch_get_main_queue(), ^{
         self.progressText.text = progress.localizedAdditionalDescription;
 
-        if (!progress.finished) return;
-        [self.progressVC dismissModalViewControllerAnimated:NO];
-
-        self.progressViewMain.observedProgress = nil;
-        if (self.task.metadata) {
-            __block NSDictionary *metadata = self.task.metadata;
-            [self invokeAfterJITEnabled:^{
-                UIKit_launchMinecraftSurfaceVC(self.view.window, metadata);
-            }];
-        } else {
-            [self reloadProfileList];
-        }
-        self.task = nil;
-        [self setInteractionEnabled:YES forDownloading:YES];
+        if (!finished || self.task != task) return;
+        [self completeDownloadTask:task];
     });
 }
 
 - (void)receiveNotification:(NSNotification *)notification {
-    if (![notification.name isEqualToString:@"InstallModpack"]) {
+    if (![notification.name isEqualToString:@"InstallModpack"] &&
+        ![notification.name isEqualToString:@"InstallMods"]) {
         return;
     }
     [self setInteractionEnabled:NO forDownloading:YES];
@@ -404,17 +482,30 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     NSDictionary *userInfo = notification.userInfo;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         __weak LauncherNavigationController *weakSelf = self;
-        self.task.handleError = ^{
+        MinecraftResourceDownloadTask *task = self.task;
+        task.handleError = ^{
             dispatch_async(dispatch_get_main_queue(), ^{
                 [weakSelf setInteractionEnabled:YES forDownloading:YES];
                 weakSelf.task = nil;
                 weakSelf.progressVC = nil;
             });
         };
-        [self.task downloadModpackFromAPI:notification.object detail:userInfo[@"detail"] atIndex:[userInfo[@"index"] unsignedLongValue]];
+        task.allDownloadTasksFinishedHandler = ^{
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [weakSelf completeDownloadTask:task];
+            });
+        };
+        if ([notification.name isEqualToString:@"InstallMods"]) {
+            [task downloadModsWithPlan:userInfo store:notification.object];
+        } else {
+            [task downloadModpackFromAPI:notification.object detail:userInfo[@"detail"] atIndex:[userInfo[@"index"] unsignedLongValue]];
+        }
         dispatch_async(dispatch_get_main_queue(), ^{
-            self.progressViewMain.observedProgress = self.task.progress;
-            [self.task.progress addObserver:self
+            if (self.task != task) {
+                return;
+            }
+            self.progressViewMain.observedProgress = task.progress;
+            [task.progress addObserver:self
                 forKeyPath:@"fractionCompleted"
                 options:NSKeyValueObservingOptionInitial
                 context:ProgressObserverContext];
@@ -483,7 +574,6 @@ static void *ProgressObserverContext = &ProgressObserverContext;
 #pragma mark - UIPickerView stuff
 - (void)pickerView:(PLPickerView *)pickerView didSelectRow:(NSInteger)row inComponent:(NSInteger)component {
     self.profileSelectedAt = row;
-    //((UIImageView *)self.versionTextField.leftView).image = [pickerView imageAtRow:row column:component];
     ((UIImageView *)self.versionTextField.leftView).image = [pickerView imageAtRow:row column:component];
     self.versionTextField.text = [self pickerView:pickerView titleForRow:row forComponent:component];
     PLProfiles.current.selectedProfileName = self.versionTextField.text;
@@ -501,7 +591,7 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     return PLProfiles.current.profiles.allValues[row][@"name"];
 }
 
-- (void)pickerView:(UIPickerView *)pickerView enumerateImageView:(UIImageView *)imageView forRow:(NSInteger)row forComponent:(NSInteger)component {
+- (void)pickerView:(PLPickerView *)pickerView enumerateImageView:(UIImageView *)imageView forRow:(NSInteger)row forComponent:(NSInteger)component {
     UIImage *fallbackImage = [[UIImage imageNamed:@"DefaultProfile"] _imageWithSize:CGSizeMake(40, 40)];
     NSString *urlString = PLProfiles.current.profiles.allValues[row][@"icon"];
     [imageView setImageWithURL:[NSURL URLWithString:urlString] placeholderImage:fallbackImage];

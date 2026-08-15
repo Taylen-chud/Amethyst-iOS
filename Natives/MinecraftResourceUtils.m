@@ -14,6 +14,7 @@
     [self insertSafety:inheritsFrom from:json arr:@[
         @"assetIndex", @"assets", @"id",
         @"inheritsFrom",
+        @"javaVersion",
         @"mainClass", @"minecraftArguments",
         @"optifineLib", @"releaseTime", @"time", @"type"
     ]];
@@ -43,8 +44,12 @@
 
 + (void)insertSafety:(NSMutableDictionary *)targetVer from:(NSDictionary *)fromVer arr:(NSArray *)arr {
     for (NSString *key in arr) {
-        if (([fromVer[key] isKindOfClass:NSString.class] && [fromVer[key] length] > 0) || targetVer[key] == nil) {
-            targetVer[key] = fromVer[key];
+        id value = fromVer[key];
+        if (!value || value == NSNull.null) {
+            continue;
+        }
+        if (([value isKindOfClass:NSString.class] && [value length] > 0) || targetVer[key] == nil) {
+            targetVer[key] = value;
         } else {
             NSLog(@"[MCDL] insertSafety: how to insert %@?", key);
         }
@@ -114,8 +119,9 @@
     } else {
         client[@"downloads"][@"artifact"] = json[@"downloads"][@"client"];
     }
-    client[@"downloads"][@"artifact"][@"path"] = [NSString stringWithFormat:@"../versions/%1$@/%1$@.jar", json[@"id"]];
-    client[@"name"] = [NSString stringWithFormat:@"%@.jar", json[@"id"]];
+    NSString *clientVersionID = [json[@"inheritsFrom"] isKindOfClass:NSString.class] ? json[@"inheritsFrom"] : json[@"id"];
+    client[@"downloads"][@"artifact"][@"path"] = [NSString stringWithFormat:@"../versions/%1$@/%1$@.jar", clientVersionID];
+    client[@"name"] = [NSString stringWithFormat:@"%@.jar", clientVersionID];
     [json[@"libraries"] addObject:client];
 
     // Parse Forge 1.17+ additional JVM Arguments
@@ -143,6 +149,97 @@
             argsToSkip--;
         }
     }
+}
+
++ (NSString *)minecraftVersionFromVersionID:(NSString *)versionID {
+    if (![versionID isKindOfClass:NSString.class] || versionID.length == 0) {
+        return nil;
+    }
+
+    if ([versionID hasPrefix:@"fabric-loader-"] || [versionID hasPrefix:@"quilt-loader-"]) {
+        return [versionID componentsSeparatedByString:@"-"].lastObject;
+    }
+
+    NSRange forgeRange = [versionID rangeOfString:@"-forge-"];
+    if (forgeRange.location != NSNotFound) {
+        return [versionID substringToIndex:forgeRange.location];
+    }
+
+    NSRange neoForgeRange = [versionID rangeOfString:@"-neoforge-"];
+    if (neoForgeRange.location != NSNotFound) {
+        return [versionID substringToIndex:neoForgeRange.location];
+    }
+
+    return versionID;
+}
+
++ (int)minimumJavaVersionForMinecraftVersion:(NSString *)version {
+    if (![version isKindOfClass:NSString.class] || version.length == 0) {
+        return 8;
+    }
+
+    NSArray<NSString *> *parts = [version componentsSeparatedByString:@"."];
+    NSInteger major = parts.count > 0 ? parts[0].integerValue : 0;
+    NSInteger minor = parts.count > 1 ? parts[1].integerValue : 0;
+    NSInteger patch = parts.count > 2 ? parts[2].integerValue : 0;
+    if (major == 1) {
+        if (minor > 20 || (minor == 20 && patch >= 5)) {
+            return 21;
+        }
+        if (minor >= 18) {
+            return 17;
+        }
+        if (minor == 17) {
+            return 16;
+        }
+        return 8;
+    }
+    if (major >= 21) {
+        return 21;
+    }
+    if (major >= 18) {
+        return 17;
+    }
+    if (major == 17) {
+        return 16;
+    }
+
+    NSScanner *scanner = [NSScanner scannerWithString:version];
+    NSInteger snapshotYear = 0;
+    if ([scanner scanInteger:&snapshotYear] && [version containsString:@"w"]) {
+        if (snapshotYear >= 24) {
+            return 21;
+        }
+        if (snapshotYear >= 22) {
+            return 17;
+        }
+        if (snapshotYear >= 21) {
+            return 16;
+        }
+    }
+    return 8;
+}
+
++ (int)minimumJavaVersionForMetadata:(NSDictionary *)metadata {
+    NSDictionary *javaVersion = [metadata[@"javaVersion"] isKindOfClass:NSDictionary.class] ? metadata[@"javaVersion"] : nil;
+    int minVersion = [javaVersion[@"majorVersion"] respondsToSelector:@selector(intValue)] ? [javaVersion[@"majorVersion"] intValue] : 0;
+    if (minVersion == 0) {
+        minVersion = [javaVersion[@"version"] respondsToSelector:@selector(intValue)] ? [javaVersion[@"version"] intValue] : 0;
+    }
+    if (minVersion == 0 && [metadata[@"javaVersion"] respondsToSelector:@selector(intValue)]) {
+        minVersion = [metadata[@"javaVersion"] intValue];
+    }
+    if (minVersion > 0) {
+        return minVersion;
+    }
+
+    NSString *minecraftVersion = [metadata[@"inheritsFrom"] isKindOfClass:NSString.class] ? metadata[@"inheritsFrom"] : nil;
+    if (minecraftVersion.length == 0) {
+        minecraftVersion = [self minecraftVersionFromVersionID:metadata[@"id"]];
+    }
+    minVersion = [self minimumJavaVersionForMinecraftVersion:minecraftVersion];
+    NSLog(@"[MCDL] Missing javaVersion in metadata for %@, inferred Java %d", metadata[@"id"], minVersion);
+    return minVersion;
 }
 
 + (NSObject *)findVersion:(NSString *)version inList:(NSArray *)list {
