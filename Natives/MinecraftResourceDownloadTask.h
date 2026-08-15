@@ -15,12 +15,14 @@
 @property NSArray<NSDictionary *> *postInstallManualDownloads;
 @property NSString *postInstallInstallerPath;
 @property BOOL postInstallHitEnter;
+@property NSDictionary *postInstallModpackMetadataPlan;
 
 // Task control & status
 - (NSURLSessionDownloadTask *)createDownloadTask:(NSString *)url size:(NSUInteger)size sha:(NSString *)sha altName:(NSString *)altName toPath:(NSString *)path;
 - (void)finishDownloadWithErrorString:(NSString *)error;
 - (BOOL)allDownloadTasksFinished;
 - (void)markAllDownloadTasksComplete;
+- (void)finishAddingDownloadTasks;
 
 // Finalization helpers
 - (void)finalizeModInstall;

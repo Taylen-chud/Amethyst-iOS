@@ -550,7 +550,6 @@
                 [skippedManualFileNames addObject:finalPath.lastPathComponent];
                 continue;
             }
-        }
 
         NSError *moveError = nil;
         [NSFileManager.defaultManager createDirectoryAtPath:finalPath.stringByDeletingLastPathComponent
@@ -586,6 +585,31 @@
     if (error) {
         dispatch_async(dispatch_get_main_queue(), ^{
             showDialog(localize(@"Error", nil), [NSString stringWithFormat:@"Mods installed, but metadata could not be saved: %@", error.localizedDescription]);
+        });
+        return;
+    }
+    [NSNotificationCenter.defaultCenter postNotificationName:@"ModManagerModsChanged" object:self.postInstallModStore];
+}
+
+#pragma mark - Modpack installation
+
+// NOTE: postInstallModStore is never set anywhere in the CurseForge/Modrinth
+// modpack-install path (downloadModpackFromAPI:detail:atIndex: and friends) -
+// unlike downloadModsWithPlan:store:, nothing currently threads a
+// ModManagerStore through this flow, and ModManagerStore has no default/shared
+// instance to fall back on (it requires a specific profileName + profile).
+// Until that's wired up, this intentionally no-ops rather than guessing which
+// profile a modpack install's records belong to.
+- (void)finalizeModpackMetadata {
+    if (!self.postInstallModpackMetadataPlan || !self.postInstallModStore) {
+        return;
+    }
+
+    NSArray *records = [self.postInstallModpackMetadataPlan[@"records"] isKindOfClass:NSArray.class] ? self.postInstallModpackMetadataPlan[@"records"] : @[];
+    NSError *error = [self.postInstallModStore saveMetadataRecords:records replacingFileNames:@[] replacements:@[]];
+    if (error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            showDialog(localize(@"Error", nil), [NSString stringWithFormat:@"Modpack installed, but mod metadata could not be saved: %@", error.localizedDescription]);
         });
         return;
     }
