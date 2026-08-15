@@ -344,6 +344,10 @@ dep_mobilegl:
 		echo 'MobileGL source directory not found: $(MOBILEGL_SOURCE_DIR)'; \
 		exit 1; \
 	fi
+	if grep -q 'set(ENABLE_OPT[[:space:]]*ON[[:space:]]*CACHE BOOL "Enable SPIRV-Tools opt usage in glslang" FORCE)' $(MOBILEGL_SOURCE_DIR)/CMakeLists.txt; then \
+		sed -i.bak 's/set(ENABLE_OPT[[:space:]]*ON[[:space:]]*CACHE BOOL "Enable SPIRV-Tools opt usage in glslang" FORCE)/set(ENABLE_OPT                 OFF CACHE BOOL "Enable SPIRV-Tools opt usage in glslang" FORCE)/' $(MOBILEGL_SOURCE_DIR)/CMakeLists.txt; \
+		echo '[Amethyst v$(VERSION)] patched MobileGL CMakeLists.txt: ENABLE_OPT forced OFF'; \
+	fi
 	mkdir -p $(WORKINGDIR)/mobilegl
 	cd $(WORKINGDIR)/mobilegl && cmake \
 		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
