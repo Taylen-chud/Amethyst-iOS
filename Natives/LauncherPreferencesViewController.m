@@ -224,6 +224,12 @@
               @"enableCondition": ^BOOL() {
                     return getPrefBool(@"video.allow_microphone") && whenNotInGame();
               }
+            },
+            @{@"key": @"sodium_compatibility",
+              @"hasDetail": @YES,
+              @"icon": @"leaf",
+              @"type": self.typeSwitch,
+              @"enableCondition": whenNotInGame
             }
         ], @[
             // Control settings

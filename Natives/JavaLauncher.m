@@ -530,6 +530,19 @@ if (getPrefBool(@"video.fix_simple_voice_chat_mod")) {
 
     NSLog(@"[Init] Calling JLI_Launch");
 
+    
+    if (getPrefBool(@"video.sodium_compatibility")) {
+        const char *currentRenderer = getenv("POJAV_RENDERER");
+        char *savedRenderer = currentRenderer ? strdup(currentRenderer) : NULL;
+        unsetenv("POJAV_RENDERER");
+        if (savedRenderer) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+                setenv("POJAV_RENDERER", savedRenderer, 1);
+                free(savedRenderer);
+            });
+        }
+    }
+
     // Cr4shed known issue: exit after crash dump,
     // reset signal handler so that JVM can catch them
     signal(SIGSEGV, SIG_DFL);
