@@ -9,7 +9,7 @@ OUTPUTDIR   := $(SOURCEDIR)/artifacts
 WORKINGDIR  := $(SOURCEDIR)/Natives/build
 DETECTPLAT  := $(shell uname -s)
 DETECTARCH  := $(shell uname -m)
-VERSION     := 1.0
+VERSION     := 1.1.1
 BRANCH      := $(shell git branch --show-current)
 COMMIT      := $(shell git log --oneline | sed '2,10000000d' | cut -b 1-7)
 PLATFORM    ?= 2
@@ -151,6 +151,8 @@ METHOD_PACKAGE = \
 	else \
 		IPA_SUFFIX=".ipa"; \
 	fi; \
+	rm -f $(OUTPUTDIR)/org.angelauramc.amethyst-$(VERSION)-$(PLATFORM_NAME)$$IPA_SUFFIX; \
+	rm -f $(OUTPUTDIR)/org.angelauramc.amethyst.slimmed-$(VERSION)-$(PLATFORM_NAME)$$IPA_SUFFIX; \
 	if [ '$(SLIMMED_ONLY)' = '0' ]; then \
 		zip --symlinks -r $(OUTPUTDIR)/org.angelauramc.amethyst-$(VERSION)-$(PLATFORM_NAME)$$IPA_SUFFIX Payload; \
 	fi; \
@@ -161,10 +163,14 @@ METHOD_PACKAGE = \
 # Function to download and unpack Java runtimes.
 METHOD_JAVA_UNPACK = \
 	cd $(SOURCEDIR)/depends; \
-	if [ ! -f "java-$(1)-openjdk/release" ] && [ ! -f "$(ls jre$(1)-*.tar.xz)" ]; then \
+	if [ ! -f "java-$(1)-openjdk/release" ] && [ -z "$$(ls jre$(1)-*.tar.xz 2>/dev/null)" ]; then \
 		if [ "$(RUNNER)" != "1" ]; then \
-			wget '$(2)' -q --show-progress; \
-			unzip jre*-ios-aarch64.zip && rm jre*-ios-aarch64.zip; \
+			echo "Downloading JRE $(1) from $(2)..."; \
+			if ! wget '$(2)' -nv --show-progress -O jre$(1)-ios-aarch64.zip; then \
+				echo "ERROR: Failed to download JRE $(1) from $(2) (network failure, DNS issue, or the asset is unavailable)."; \
+				exit 1; \
+			fi; \
+			unzip jre$(1)-ios-aarch64.zip && rm jre$(1)-ios-aarch64.zip; \
 		fi; \
 		mkdir -p java-$(1)-openjdk; \
 		tar xvf jre$(1)-*.tar.xz -C java-$(1)-openjdk; \
@@ -294,7 +300,7 @@ jre: native
 	$(call METHOD_JAVA_UNPACK,17,'https://assets.angelauramc.dev/openjdk/ios-arm64/jre17-ios-aarch64.zip'); \
 	$(call METHOD_JAVA_UNPACK,21,'https://assets.angelauramc.dev/openjdk/ios-arm64/jre21-ios-aarch64.zip'); \
 	$(call METHOD_JAVA_UNPACK,25,'https://assets.angelauramc.dev/openjdk/ios-arm64/jre25-ios-aarch64.zip'); \
-	if [ -f "$(ls jre*.tar.xz)" ]; then rm $(SOURCEDIR)/depends/jre*.tar.xz; fi; \
+	if [ -n "$$(ls jre*.tar.xz 2>/dev/null)" ]; then rm $(SOURCEDIR)/depends/jre*.tar.xz; fi; \
 	cd $(SOURCEDIR); \
 	rm -rf $(SOURCEDIR)/depends/java-*-openjdk/{ASSEMBLY_EXCEPTION,bin,include,jre,legal,LICENSE,man,THIRD_PARTY_README,lib/{ct.sym,jspawnhelper,libjsig.dylib,src.zip,tools.jar}}; \
 	$(call METHOD_DIRCHECK,$(OUTPUTDIR)/java_runtimes); \
@@ -303,8 +309,8 @@ jre: native
 	cp -R $(POJAV_JRE21_DIR) $(OUTPUTDIR)/java_runtimes; \
 	cp -R $(POJAV_JRE25_DIR) $(OUTPUTDIR)/java_runtimes; \
 	cp $(WORKINGDIR)/libawt_xawt.dylib $(OUTPUTDIR)/java_runtimes/java-8-openjdk/lib; \
-	cp $(WORKINGDIR)/libawt_xawt.dylib $(OUTPUTDIR)/java_runtimes/java-17-openjdk/lib;
-	cp $(WORKINGDIR)/libawt_xawt.dylib $(OUTPUTDIR)/java_runtimes/java-21-openjdk/lib;
+	cp $(WORKINGDIR)/libawt_xawt.dylib $(OUTPUTDIR)/java_runtimes/java-17-openjdk/lib; \
+	cp $(WORKINGDIR)/libawt_xawt.dylib $(OUTPUTDIR)/java_runtimes/java-21-openjdk/lib; \
 	cp $(WORKINGDIR)/libawt_xawt.dylib $(OUTPUTDIR)/java_runtimes/java-25-openjdk/lib
 	echo '[Amethyst v$(VERSION)] jre - end'
 
@@ -328,10 +334,7 @@ dep_mg:
 
 	SPIRV_LIB="$$(find $(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/libraries -type f \( -name 'libspirv-cross-c-shared*.dylib' -o -name 'libspirv-cross-c*.dylib' \) | head -n 1)"; \
 	if [ -n "$$SPIRV_LIB" ]; then \
-		cp "$$SPIRV_LIB" $(WORKINGDIR)/libspirv-cross-c-shared.dylib; \
 		cp "$$SPIRV_LIB" $(WORKINGDIR)/libspirv-cross-c-shared.0.dylib; \
-		install_name_tool -id @rpath/libspirv-cross-c-shared.dylib $(WORKINGDIR)/libspirv-cross-c-shared.dylib 2>/dev/null || true; \
-		install_name_tool -id @rpath/libspirv-cross-c-shared.0.dylib $(WORKINGDIR)/libspirv-cross-c-shared.0.dylib 2>/dev/null || true; \
 	else \
 		echo 'Warning: SPIRV-Cross shared library not found; continuing without it.'; \
 	fi
@@ -344,8 +347,24 @@ dep_mobilegl:
 		echo 'MobileGL source directory not found: $(MOBILEGL_SOURCE_DIR)'; \
 		exit 1; \
 	fi
+	# Initialize base submodules first
+	git -C $(MOBILEGL_SOURCE_DIR) submodule update --init --recursive --force
+	# Patch ProbeTexture's multisample-storage probe to gate on the actual
+	# negotiated GLES version instead of just function-pointer presence -
+	# without this, MobileGL segfaults inside ANGLE (gl::State::getTargetTexture)
+	# the first time InitCapabilities runs on a context that exports but can't
+	# back GL_TEXTURE_2D_MULTISAMPLE(_ARRAY) storage. Idempotent, safe to re-run.
+	python3 $(SOURCEDIR)/Natives/patch_mobilegl.py $(MOBILEGL_SOURCE_DIR)
+	# Force glslang to fetch its own missing validation tool dependencies directly
 	if [ -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang" ]; then \
 		cd $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang && python3 update_glslang_sources.py; \
+	fi
+	# Patch glslang's convertSwizzle() to null-check the swizzle index nodes
+	# instead of unconditionally dereferencing getAsConstantUnion(). On some
+	# shaders that returns null and crashes the whole JVM with a SIGSEGV in
+	# libMobileGL.dylib (TGlslangToSpvTraverser::convertSwizzle). Idempotent.
+	if [ -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang" ]; then \
+		python3 $(SOURCEDIR)/Natives/patch_glslang.py $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang; \
 	fi
 	mkdir -p $(WORKINGDIR)/mobilegl
 	cd $(WORKINGDIR)/mobilegl && cmake \
@@ -363,6 +382,7 @@ dep_mobilegl:
 		-DMOBILEGL_BUILD_BENCHMARK=OFF \
 		-DMOBILEGL_BUILD_TRACE_REPLAY=OFF \
 		-DMOBILEGL_VULKAN_LIBRARY="$(MOLTENVK_LIBRARY)" \
+		-DENABLE_OPT=OFF \
 		$(MOBILEGL_SOURCE_DIR)
 
 	cmake --build $(WORKINGDIR)/mobilegl --config $(CMAKE_BUILD_TYPE) -j$(JOBS) --target MobileGL
@@ -375,8 +395,18 @@ dep_mobilegl:
 	fi
 	install_name_tool -add_rpath @loader_path $(WORKINGDIR)/mobilegl/libMobileGL.dylib
 	cp $(WORKINGDIR)/mobilegl/libMobileGL.dylib $(WORKINGDIR)/libMobileGL.dylib
+	cp $(WORKINGDIR)/mobilegl/libMobileGL.dylib $(WORKINGDIR)/libMobileGL-gles.dylib
+	install_name_tool -id @rpath/libMobileGL-gles.dylib $(WORKINGDIR)/libMobileGL-gles.dylib
 	echo '[Amethyst v$(VERSION)] dep_mobilegl - end'
 
+# Builds a small shim dylib that exports __ZNSt3__113__hash_memoryEPKvm
+# (std::__1::__hash_memory), which some libMobileGL.dylib builds expect to
+# find in the system libc++.1.dylib but which isn't always exported there.
+# Without this, MobileGL fails to dlopen with "Symbol not found" and LWJGL's
+# OpenGL loader throws UnsatisfiedLinkError before the game ever starts.
+# The resulting dylib is dropped straight into $(WORKINGDIR), so the
+# existing `cp $(WORKINGDIR)/*.dylib .../Frameworks/` step in `payload`
+# picks it up automatically - no separate copy rule needed here.
 dep_libcxx_shim:
 	echo '[Amethyst v$(VERSION)] dep_libcxx_shim - start'
 	if [ ! -f "$(LIBCXX_SHIM_SOURCE)" ]; then \
@@ -396,7 +426,6 @@ dep_libcxx_shim:
 		$(LIBCXX_SHIM_SOURCE)
 	echo '[Amethyst v$(VERSION)] dep_libcxx_shim - end'
 
-
 assets:
 	echo '[Amethyst v$(VERSION)] assets - start'
 	if [ '$(IOS)' = '0' ] && [ '$(DETECTPLAT)' = 'Darwin' ]; then \
@@ -412,7 +441,7 @@ assets:
 	fi
 	echo '[Amethyst v$(VERSION)] assets - end'
 
-payload: native dep_mg dep_mobilegl dep_libcxx_shim  java jre assets
+payload: native dep_mg dep_mobilegl dep_libcxx_shim java jre assets
 	echo '[Amethyst v$(VERSION)] payload - start'
 	$(call METHOD_DIRCHECK,$(WORKINGDIR)/AngelAuraAmethyst.app/libs)
 	$(call METHOD_DIRCHECK,$(WORKINGDIR)/AngelAuraAmethyst.app/libs_caciocavallo)
@@ -478,6 +507,7 @@ package: payload
 	echo '[Amethyst v$(VERSION)] package - start'
 	if [ '$(TEAMID)' != '-1' ] && [ '$(SIGNING_TEAMID)' != '-1' ] && [ -f '$(PROVISIONING)' ] && [ '$(DETECTPLAT)' = 'Darwin' ]; then \
 		printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n	<key>application-identifier</key>\n	<string>$(TEAMID).org.angelauramc.amethyst</string>\n	<key>com.apple.developer.team-identifier</key>\n	<string>$(TEAMID)</string>\n	<key>get-task-allow</key>\n	<true/>\n	<key>keychain-access-groups</key>\n	<array>\n	<string>$(TEAMID).*</string>\n	<string>com.apple.token</string>\n	</array>\n	<key>com.apple.developer.kernel.extended-virtual-addressing</key>\n	<true/>\n	<key>com.apple.developer.kernel.increased-memory-limit</key>\n	<true/>\n</dict>\n</plist>' > entitlements.codesign.xml; \
+		$(MAKE) codesign; \
 		rm -rf entitlements.codesign.xml; \
 	else \
 		echo 'Skipped codesigning. If not intentional, check your variables.'; \
@@ -507,7 +537,5 @@ clean:
 	rm -rf JavaApp/build
 	rm -rf $(OUTPUTDIR)
 	echo '[Amethyst v$(VERSION)] clean - end'
-
-		
 
 .PHONY: all clean check native java jre package dsym deploy help dep_mg dep_mobilegl dep_libcxx_shim
