@@ -29,6 +29,7 @@ static void* load_egl_symbol(void *dl_handle, const char *symbol) {
 static bool dlsym_EGL() {
     const char *renderer = getenv("POJAV_RENDERER");
     const char *eglLibrary = gl_is_mobilegl_renderer() ? renderer : RENDERER_NAME_MTL_ANGLE;
+<<<<<<< HEAD
     
     if (!eglLibrary || strlen(eglLibrary) == 0) {
         eglLibrary = RENDERER_NAME_MTL_ANGLE;
@@ -42,6 +43,10 @@ static bool dlsym_EGL() {
         dl_handle = dlopen(eglLibrary, RTLD_NOW | RTLD_GLOBAL);
     }
 
+=======
+    NSString *eglPath = [NSString stringWithFormat:@"@rpath/%s", eglLibrary ?: ""];
+    void* dl_handle = dlopen(eglPath.UTF8String, RTLD_NOW | RTLD_GLOBAL);
+>>>>>>> 6d5ae51 (second fix?)
     if (!dl_handle) {
         NSLog(@"EGLBridge: failed to load %@ for renderer %s: %s",
             eglPath, renderer ?: "<unset>", dlerror() ?: "unknown dlopen error");
@@ -77,7 +82,16 @@ static bool dlsym_EGL() {
 
 static bool gl_init() {
     if (!dlsym_EGL()) {
+<<<<<<< HEAD
         NSLog(@"EGLBridge: dlsym_EGL failed to resolve required EGL symbols.");
+=======
+        return false;
+    }
+
+    g_EglDisplay = handle.eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    if (g_EglDisplay == EGL_NO_DISPLAY) {
+        NSDebugLog(@"EGLBridge: eglGetDisplay(EGL_DEFAULT_DISPLAY) returned EGL_NO_DISPLAY");
+>>>>>>> 6d5ae51 (second fix?)
         return false;
     }
 
@@ -106,6 +120,7 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
 
     NSString *renderer = NSProcessInfo.processInfo.environment[@"POJAV_RENDERER"];
     BOOL angleDesktopGL = [renderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE];
+<<<<<<< HEAD
     // isMobileGLRenderer()/mobileGL covers BOTH libMobileGL.dylib and
     // libMobileGL-gles.dylib, since they're the same binary under two names.
     // That's fine for things like surface sizing attribs below, but the EGL
@@ -119,6 +134,9 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
     BOOL mobileGL = gl_is_mobilegl_renderer();
     BOOL mobileGLDesktop = [renderer isEqualToString:@ RENDERER_NAME_MOBILEGL];
     BOOL useDesktopGL = angleDesktopGL || mobileGLDesktop;
+=======
+    BOOL mobileGL = gl_is_mobilegl_renderer();
+>>>>>>> 6d5ae51 (second fix?)
 
     const EGLint attribs[] = {
         EGL_RED_SIZE, 8,
@@ -127,7 +145,11 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
         EGL_ALPHA_SIZE, 8,
         EGL_DEPTH_SIZE, 24,
         EGL_SURFACE_TYPE, EGL_WINDOW_BIT|EGL_PBUFFER_BIT,
+<<<<<<< HEAD
         EGL_RENDERABLE_TYPE, useDesktopGL ? EGL_OPENGL_BIT : EGL_OPENGL_ES3_BIT,
+=======
+        EGL_RENDERABLE_TYPE, (angleDesktopGL || mobileGL) ? EGL_OPENGL_BIT : EGL_OPENGL_ES3_BIT,
+>>>>>>> 6d5ae51 (second fix?)
         EGL_NONE
     };
 
@@ -148,8 +170,13 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
     }
 
     EGLBoolean bindResult;
+<<<<<<< HEAD
     if (useDesktopGL) {
         NSLog(@"EGLBridge: Binding to desktop OpenGL");
+=======
+    if (angleDesktopGL || mobileGL) {
+        NSDebugLog(@"EGLBridge: Binding to desktop OpenGL");
+>>>>>>> 6d5ae51 (second fix?)
         bindResult = handle.eglBindAPI(EGL_OPENGL_API);
     } else {
         NSLog(@"EGLBridge: Binding to OpenGL ES");
@@ -161,6 +188,7 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
     const EGLint mobileGLSurfaceAttribs[] = {
         EGL_WIDTH, (EGLint)MAX(1.0, round(layer.bounds.size.width * layer.contentsScale)),
         EGL_HEIGHT, (EGLint)MAX(1.0, round(layer.bounds.size.height * layer.contentsScale)),
+<<<<<<< HEAD
         EGL_NONE
     };
     bundle->surface = handle.eglCreateWindowSurface(g_EglDisplay, bundle->config, (__bridge EGLNativeWindowType)layer,
@@ -171,12 +199,29 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
         return NULL;
     }
 
+=======
+        EGL_NONE
+    };
+    bundle->surface = handle.eglCreateWindowSurface(g_EglDisplay, bundle->config, (__bridge EGLNativeWindowType)layer,
+        mobileGL ? mobileGLSurfaceAttribs : NULL);
+    if (!bundle->surface) {
+        NSDebugLog(@"EGLBridge: eglCreateWindowSurface finished with error: 0x%x", handle.eglGetError());
+        free(bundle);
+        return NULL;
+    }
+
+    const EGLint gles_ctx_attribs[] = {
+        EGL_CONTEXT_CLIENT_VERSION, 3,
+        EGL_NONE
+    };
+>>>>>>> 6d5ae51 (second fix?)
     const EGLint desktop_ctx_attribs[] = {
         EGL_CONTEXT_MAJOR_VERSION, 3,
         EGL_CONTEXT_MINOR_VERSION, 3,
         EGL_CONTEXT_OPENGL_PROFILE_MASK, EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
         EGL_NONE
     };
+<<<<<<< HEAD
 
     if (useDesktopGL) {
         bundle->context = handle.eglCreateContext(g_EglDisplay, bundle->config, share ? share->context : EGL_NO_CONTEXT,
@@ -223,6 +268,12 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
 
     if (!bundle->context) {
         NSLog(@"EGLBridge: Error eglCreateContext finished with error: 0x%x", handle.eglGetError());
+=======
+    bundle->context = handle.eglCreateContext(g_EglDisplay, bundle->config, share ? share->context : EGL_NO_CONTEXT,
+        mobileGL ? desktop_ctx_attribs : gles_ctx_attribs);
+    if (!bundle->context) {
+        NSDebugLog(@"EGLBridge: Error eglCreateContext finished with error: 0x%x", handle.eglGetError());
+>>>>>>> 6d5ae51 (second fix?)
         free(bundle);
         return NULL;
     }

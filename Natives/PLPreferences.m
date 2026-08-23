@@ -26,7 +26,11 @@
             @"silence_other_audio": @NO,
             @"silence_with_switch": @NO,
             @"allow_microphone": @NO,
+<<<<<<< HEAD
             @"fix_simple_voice_chat_mod": @NO
+=======
+            @"sodium_compat": @NO
+>>>>>>> 6d5ae51 (second fix?)
         }.mutableCopy,
         @"control": @{
             @"default_ctrl": @"default.json",

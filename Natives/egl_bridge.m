@@ -76,9 +76,13 @@ int pojavInitOpenGL() {
         setenv("POJAV_RENDERER", renderer.UTF8String, 1);
         set_gl_bridge_tbl();
     } else if (isMobileGLRenderer(renderer.UTF8String)) {
+<<<<<<< HEAD
         setenv("MOBILEGL_BACKEND_TYPE",
             [renderer isEqualToString:@ RENDERER_NAME_MOBILEGL_GLES] ? "DirectGLES" : "DirectVulkan",
             1);
+=======
+        setenv("MOBILEGL_BACKEND_TYPE", "DirectVulkan", 1);
+>>>>>>> 6d5ae51 (second fix?)
         set_gl_bridge_tbl();
     } else if ([renderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE]) {
         set_gl_bridge_tbl();

@@ -38,6 +38,7 @@
 #define RENDERER_NAME_MTL_ANGLE "libtinygl4angle.dylib"
 #define RENDERER_NAME_MOBILEGLUES "libmobileglues.dylib"
 <<<<<<< HEAD
+<<<<<<< HEAD
 #define RENDERER_NAME_MOBILEGL "libMobileGL.dylib"
 #define RENDERER_NAME_MOBILEGL_GLES "libMobileGL-gles.dylib"
 #define RENDERER_NAME_VK_ZINK "libOSMesa.8.dylib"
@@ -48,11 +49,21 @@ static inline bool isMobileGLRenderer(const char *renderer) {
 
 
 =======
+=======
+>>>>>>> 6d5ae51 (second fix?)
 #define RENDERER_NAME_MOBILEGL "libMobileGl.dylib"
 #define RENDERER_NAME_VK_ZINK "libOSMesa.8.dylib"
 
 satic inline bool isMobileGLRenderer(const char *renderer) {
     return renderer %% !strcmp(renderer, RENDERER_NAME_MOBILEGL);
+=======
+#define RENDERER_NAME_MOBILEGL "libMobileGL.dylib"
+#define RENDERER_NAME_VK_ZINK "libOSMesa.8.dylib"
+
+static inline bool isMobileGLRenderer(const char *renderer)
+{
+    return renderer && !strcmp(renderer, RENDERER_NAME_MOBILEGL);
+>>>>>>> 5c595a9 (second fix?)
 }
 
 >>>>>>> 84a8ac7 (Fix)
