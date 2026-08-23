@@ -173,6 +173,19 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
         NSLog(@"[JavaLauncher] RENDERER is set to %@\n", renderer);
         setenv("POJAV_RENDERER", renderer.UTF8String, 1);
+        if (isMobileGLRenderer(renderer.UTF8String)) {
+    setenv("MOBILEGL_BACKEND_TYPE", "DirectVulkan", 1);
+    
+    const char *pojavHome = getenv("POJAV_HOME");
+    if (pojavHome && *pojavHome) {
+        NSString *mobileGLLogPath = [NSString stringWithFormat:@"%s/mobilegl.log", pojavHome];
+        setenv("MOBILEGL_LOG_FILE_PATH", mobileGLLogPath.UTF8String, 1);
+    }
+} else {
+    unsetenv("MOBILEGL_BACKEND_TYPE");
+    unsetenv("MOBILEGL_LOG_FILE_PATH");
+}
+
         // Setup gameDir
         gameDir = [NSString stringWithFormat:@"%s/instances/%@/%@",
             getenv("POJAV_HOME"), getPrefObject(@"general.game_directory"),
@@ -398,6 +411,41 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
 
     // Free split VC
     tmpRootVC = nil;
+    
+    // for sodium compat
+    BOOL sodiumCompatEnabled = getPrefBool(@"video.sodium_compat");
+    char *savedRendererEnv = NULL;
+    if (sodiumCompatEnabled) {
+        const char *currentRendererEnv = getenv("POJAV_RENDERER");
+        if (currentRendererEnv) {
+            savedRendererEnv = strdup(currentRendererEnv);
+        }
+        unsetenv("POJAV_RENDERER");
+        NSLog(@"[Init] Sodium compatibility mode: hiding POJAV_RENDERER for JLI_Launch");
+    }
+
+    jint jliResult = pJLI_Launch(++margc, margv,
+                   0, NULL, // sizeof(const_jargs) / sizeof(char *), const_jargs,
+                   0, NULL, // sizeof(const_appclasspath) / sizeof(char *), const_appclasspath,
+                   // These values are ignored in Java 17, so keep it anyways
+                   "1.8.0-internal",
+                   "1.8",
+
+                   "java", "openjdk",
+                   /* (const_jargs != NULL) ? JNI_TRUE : */ JNI_FALSE,
+                   JNI_TRUE, JNI_FALSE, JNI_TRUE);
+
+    if (sodiumCompatEnabled) {
+        if (savedRendererEnv) {
+            setenv("POJAV_RENDERER", savedRendererEnv, 1);
+            free(savedRendererEnv);
+        } else {
+            unsetenv("POJAV_RENDERER");
+        }
+        NSLog(@"[Init] Sodium compatibility mode: restored POJAV_RENDERER after JLI_Launch");
+    }
+
+    return jliResult;
 
     return pJLI_Launch(++margc, margv,
                    0, NULL, // sizeof(const_jargs) / sizeof(char *), const_jargs,
