@@ -27,13 +27,30 @@ extern char **environ;
 // LWJGL-era quirks to emulate for a given MC version, via the "pojav.lwjglVersion"
 // system property below. It does NOT change org.lwjgl.Version.getVersion(), which
 // will always report 3.4.1 since that's the real jar being loaded.
+//
+// Mapping verified against Mojang's actual version manifests (piston-meta), i.e.
+// this is the real LWJGL version vanilla Minecraft ships for each release:
+//   1.19    - 1.20.1  -> 3.3.1
+//   1.20.2  - 1.20.6  -> 3.3.2
+//   1.21    - 1.21.11 -> 3.3.3
+//   26.1+ (new year-based numbering) and anything unlisted -> 3.4.1
 static NSString *reportedLwjglVersionForMCVersion(id launchTarget) {
     static NSDictionary<NSString *, NSString *> *versionMap;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         versionMap = @{
-            @"1.20.1": @"3.3.1",
-            @"1.21.1": @"3.3.3",
+            // LWJGL 3.3.1
+            @"1.19": @"3.3.1", @"1.19.1": @"3.3.1", @"1.19.2": @"3.3.1",
+            @"1.19.3": @"3.3.1", @"1.19.4": @"3.3.1",
+            @"1.20": @"3.3.1", @"1.20.1": @"3.3.1",
+            // LWJGL 3.3.2
+            @"1.20.2": @"3.3.2", @"1.20.3": @"3.3.2", @"1.20.4": @"3.3.2",
+            @"1.20.5": @"3.3.2", @"1.20.6": @"3.3.2",
+            // LWJGL 3.3.3
+            @"1.21": @"3.3.3", @"1.21.1": @"3.3.3", @"1.21.2": @"3.3.3",
+            @"1.21.3": @"3.3.3", @"1.21.4": @"3.3.3", @"1.21.5": @"3.3.3",
+            @"1.21.6": @"3.3.3", @"1.21.7": @"3.3.3", @"1.21.8": @"3.3.3",
+            @"1.21.9": @"3.3.3", @"1.21.10": @"3.3.3", @"1.21.11": @"3.3.3",
         };
     });
     NSString *mcVersionId = [launchTarget isKindOfClass:NSDictionary.class] ? launchTarget[@"id"] : nil;
