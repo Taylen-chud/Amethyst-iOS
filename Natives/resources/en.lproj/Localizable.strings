@@ -197,8 +197,8 @@
 "preference.title.performance_hud" = "Show Performance HUD";
 "preference.detail.performance_hud" = "When available, show the performance monitoring overlay.";
 
-"preference.title.sodium_compat" = "Sodium Compatibility Mode";
-"preference.detail.sodium_compat" = "If you run into issues with sodium ,terrain not rendering, crashes, shaders not working, you are still on your own because sodim still isnt supported";
+"preference.title.sodium_compat" = "Sodium Compatibility";
+"preference.detail.sodium_compat" = "If you run into issues with sodium such as terrain not rendering, crashes, shaders not working, etc you are still on your own, sodium isnt supported";
 
 "preference.title.fullscreen_airplay" = "Fullscreen AirPlay";
 "preference.detail.fullscreen_airplay" = "Allows presenting fullscreen game window on the external display rather than mirroring everything on screen.";
