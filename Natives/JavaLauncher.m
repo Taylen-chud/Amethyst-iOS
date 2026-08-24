@@ -22,6 +22,24 @@
 
 extern char **environ;
 
+// Only real LWJGL binary bundled is 3.4.1 - there is no separate 3.3.x jar/dylib set.
+// This table just tells our own compat-shim code (src/lwjgl, e.g. GLFW.java) which
+// LWJGL-era quirks to emulate for a given MC version, via the "pojav.lwjglVersion"
+// system property below. It does NOT change org.lwjgl.Version.getVersion(), which
+// will always report 3.4.1 since that's the real jar being loaded.
+static NSString *reportedLwjglVersionForMCVersion(id launchTarget) {
+    static NSDictionary<NSString *, NSString *> *versionMap;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        versionMap = @{
+            @"1.20.1": @"3.3.1",
+            @"1.21.1": @"3.3.3",
+        };
+    });
+    NSString *mcVersionId = [launchTarget isKindOfClass:NSDictionary.class] ? launchTarget[@"id"] : nil;
+    return versionMap[mcVersionId] ?: @"3.4.1";
+}
+
 BOOL validateVirtualMemorySpace(size_t size) {
     size <<= 20; // convert to MB
     void *map = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -152,6 +170,8 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     NSString *gameDir;
     NSString *defaultJRETag;
     NSCAssert(launchTarget, @"Unexpected nil launchTarget");
+    NSString *reportedLwjglVersion = reportedLwjglVersionForMCVersion(launchTarget);
+    NSLog(@"[JavaLauncher] Reporting LWJGL compat version: %@ (actual bundled jar is always 3.4.1)", reportedLwjglVersion);
     if ([launchTarget isKindOfClass:NSDictionary.class]) {
         // Get preferred Java version from current profile
         int preferredJavaVersion = [PLProfiles resolveKeyForCurrentProfile:@"javaVersion"].intValue;
@@ -252,6 +272,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = "-Xms128M";
     margv[++margc] = [NSString stringWithFormat:@"-Xmx%dM", allocmem].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Djava.library.path=%@/Frameworks", NSBundle.mainBundle.bundlePath].UTF8String;
+    margv[++margc] = [NSString stringWithFormat:@"-Dpojav.lwjglVersion=%@", reportedLwjglVersion].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.dir=%@", gameDir].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.home=%s", getenv("POJAV_HOME")].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.timezone=%@", NSTimeZone.localTimeZone.name].UTF8String;
