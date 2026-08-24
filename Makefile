@@ -365,6 +365,27 @@ dep_mobilegl:
 	cp $(WORKINGDIR)/mobilegl/libMobileGL.dylib $(WORKINGDIR)/libMobileGL.dylib
 	echo '[Amethyst v$(VERSION)] dep_mobilegl - end'
 
+dep_libcxx_shim:
+	echo '[Amethyst v$(VERSION)] dep_libcxx_shim - start'
+	if [ ! -f "$(LIBCXX_SHIM_SOURCE)" ]; then \
+		echo 'libcxx_hash_shim.cpp not found: $(LIBCXX_SHIM_SOURCE)'; \
+		exit 1; \
+	fi
+	mkdir -p $(WORKINGDIR)
+	clang++ \
+		-arch arm64 \
+		-isysroot "$(SDKPATH)" \
+		-mios-version-min=14.0 \
+		-stdlib=libc++ \
+		-dynamiclib \
+		-O2 \
+		-install_name @rpath/libcxx_hash_shim.dylib \
+		-o $(WORKINGDIR)/libcxx_hash_shim.dylib \
+		$(LIBCXX_SHIM_SOURCE)
+	echo '[Amethyst v$(VERSION)] dep_libcxx_shim - end'
+
+assets:
+
 assets:
 	echo '[Amethyst v$(VERSION)] assets - start'
 	if [ '$(IOS)' = '0' ] && [ '$(DETECTPLAT)' = 'Darwin' ]; then \
