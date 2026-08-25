@@ -22,18 +22,11 @@
 
 extern char **environ;
 
-// Only real LWJGL binary bundled is 3.4.1 - there is no separate 3.3.x jar/dylib set.
-// This table just tells our own compat-shim code (src/lwjgl, e.g. GLFW.java) which
-// LWJGL-era quirks to emulate for a given MC version, via the "pojav.lwjglVersion"
-// system property below. It does NOT change org.lwjgl.Version.getVersion(), which
-// will always report 3.4.1 since that's the real jar being loaded.
-//
-// Mapping verified against Mojang's actual version manifests (piston-meta), i.e.
-// this is the real LWJGL version vanilla Minecraft ships for each release:
+// LWJGL stuff
 //   1.19    - 1.20.1  -> 3.3.1
 //   1.20.2  - 1.20.6  -> 3.3.2
 //   1.21    - 1.21.11 -> 3.3.3
-//   26.1+ (new year-based numbering) and anything unlisted -> 3.4.1
+//   26.1+  -> 3.4.1
 static NSString *reportedLwjglVersionForMCVersion(id launchTarget) {
     static NSDictionary<NSString *, NSString *> *versionMap;
     static dispatch_once_t onceToken;
