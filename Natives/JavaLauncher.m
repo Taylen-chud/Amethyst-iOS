@@ -22,33 +22,21 @@
 
 extern char **environ;
 
-// LWJGL stuff
-//   1.19    - 1.20.1  -> 3.3.1
-//   1.20.2  - 1.20.6  -> 3.3.2
-//   1.21    - 1.21.11 -> 3.3.3
-//   26.1+  -> 3.4.1
 static NSString *reportedLwjglVersionForMCVersion(id launchTarget) {
-    static NSDictionary<NSString *, NSString *> *versionMap;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        versionMap = @{
-            // LWJGL 3.3.1
-            @"1.19": @"3.3.1", @"1.19.1": @"3.3.1", @"1.19.2": @"3.3.1",
-            @"1.19.3": @"3.3.1", @"1.19.4": @"3.3.1",
-            @"1.20": @"3.3.1", @"1.20.1": @"3.3.1",
-            // LWJGL 3.3.2
-            @"1.20.2": @"3.3.2", @"1.20.3": @"3.3.2", @"1.20.4": @"3.3.2",
-            @"1.20.5": @"3.3.2", @"1.20.6": @"3.3.2",
-            // LWJGL 3.3.3
-            @"1.21": @"3.3.3", @"1.21.1": @"3.3.3", @"1.21.2": @"3.3.3",
-            @"1.21.3": @"3.3.3", @"1.21.4": @"3.3.3", @"1.21.5": @"3.3.3",
-            @"1.21.6": @"3.3.3", @"1.21.7": @"3.3.3", @"1.21.8": @"3.3.3",
-            @"1.21.9": @"3.3.3", @"1.21.10": @"3.3.3", @"1.21.11": @"3.3.3",
-        };
-    });
-    NSString *mcVersionId = [launchTarget isKindOfClass:NSDictionary.class] ? launchTarget[@"id"] : nil;
-    return versionMap[mcVersionId] ?: @"3.4.1";
+    NSString *mc = [launchTarget isKindOfClass:NSDictionary.class] ? launchTarget[@"id"] : nil;
+    if (!mc) return @"3.4.1";
+
+    // real bumps mojang shipped (checked against piston-meta), not a guess
+    if ([mc hasPrefix:@"1.19"] || [mc isEqualToString:@"1.20"] || [mc isEqualToString:@"1.20.1"])
+        return @"3.3.1";
+    if ([mc hasPrefix:@"1.20."]) // .2 through .6
+        return @"3.3.2";
+    if ([mc hasPrefix:@"1.21"])
+        return @"3.3.3";
+
+    return @"3.4.1"; // 26.x and anything newer
 }
+
 
 BOOL validateVirtualMemorySpace(size_t size) {
     size <<= 20; // convert to MB
@@ -181,7 +169,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     NSString *defaultJRETag;
     NSCAssert(launchTarget, @"Unexpected nil launchTarget");
     NSString *reportedLwjglVersion = reportedLwjglVersionForMCVersion(launchTarget);
-    NSLog(@"[JavaLauncher] Reporting LWJGL compat version: %@ (actual bundled jar is always 3.4.1)", reportedLwjglVersion);
     if ([launchTarget isKindOfClass:NSDictionary.class]) {
         // Get preferred Java version from current profile
         int preferredJavaVersion = [PLProfiles resolveKeyForCurrentProfile:@"javaVersion"].intValue;
