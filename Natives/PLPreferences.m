@@ -26,7 +26,7 @@
             @"silence_other_audio": @NO,
             @"silence_with_switch": @NO,
             @"allow_microphone": @NO,
-            @"sodium_compat": @NO
+            @"lwjgl_version": @"3.4.1"
         }.mutableCopy,
         @"control": @{
             @"default_ctrl": @"default.json",

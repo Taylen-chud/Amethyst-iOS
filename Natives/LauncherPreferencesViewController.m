@@ -16,6 +16,7 @@
 
 @interface LauncherPreferencesViewController()
 @property(nonatomic) NSArray<NSString*> *rendererKeys, *rendererList;
+@property(nonatomic) NSArray<NSString*> *lwjglVersionKeys, *lwjglVersionList;
 @end
 
 @implementation LauncherPreferencesViewController
@@ -48,6 +49,8 @@
 
     self.rendererKeys = getRendererKeys(NO);
     self.rendererList = getRendererNames(NO);
+    self.lwjglVersionKeys = @[@"3.4.1", @"3.3.3"];
+    self.lwjglVersionList = @[@"3.4.1", @"3.3.3"];
     
     BOOL(^whenNotInGame)() = ^BOOL(){
         return self.navigationController != nil;
@@ -164,11 +167,13 @@
               @"pickKeys": self.rendererKeys,
               @"pickList": self.rendererList
             },
-            @{@"key": @"sodium_compat",
+            @{@"key": @"lwjgl_version",
               @"hasDetail": @YES,
-              @"icon": @"leaf",
-              @"type": self.typeSwitch,
-              @"enableCondition": whenNotInGame
+              @"icon": @"shippingbox",
+              @"type": self.typePickField,
+              @"enableCondition": whenNotInGame,
+              @"pickKeys": self.lwjglVersionKeys,
+              @"pickList": self.lwjglVersionList
             },
             @{@"key": @"resolution",
               @"hasDetail": @YES,
