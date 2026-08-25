@@ -80,7 +80,9 @@ int pojavInitOpenGL() {
 void pojavSetWindowHint(int hint, int value) {
     if (hint == GLFW_CLIENT_API) {
         clientAPI = value;
-    } else if (strcmp(getenv("POJAV_RENDERER"), "auto")==0 && hint == GLFW_CONTEXT_VERSION_MAJOR) {
+    } else if (hint == GLFW_CONTEXT_VERSION_MAJOR) {
+        const char *renderer = getenv("POJAV_RENDERER");
+        if (renderer && strcmp(renderer, "auto") == 0) {
         switch (value) {
             case 1:
             case 2:
@@ -92,6 +94,7 @@ void pojavSetWindowHint(int hint, int value) {
                 setenv("POJAV_RENDERER", RENDERER_NAME_MOBILEGLUES, 1);
                 JNI_LWJGL_changeRenderer(RENDERER_NAME_MOBILEGLUES);
                 break;
+        }
         }
     }
 }
