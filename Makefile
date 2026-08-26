@@ -429,7 +429,7 @@ dep_libcxx_shim:
 		$(LIBCXX_SHIM_SOURCE)
 	echo '[Amethyst v$(VERSION)] dep_libcxx_shim - end'
 
-	dep_mobilegl:
+dep_mobilegl:
 	echo '[Amethyst v$(VERSION)] dep_mobilegl - start'
 	if [ ! -d "$(MOBILEGL_SOURCE_DIR)" ]; then \
 		echo 'MobileGL source directory not found: $(MOBILEGL_SOURCE_DIR)'; \
@@ -496,6 +496,8 @@ payload: native dep_mg dep_mobilegl java jre assets
 	cp -R $(SOURCEDIR)/Natives/resources/* $(WORKINGDIR)/AngelAuraAmethyst.app/ || exit 1
 	cp $(WORKINGDIR)/*.dylib $(WORKINGDIR)/AngelAuraAmethyst.app/Frameworks/ || exit 1
 	cp -R $(SOURCEDIR)/JavaApp/libs/others/* $(WORKINGDIR)/AngelAuraAmethyst.app/libs/ || exit 1
+	cp -R $(SOURCEDIR)/JavaApp/libs/lwjgl-3.4.1 $(WORKINGDIR)/AngelAuraAmethyst.app/libs/ || exit 1
+	cp -R $(SOURCEDIR)/JavaApp/libs/lwjgl-3.3.3 $(WORKINGDIR)/AngelAuraAmethyst.app/libs/ || exit 1
 	cp $(SOURCEDIR)/JavaApp/build/*.jar $(WORKINGDIR)/AngelAuraAmethyst.app/libs/ || exit 1
 	mkdir -p $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl-3.3.3 $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl-3.4.1
 	mv $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl-3.3.3.jar $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl-3.3.3/lwjgl.jar || exit 1
