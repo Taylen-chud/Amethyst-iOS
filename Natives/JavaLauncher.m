@@ -22,41 +22,6 @@
 
 extern char **environ;
 
-// Only real LWJGL binary bundled is 3.4.1 - there is no separate 3.3.x jar/dylib set.
-// This table just tells our own compat-shim code (src/lwjgl, e.g. GLFW.java) which
-// LWJGL-era quirks to emulate for a given MC version, via the "pojav.lwjglVersion"
-// system property below. It does NOT change org.lwjgl.Version.getVersion(), which
-// will always report 3.4.1 since that's the real jar being loaded.
-//
-// Mapping verified against Mojang's actual version manifests (piston-meta), i.e.
-// this is the real LWJGL version vanilla Minecraft ships for each release:
-//   1.19    - 1.20.1  -> 3.3.1
-//   1.20.2  - 1.20.6  -> 3.3.2
-//   1.21    - 1.21.11 -> 3.3.3
-//   26.1+ (new year-based numbering) and anything unlisted -> 3.4.1
-static NSString *reportedLwjglVersionForMCVersion(id launchTarget) {
-    static NSDictionary<NSString *, NSString *> *versionMap;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        versionMap = @{
-            // LWJGL 3.3.1
-            @"1.19": @"3.3.1", @"1.19.1": @"3.3.1", @"1.19.2": @"3.3.1",
-            @"1.19.3": @"3.3.1", @"1.19.4": @"3.3.1",
-            @"1.20": @"3.3.1", @"1.20.1": @"3.3.1",
-            // LWJGL 3.3.2
-            @"1.20.2": @"3.3.2", @"1.20.3": @"3.3.2", @"1.20.4": @"3.3.2",
-            @"1.20.5": @"3.3.2", @"1.20.6": @"3.3.2",
-            // LWJGL 3.3.3
-            @"1.21": @"3.3.3", @"1.21.1": @"3.3.3", @"1.21.2": @"3.3.3",
-            @"1.21.3": @"3.3.3", @"1.21.4": @"3.3.3", @"1.21.5": @"3.3.3",
-            @"1.21.6": @"3.3.3", @"1.21.7": @"3.3.3", @"1.21.8": @"3.3.3",
-            @"1.21.9": @"3.3.3", @"1.21.10": @"3.3.3", @"1.21.11": @"3.3.3",
-        };
-    });
-    NSString *mcVersionId = [launchTarget isKindOfClass:NSDictionary.class] ? launchTarget[@"id"] : nil;
-    return versionMap[mcVersionId] ?: @"3.4.1";
-}
-
 BOOL validateVirtualMemorySpace(size_t size) {
     size <<= 20; // convert to MB
     void *map = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -186,9 +151,8 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     BOOL launchJar = NO;
     NSString *gameDir;
     NSString *defaultJRETag;
+    NSString *lwjglFolder = @"lwjgl-3.3.3";
     NSCAssert(launchTarget, @"Unexpected nil launchTarget");
-    NSString *reportedLwjglVersion = reportedLwjglVersionForMCVersion(launchTarget);
-    NSLog(@"[JavaLauncher] Reporting LWJGL compat version: %@ (actual bundled jar is always 3.4.1)", reportedLwjglVersion);
     if ([launchTarget isKindOfClass:NSDictionary.class]) {
         // Get preferred Java version from current profile
         int preferredJavaVersion = [PLProfiles resolveKeyForCurrentProfile:@"javaVersion"].intValue;
@@ -205,6 +169,36 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         } else {
             defaultJRETag = @"1_17_newer";
         }
+
+         // Determine LWJGL version based on explicitly recorded lwjglVersion or fallback rules
+        NSString *lwjglVersionStr = launchTarget[@"lwjglVersion"];
+        if ([lwjglVersionStr isKindOfClass:NSString.class] && lwjglVersionStr.length > 0) {
+            NSArray<NSString *> *lwjglVersion = [lwjglVersionStr componentsSeparatedByString:@"."];
+            int lwjglMajor = lwjglVersion.count > 0 ? [lwjglVersion[0] intValue] : 0;
+            int lwjglMinor = lwjglVersion.count > 1 ? [lwjglVersion[1] intValue] : 0;
+            if (lwjglMajor > 3 || (lwjglMajor == 3 && lwjglMinor >= 4)) {
+                lwjglFolder = @"lwjgl-3.4.1";
+            } else {
+                lwjglFolder = @"lwjgl-3.3.3";
+            }
+        } else {
+            // Fallback: Parse Minecraft version ID cleanly (e.g. "1.21.11" or "26.1")
+            NSString *versionId = launchTarget[@"id"];
+            lwjglFolder = @"lwjgl-3.3.3"; // Default safety net for 1.x versions
+            
+            if ([versionId isKindOfClass:NSString.class]) {
+                NSArray<NSString *> *components = [versionId componentsSeparatedByString:@"."];
+                if (components.count > 0) {
+                    int major = [components[0] intValue];
+                    // If major version is >= 26 force 3.4.1
+                    if (major >= 26) {
+                        lwjglFolder = @"lwjgl-3.4.1";
+                    }
+                }
+            }
+        }
+        NSLog(@"[JavaLauncher] Using LWJGL from %@", lwjglFolder);
+
 
         // Setup POJAV_RENDERER
         NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
