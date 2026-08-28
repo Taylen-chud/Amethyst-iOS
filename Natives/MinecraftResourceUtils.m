@@ -84,6 +84,7 @@
            // Record actual LWJGL version for JavaLauncher.m to select the correct folder.
            // Avoids guessing from the unreliable Minecraft version ID.
             json[@"lwjglVersion"] = versionStr;
+        }
         if ([library[@"name"] hasPrefix:@"net.java.dev.jna:jna:"]) {
             // Special handling for LabyMod 1.8.9 and Forge 1.12.2(?)
             // we have libjnidispatch 5.13.0 in Frameworks directory
