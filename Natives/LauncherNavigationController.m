@@ -25,6 +25,11 @@
 
 static void *ProgressObserverContext = &ProgressObserverContext;
 
+// NEW: shared brand accent, was previously duplicated inline in two places below
+static inline UIColor *AmethystAccentColor(void) {
+    return [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:1.0];
+}
+
 @interface LauncherNavigationController () <UIDocumentPickerDelegate, UIPickerViewDataSource, PLPickerViewDelegate, UIPopoverPresentationControllerDelegate> {
 }
 
@@ -67,6 +72,15 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     self.versionTextField.leftViewMode = UITextFieldViewModeAlways;
     self.versionTextField.rightViewMode = UITextFieldViewModeAlways;
     self.versionTextField.textAlignment = NSTextAlignmentCenter;
+    // NEW: capsule-style field so the version picker reads as one tappable control
+    // instead of bare text sitting on the toolbar. Skipped on Liquid Glass, which
+    // already renders its own system material behind the field.
+    self.versionTextField.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
+    if (!hasLiquidGlass) {
+        self.versionTextField.backgroundColor = UIColor.tertiarySystemFillColor;
+        self.versionTextField.layer.cornerRadius = self.versionTextField.frame.size.height / 2;
+        self.versionTextField.layer.masksToBounds = YES;
+    }
 
     self.versionPickerView = [[PLPickerView alloc] init];
     self.versionPickerView.delegate = self;
@@ -87,7 +101,8 @@ static void *ProgressObserverContext = &ProgressObserverContext;
                                                                  action:@selector(performInstallOrShowDetails:)];
         self.buttonInstallItem.enabled = NO;
         dispatch_async(dispatch_get_main_queue(), ^{
-            self.buttonInstallItem.buttonGlassView.backgroundColor = [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:0.5];
+            // NEW: stronger tint so the "Play" label stays legible over the glass material
+            self.buttonInstallItem.buttonGlassView.backgroundColor = [AmethystAccentColor() colorWithAlphaComponent:0.85];
         });
         [textFieldContainer addSubview:self.versionTextField];
         UIBarButtonItem *textFieldItem = [[UIBarButtonItem alloc] initWithCustomView:textFieldContainer];
@@ -100,9 +115,10 @@ static void *ProgressObserverContext = &ProgressObserverContext;
         setButtonPointerInteraction(self.buttonInstall);
         [self.buttonInstall setTitle:localize(@"Play", nil) forState:UIControlStateNormal];
         self.buttonInstall.autoresizingMask = AUTORESIZE_MASKS;
-        self.buttonInstall.backgroundColor = [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:1.0];
-        self.buttonInstall.layer.cornerRadius = 5;
+        self.buttonInstall.backgroundColor = AmethystAccentColor();
         self.buttonInstall.frame = CGRectMake(self.toolbar.frame.size.width * 0.8, 4, self.toolbar.frame.size.width * 0.2, self.toolbar.frame.size.height - 8);
+        self.buttonInstall.layer.cornerRadius = self.buttonInstall.frame.size.height / 2; // NEW: full capsule instead of a slight 5pt rounding
+        self.buttonInstall.titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold]; // NEW
         self.buttonInstall.tintColor = UIColor.whiteColor;
         self.buttonInstall.enabled = NO;
         [self.buttonInstall addTarget:self action:@selector(performInstallOrShowDetails:) forControlEvents:UIControlEventPrimaryActionTriggered];
@@ -117,6 +133,7 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     self.progressText.adjustsFontSizeToFitWidth = YES;
     self.progressText.autoresizingMask = AUTORESIZE_MASKS;
     self.progressText.font = [self.progressText.font fontWithSize:16];
+    self.progressText.textColor = UIColor.secondaryLabelColor; // NEW: de-emphasize status text vs. the version field
     self.progressText.textAlignment = NSTextAlignmentCenter;
     self.progressText.userInteractionEnabled = NO;
     

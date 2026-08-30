@@ -17,6 +17,11 @@
 
 #include <dlfcn.h>
 
+// NEW: shared brand accent, matches the Play button purple used elsewhere in the app
+static inline UIColor *AmethystAccentColor(void) {
+    return [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:1.0];
+}
+
 @implementation LauncherMenuCustomItem
 
 + (LauncherMenuCustomItem *)title:(NSString *)title imageName:(NSString *)imageName action:(id)action {
@@ -114,6 +119,11 @@
     }
     
     self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    // NEW: taller rows + breathing room above/below the list, and a brand-accented
+    // navigation bar so the sidebar reads as one cohesive, modern surface
+    self.tableView.rowHeight = 52;
+    self.tableView.contentInset = UIEdgeInsetsMake(8, 0, 8, 0);
+    self.view.tintColor = AmethystAccentColor();
     
     self.navigationController.toolbarHidden = NO;
     UIActivityIndicatorViewStyle indicatorStyle = UIActivityIndicatorViewStyleMedium;
@@ -200,6 +210,7 @@
     }
 
     cell.textLabel.text = [self.options[indexPath.row] title];
+    cell.textLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightMedium]; // NEW: clearer label weight
     
     UIImage *origImage = [UIImage systemImageNamed:[self.options[indexPath.row]
         performSelector:@selector(imageName)]];
@@ -210,6 +221,7 @@
             [origImage drawInRect:CGRectMake(20 - origImage.size.width*scaleFactor/2, 0, origImage.size.width*scaleFactor, 40)];
         }];
         cell.imageView.image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+        cell.imageView.tintColor = AmethystAccentColor(); // NEW: brand-accented sidebar icons
     }
     
     if (cell.imageView.image == nil) {
@@ -220,6 +232,18 @@
         cell.imageView.image = [cell.imageView.image _imageWithSize:CGSizeMake(40, 40)];
     }
     return cell;
+}
+
+// NEW: rounded "pill" selection highlight instead of the default edge-to-edge fill,
+// matching the inset, card-like selection style used across modern iOS sidebars
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    UIView *selectedBackground = [[UIView alloc] initWithFrame:CGRectInset(cell.bounds, 12, 4)];
+    selectedBackground.backgroundColor = [AmethystAccentColor() colorWithAlphaComponent:0.16];
+    selectedBackground.layer.cornerRadius = 12;
+    selectedBackground.layer.cornerCurve = kCACornerCurveContinuous;
+    selectedBackground.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    cell.selectedBackgroundView = selectedBackground;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath

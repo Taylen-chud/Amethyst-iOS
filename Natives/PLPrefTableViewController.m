@@ -11,6 +11,11 @@
 #import "ios_uikit_bridge.h"
 #import "utils.h"
 
+// NEW: shared brand accent, matches the Play button purple used elsewhere in the app
+static inline UIColor *AmethystAccentColor(void) {
+    return [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:1.0];
+}
+
 @interface PLPrefTableViewController()<UIContextMenuInteractionDelegate>{}
 @property(nonatomic) UIMenu* currentMenu;
 @property(nonatomic) UIBarButtonItem *helpBtn;
@@ -31,6 +36,11 @@
 
     self.tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStyleInsetGrouped];
     self.tableView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
+    // NEW: roomier rows + a single accent color so switches, buttons, disclosure
+    // chevrons and icons all read as one consistent, on-brand hierarchy
+    self.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedRowHeight = 56;
+    self.view.tintColor = AmethystAccentColor();
     if (self.prefSections) {
         self.prefSectionsVisibility = [[NSMutableArray<NSNumber *> alloc] initWithCapacity:self.prefSections.count];
         for (int i = 0; i < self.prefSections.count; i++) {
@@ -140,7 +150,11 @@
     // Set general properties
     BOOL destructive = [item[@"destructive"] boolValue];
     cell.imageView.tintColor = destructive ? UIColor.systemRedColor : nil;
-    cell.imageView.image = [UIImage systemImageNamed:item[@"icon"]];
+    // NEW: normalize every SF Symbol to the same weight/size so the leading icon
+    // column lines up cleanly regardless of which symbol a given row uses
+    UIImage *icon = [UIImage systemImageNamed:item[@"icon"]];
+    cell.imageView.image = [icon imageByApplyingSymbolConfiguration:
+        [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageSymbolWeightMedium]];
     
     if (cellStyle != UITableViewCellStyleValue1) {
         cell.detailTextLabel.text = nil;
@@ -221,6 +235,7 @@
             [view setOn:[weakSelf.getPreference(section, key) isEqualToString:customSwitchValue[1]] animated:NO];
         }
         [view addTarget:weakSelf action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
+        view.onTintColor = AmethystAccentColor(); // NEW: brand accent instead of default green
         cell.accessoryView = view;
     };
 }

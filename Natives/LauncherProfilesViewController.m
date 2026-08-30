@@ -18,6 +18,11 @@
 #import "ios_uikit_bridge.h"
 #import "utils.h"
 
+// NEW: shared brand accent, matches the Play button purple used elsewhere in the app
+static inline UIColor *AmethystAccentColor(void) {
+    return [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:1.0];
+}
+
 typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
     kInstances,
     kProfiles
@@ -82,6 +87,11 @@ typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
 
     self.tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStyleInsetGrouped];
     self.tableView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
+    // NEW: roomier rows for the larger profile artwork, plus a brand-accented tint
+    // so the "+" button, switch and chevrons match the rest of the app
+    self.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedRowHeight = 64;
+    self.view.tintColor = AmethystAccentColor();
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -154,8 +164,13 @@ typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
 
 - (void)setupInstanceCell:(UITableViewCell *) cell atRow:(NSInteger)row {
     cell.userInteractionEnabled = !getenv("DEMO_LOCK");
+    // NEW: consistent symbol weight + brand tint for the instance icons
+    UIImageSymbolConfiguration *iconConfig = [UIImageSymbolConfiguration configurationWithPointSize:18 weight:UIImageSymbolWeightMedium];
+    cell.imageView.tintColor = AmethystAccentColor();
+    cell.textLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightMedium];
+    cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
     if (row == 0) {
-        cell.imageView.image = [UIImage systemImageNamed:@"folder"];
+        cell.imageView.image = [[UIImage systemImageNamed:@"folder"] imageByApplyingSymbolConfiguration:iconConfig];
         cell.textLabel.text = localize(@"preference.title.game_directory", nil);
         cell.detailTextLabel.text = getenv("DEMO_LOCK") ? @".demo" : getPrefObject(@"general.game_directory");
     } else {
@@ -165,12 +180,13 @@ typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
         } else {
             imageName = @"folder.badge.gear";
         }
-        cell.imageView.image = [UIImage systemImageNamed:imageName];
+        cell.imageView.image = [[UIImage systemImageNamed:imageName] imageByApplyingSymbolConfiguration:iconConfig];
         cell.textLabel.text = localize(@"profile.title.separate_preference", nil);
         cell.detailTextLabel.text = localize(@"profile.detail.separate_preference", nil);
         UISwitch *view = [UISwitch new];
         [view setOn:getPrefBool(@"internal.isolated") animated:NO];
         [view addTarget:self action:@selector(actionTogglePrefIsolation:) forControlEvents:UIControlEventValueChanged];
+        view.onTintColor = AmethystAccentColor(); // NEW: brand accent instead of default green
         cell.accessoryView = view;
     }
 }
@@ -179,8 +195,14 @@ typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
     NSMutableDictionary *profile = PLProfiles.current.profiles.allValues[row];
 
     cell.textLabel.text = profile[@"name"];
+    cell.textLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold]; // NEW: profile name stands out as the primary label
     cell.detailTextLabel.text = profile[@"lastVersionId"];
+    cell.detailTextLabel.textColor = UIColor.secondaryLabelColor; // NEW
     cell.imageView.layer.magnificationFilter = kCAFilterNearest;
+    // NEW: soft rounded corners on the profile artwork instead of a hard square,
+    // matching the rounded-icon language used across the rest of iOS
+    cell.imageView.layer.cornerRadius = 8;
+    cell.imageView.layer.masksToBounds = YES;
 
     UIImage *fallbackImage = [[UIImage imageNamed:@"DefaultProfile"] _imageWithSize:CGSizeMake(40, 40)];
     [cell.imageView setImageWithURL:[NSURL URLWithString:profile[@"icon"]] placeholderImage:fallbackImage];
