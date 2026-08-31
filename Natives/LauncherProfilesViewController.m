@@ -18,11 +18,6 @@
 #import "ios_uikit_bridge.h"
 #import "utils.h"
 
-// NEW: shared brand accent, matches the Play button purple used elsewhere in the app
-static inline UIColor *AmethystAccentColor(void) {
-    return [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:1.0];
-}
-
 typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
     kInstances,
     kProfiles
@@ -92,6 +87,17 @@ typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 64;
     self.view.tintColor = AmethystAccentColor();
+    // NEW: re-theme this screen immediately after an accent color change elsewhere
+    [NSNotificationCenter.defaultCenter addObserver:self
+        selector:@selector(amethystAccentColorChanged)
+        name:AmethystAccentColorDidChangeNotification
+        object:nil];
+}
+
+// NEW
+- (void)amethystAccentColorChanged {
+    self.view.tintColor = AmethystAccentColor();
+    [self.tableView reloadData];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -164,13 +170,14 @@ typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
 
 - (void)setupInstanceCell:(UITableViewCell *) cell atRow:(NSInteger)row {
     cell.userInteractionEnabled = !getenv("DEMO_LOCK");
-    // NEW: consistent symbol weight + brand tint for the instance icons
-    UIImageSymbolConfiguration *iconConfig = [UIImageSymbolConfiguration configurationWithPointSize:18 weight:UIImageSymbolWeightMedium];
+    // NEW: same colored rounded-square icon badges used in Settings, for a
+    // consistent look between this screen and the main preferences screen
     cell.imageView.tintColor = AmethystAccentColor();
     cell.textLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightMedium];
     cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
     if (row == 0) {
-        cell.imageView.image = [[UIImage systemImageNamed:@"folder"] imageByApplyingSymbolConfiguration:iconConfig];
+        cell.imageView.image = AmethystBadgeIconImage(@"folder", AmethystAccentColor())
+            ?: [UIImage systemImageNamed:@"folder"];
         cell.textLabel.text = localize(@"preference.title.game_directory", nil);
         cell.detailTextLabel.text = getenv("DEMO_LOCK") ? @".demo" : getPrefObject(@"general.game_directory");
     } else {
@@ -180,7 +187,8 @@ typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
         } else {
             imageName = @"folder.badge.gear";
         }
-        cell.imageView.image = [[UIImage systemImageNamed:imageName] imageByApplyingSymbolConfiguration:iconConfig];
+        cell.imageView.image = AmethystBadgeIconImage(imageName, AmethystAccentColor())
+            ?: [UIImage systemImageNamed:imageName];
         cell.textLabel.text = localize(@"profile.title.separate_preference", nil);
         cell.detailTextLabel.text = localize(@"profile.detail.separate_preference", nil);
         UISwitch *view = [UISwitch new];

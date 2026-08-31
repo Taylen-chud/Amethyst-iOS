@@ -11,11 +11,6 @@
 #import "ios_uikit_bridge.h"
 #import "utils.h"
 
-// NEW: shared brand accent, matches the Play button purple used elsewhere in the app
-static inline UIColor *AmethystAccentColor(void) {
-    return [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:1.0];
-}
-
 @interface PLPrefTableViewController()<UIContextMenuInteractionDelegate>{}
 @property(nonatomic) UIMenu* currentMenu;
 @property(nonatomic) UIBarButtonItem *helpBtn;
@@ -41,6 +36,12 @@ static inline UIColor *AmethystAccentColor(void) {
     self.tableView.rowHeight = UITableViewAutomaticDimension;
     self.tableView.estimatedRowHeight = 56;
     self.view.tintColor = AmethystAccentColor();
+    // NEW: live-refresh this screen the instant the user picks a new accent color
+    // elsewhere (e.g. from the same "Accent Color" row below), no restart needed
+    [NSNotificationCenter.defaultCenter addObserver:self
+        selector:@selector(amethystAccentColorChanged)
+        name:AmethystAccentColorDidChangeNotification
+        object:nil];
     if (self.prefSections) {
         self.prefSectionsVisibility = [[NSMutableArray<NSNumber *> alloc] initWithCapacity:self.prefSections.count];
         for (int i = 0; i < self.prefSections.count; i++) {
@@ -57,6 +58,12 @@ static inline UIColor *AmethystAccentColor(void) {
         self.helpBtn = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"questionmark.circle"] style:UIBarButtonItemStyleDone target:self action:@selector(toggleDetailVisibility)];
     }
     return self.helpBtn;
+}
+
+// NEW: re-apply the tint and re-render icon badges/switches after an accent color change
+- (void)amethystAccentColorChanged {
+    self.view.tintColor = AmethystAccentColor();
+    [self.tableView reloadData];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -149,12 +156,14 @@ static inline UIColor *AmethystAccentColor(void) {
 
     // Set general properties
     BOOL destructive = [item[@"destructive"] boolValue];
-    cell.imageView.tintColor = destructive ? UIColor.systemRedColor : nil;
-    // NEW: normalize every SF Symbol to the same weight/size so the leading icon
-    // column lines up cleanly regardless of which symbol a given row uses
-    UIImage *icon = [UIImage systemImageNamed:item[@"icon"]];
-    cell.imageView.image = [icon imageByApplyingSymbolConfiguration:
-        [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageSymbolWeightMedium]];
+    UIColor *iconColor = destructive ? UIColor.systemRedColor : AmethystAccentColor();
+    // NEW: modern "Settings app" style icon badges (colored rounded square + white
+    // glyph) instead of a bare tinted glyph. Falls back to a plain tinted symbol
+    // if a given icon name doesn't resolve to a real SF Symbol.
+    UIImage *badge = AmethystBadgeIconImage(item[@"icon"], iconColor);
+    cell.imageView.tintColor = iconColor;
+    cell.imageView.image = badge ?: [[UIImage systemImageNamed:item[@"icon"]]
+        imageByApplyingSymbolConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageSymbolWeightMedium]];
     
     if (cellStyle != UITableViewCellStyleValue1) {
         cell.detailTextLabel.text = nil;
@@ -238,6 +247,18 @@ static inline UIColor *AmethystAccentColor(void) {
         view.onTintColor = AmethystAccentColor(); // NEW: brand accent instead of default green
         cell.accessoryView = view;
     };
+
+    // NEW: a native color-picker row. Unlike the other types this doesn't read/write
+    // through getPreference/setPreference, since the accent color is a single
+    // app-wide value rather than something namespaced per section/key — it's
+    // backed directly by AmethystAccentColor()/AmethystSetAccentColor() instead.
+    self.typeColor = ^void(UITableViewCell *cell, NSString *section, NSString *key, NSDictionary *item) {
+        UIColorWell *view = [[UIColorWell alloc] init];
+        view.supportsAlpha = NO;
+        view.selectedColor = AmethystAccentColor();
+        [view addTarget:weakSelf action:@selector(colorChanged:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = view;
+    };
 }
 
 - (void)showAlertOnView:(UIView *)view title:(NSString *)title message:(NSString *)message {
@@ -300,6 +321,14 @@ static inline UIColor *AmethystAccentColor(void) {
     if ([item[@"requestReload"] boolValue]) {
         // TODO: only reload needed rows
         [self.tableView reloadData];
+    }
+}
+
+// NEW: persists the picked color and broadcasts it so every other visible
+// screen (sidebar, profiles, the Play button, etc.) re-themes immediately
+- (void)colorChanged:(UIColorWell *)sender {
+    if (sender.selectedColor) {
+        AmethystSetAccentColor(sender.selectedColor);
     }
 }
 

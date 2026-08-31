@@ -6,7 +6,7 @@ typedef void (^SetPreferenceBlock)(NSString *, NSString *, id);
 
 @interface PLPrefTableViewController : UITableViewController<UITextFieldDelegate>
 
-@property(nonatomic) CreateView typeButton, typeChildPane, typePickField, typeTextField, typeSlider, typeSwitch;
+@property(nonatomic) CreateView typeButton, typeChildPane, typePickField, typeTextField, typeSlider, typeSwitch, typeColor;
 
 @property(nonatomic) GetPreferenceBlock getPreference;
 @property(nonatomic) SetPreferenceBlock setPreference;

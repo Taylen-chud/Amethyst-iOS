@@ -107,6 +107,14 @@
               @"type": self.typeSwitch,
               @"enableCondition": whenNotInGame
             },
+            @{@"key": @"accent_color",
+              @"hasDetail": @YES,
+              @"icon": @"paintpalette",
+              @"type": self.typeColor,
+              @"enableCondition": ^BOOL(){
+                  return realUIIdiom != UIUserInterfaceIdiomTV;
+              }
+            },
             @{@"key": @"reset_warnings",
               @"icon": @"exclamationmark.triangle",
               @"type": self.typeButton,

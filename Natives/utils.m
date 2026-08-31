@@ -8,6 +8,7 @@
 #include <dirent.h>
 
 #include "utils.h"
+#import "LauncherPreferences.h"
 
 CFTypeRef SecTaskCopyValueForEntitlement(void* task, NSString* entitlement, CFErrorRef  _Nullable *error);
 void* SecTaskCreateFromSelf(CFAllocatorRef allocator);
@@ -275,4 +276,66 @@ JITFlags DeviceGetJITFlags(BOOL refresh) {
 }
 BOOL DeviceHasJITFlags(JITFlags flags) {
     return (DeviceGetJITFlags(NO) & flags) == flags;
+}
+
+#pragma mark - NEW: Amethyst theming (user-selectable accent color)
+
+NSNotificationName const AmethystAccentColorDidChangeNotification = @"AmethystAccentColorDidChangeNotification";
+
+// The purple this app has always shipped with; used whenever no custom color
+// has been picked yet, and as a safety net if the stored value is malformed.
+static UIColor *AmethystDefaultAccentColor(void) {
+    return [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:1.0];
+}
+
+UIColor* AmethystColorFromHexString(NSString *hex) {
+    if (![hex isKindOfClass:NSString.class] || hex.length < 6) {
+        return nil;
+    }
+    NSString *cleaned = [hex stringByReplacingOccurrencesOfString:@"#" withString:@""];
+    unsigned int rgb = 0;
+    if (![[NSScanner scannerWithString:cleaned] scanHexInt:&rgb]) {
+        return nil;
+    }
+    return [UIColor colorWithRed:((rgb >> 16) & 0xFF) / 255.0
+                            green:((rgb >> 8) & 0xFF) / 255.0
+                             blue:(rgb & 0xFF) / 255.0
+                            alpha:1.0];
+}
+
+NSString* AmethystHexStringFromColor(UIColor *color) {
+    CGFloat r = 0, g = 0, b = 0, a = 0;
+    [color getRed:&r green:&g blue:&b alpha:&a];
+    return [NSString stringWithFormat:@"#%02lX%02lX%02lX",
+        lroundf(r * 255), lroundf(g * 255), lroundf(b * 255)];
+}
+
+UIColor* AmethystAccentColor(void) {
+    return AmethystColorFromHexString(getPrefObject(@"general.accent_color")) ?: AmethystDefaultAccentColor();
+}
+
+void AmethystSetAccentColor(UIColor *color) {
+    setPrefObject(@"general.accent_color", AmethystHexStringFromColor(color));
+    [NSNotificationCenter.defaultCenter postNotificationName:AmethystAccentColorDidChangeNotification object:nil];
+}
+
+UIImage* AmethystBadgeIconImage(NSString *systemName, UIColor *tintColor) {
+    UIImage *symbol = [UIImage systemImageNamed:systemName
+        withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:15 weight:UIImageSymbolWeightSemibold]];
+    if (!symbol) {
+        return nil;
+    }
+    const CGFloat side = 29;
+    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
+    format.opaque = NO;
+    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(side, side) format:format];
+    return [renderer imageWithActions:^(UIGraphicsImageRendererContext * _Nonnull context) {
+        [tintColor setFill];
+        [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, side, side) cornerRadius:8] fill];
+
+        UIImage *whiteSymbol = [symbol imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal];
+        CGSize glyphSize = whiteSymbol.size;
+        CGRect glyphRect = CGRectMake((side - glyphSize.width) / 2, (side - glyphSize.height) / 2, glyphSize.width, glyphSize.height);
+        [whiteSymbol drawInRect:glyphRect];
+    }];
 }

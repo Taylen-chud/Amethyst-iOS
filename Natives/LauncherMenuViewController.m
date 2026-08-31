@@ -17,11 +17,6 @@
 
 #include <dlfcn.h>
 
-// NEW: shared brand accent, matches the Play button purple used elsewhere in the app
-static inline UIColor *AmethystAccentColor(void) {
-    return [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:1.0];
-}
-
 @implementation LauncherMenuCustomItem
 
 + (LauncherMenuCustomItem *)title:(NSString *)title imageName:(NSString *)imageName action:(id)action {
@@ -124,6 +119,12 @@ static inline UIColor *AmethystAccentColor(void) {
     self.tableView.rowHeight = 52;
     self.tableView.contentInset = UIEdgeInsetsMake(8, 0, 8, 0);
     self.view.tintColor = AmethystAccentColor();
+    // NEW: re-theme this screen immediately if the accent color is changed
+    // in Settings while the sidebar is still visible
+    [NSNotificationCenter.defaultCenter addObserver:self
+        selector:@selector(amethystAccentColorChanged)
+        name:AmethystAccentColorDidChangeNotification
+        object:nil];
     
     self.navigationController.toolbarHidden = NO;
     UIActivityIndicatorViewStyle indicatorStyle = UIActivityIndicatorViewStyleMedium;
@@ -197,6 +198,12 @@ static inline UIColor *AmethystAccentColor(void) {
     [self.tableView selectRowAtIndexPath:indexPath animated:NO scrollPosition:UITableViewScrollPositionNone];
 }
 
+// NEW: re-theme this screen immediately after an accent color change
+- (void)amethystAccentColorChanged {
+    self.view.tintColor = AmethystAccentColor();
+    [self.tableView reloadData];
+}
+
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     return self.options.count;
@@ -215,13 +222,20 @@ static inline UIColor *AmethystAccentColor(void) {
     UIImage *origImage = [UIImage systemImageNamed:[self.options[indexPath.row]
         performSelector:@selector(imageName)]];
     if (origImage) {
-        UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(40, 40)];
-        UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext*_Nonnull myContext) {
-            CGFloat scaleFactor = 40/origImage.size.height;
-            [origImage drawInRect:CGRectMake(20 - origImage.size.width*scaleFactor/2, 0, origImage.size.width*scaleFactor, 40)];
-        }];
-        cell.imageView.image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-        cell.imageView.tintColor = AmethystAccentColor(); // NEW: brand-accented sidebar icons
+        // NEW: same colored rounded-square badge style used in Settings, so SF Symbol
+        // rows (e.g. "Send your logs") match the app's icon language everywhere else
+        UIImage *badge = AmethystBadgeIconImage([self.options[indexPath.row] performSelector:@selector(imageName)], AmethystAccentColor());
+        if (badge) {
+            cell.imageView.image = badge;
+        } else {
+            UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(40, 40)];
+            UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext*_Nonnull myContext) {
+                CGFloat scaleFactor = 40/origImage.size.height;
+                [origImage drawInRect:CGRectMake(20 - origImage.size.width*scaleFactor/2, 0, origImage.size.width*scaleFactor, 40)];
+            }];
+            cell.imageView.image = [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+            cell.imageView.tintColor = AmethystAccentColor();
+        }
     }
     
     if (cell.imageView.image == nil) {

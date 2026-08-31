@@ -75,7 +75,8 @@
         NSDictionary *general = @{
             @"game_directory": @"default",
             @"hidden_sidebar": @(realUIIdiom == UIUserInterfaceIdiomPhone),
-            @"appicon": @"AppIcon-Light"
+            @"appicon": @"AppIcon-Light",
+            @"accent_color": @"#7938A2" // NEW: user-pickable app-wide accent color (see Amethyst*AccentColor in utils.m)
         };
         [defaults[@"general"] addEntriesFromDictionary:general];
 

@@ -100,6 +100,20 @@ NSMutableDictionary* parseJSONFromFile(NSString *path);
 NSError* saveJSONToFile(NSDictionary *dict, NSString *path);
 void customNSLog(const char *file, int lineNumber, const char *functionName, NSString *format, ...);
 
+// NEW: app-wide accent color. Persisted to preferences and shared by every
+// screen so the whole UI can be re-themed from one place (Settings > General).
+// Posts AmethystAccentColorDidChangeNotification whenever it's changed so
+// already-visible view controllers can refresh without needing a restart.
+extern NSNotificationName const AmethystAccentColorDidChangeNotification;
+UIColor* AmethystAccentColor(void);
+void AmethystSetAccentColor(UIColor *color);
+UIColor* AmethystColorFromHexString(NSString *hex);
+NSString* AmethystHexStringFromColor(UIColor *color);
+// Renders a small rounded-square "badge" icon (colored background + white glyph),
+// similar to the icons used throughout iOS Settings. Returns nil if systemName
+// doesn't resolve to a valid SF Symbol, so callers should keep a plain fallback.
+UIImage* AmethystBadgeIconImage(NSString *systemName, UIColor *tintColor);
+
 static inline CGFloat clamp(CGFloat x, CGFloat lower, CGFloat upper) {
     return fmin(upper, fmax(x, lower));
 }

@@ -25,11 +25,6 @@
 
 static void *ProgressObserverContext = &ProgressObserverContext;
 
-// NEW: shared brand accent, was previously duplicated inline in two places below
-static inline UIColor *AmethystAccentColor(void) {
-    return [UIColor colorWithRed:121/255.0 green:56/255.0 blue:162/255.0 alpha:1.0];
-}
-
 @interface LauncherNavigationController () <UIDocumentPickerDelegate, UIPickerViewDataSource, PLPickerViewDelegate, UIPopoverPresentationControllerDelegate> {
 }
 
@@ -49,6 +44,13 @@ static inline UIColor *AmethystAccentColor(void) {
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+
+    // NEW: re-color the Play button (and anything else on this persistent bar)
+    // immediately if the user picks a new accent color from Settings
+    [NSNotificationCenter.defaultCenter addObserver:self
+        selector:@selector(amethystAccentColorChanged)
+        name:AmethystAccentColorDidChangeNotification
+        object:nil];
 
     if ([self respondsToSelector:@selector(setNeedsUpdateOfScreenEdgesDeferringSystemGestures)]) {
         [self setNeedsUpdateOfScreenEdgesDeferringSystemGestures];
@@ -162,6 +164,14 @@ static inline UIColor *AmethystAccentColor(void) {
             }
         };
         [BaseAuthenticator.current refreshTokenWithCallback:callback];
+    }
+}
+
+// NEW
+- (void)amethystAccentColorChanged {
+    self.buttonInstall.backgroundColor = AmethystAccentColor();
+    if (self.buttonInstallItem.buttonGlassView) {
+        self.buttonInstallItem.buttonGlassView.backgroundColor = [AmethystAccentColor() colorWithAlphaComponent:0.85];
     }
 }
 
