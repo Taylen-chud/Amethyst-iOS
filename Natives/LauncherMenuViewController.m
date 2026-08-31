@@ -17,6 +17,35 @@
 
 #include <dlfcn.h>
 
+// NEW: UITableViewCell resets `selectedBackgroundView`'s frame to fill the whole
+// cell on every layout pass, so setting an inset frame in willDisplayCell: alone
+// gets silently overwritten right after (this is what caused the previous
+// edge-to-edge, square-cornered highlight instead of an inset rounded pill).
+// Re-applying the inset in -layoutSubviews, after calling super, keeps it stable.
+@interface AmethystSidebarCell : UITableViewCell
+@end
+
+@implementation AmethystSidebarCell
+
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
+    self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
+    if (self) {
+        UIView *selectedBackground = [UIView new];
+        selectedBackground.layer.cornerRadius = 12;
+        selectedBackground.layer.cornerCurve = kCACornerCurveContinuous;
+        self.selectedBackgroundView = selectedBackground;
+    }
+    return self;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    self.selectedBackgroundView.frame = CGRectInset(self.bounds, 12, 4);
+    self.selectedBackgroundView.backgroundColor = [AmethystAccentColor() colorWithAlphaComponent:0.16];
+}
+
+@end
+
 @implementation LauncherMenuCustomItem
 
 + (LauncherMenuCustomItem *)title:(NSString *)title imageName:(NSString *)imageName action:(id)action {
@@ -199,9 +228,13 @@
 }
 
 // NEW: re-theme this screen immediately after an accent color change
+// (deferred a runloop turn — see the fuller explanation in
+// PLPrefTableViewController's amethystAccentColorChanged)
 - (void)amethystAccentColorChanged {
-    self.view.tintColor = AmethystAccentColor();
-    [self.tableView reloadData];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.view.tintColor = AmethystAccentColor();
+        [self.tableView reloadData];
+    });
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
@@ -211,9 +244,9 @@
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"cell"];
+    AmethystSidebarCell *cell = [tableView dequeueReusableCellWithIdentifier:@"cell"];
     if (cell == nil) {
-        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"cell"];
+        cell = [[AmethystSidebarCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"cell"];
     }
 
     cell.textLabel.text = [self.options[indexPath.row] title];
@@ -249,16 +282,9 @@
 }
 
 // NEW: rounded "pill" selection highlight instead of the default edge-to-edge fill,
-// matching the inset, card-like selection style used across modern iOS sidebars
-- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
-{
-    UIView *selectedBackground = [[UIView alloc] initWithFrame:CGRectInset(cell.bounds, 12, 4)];
-    selectedBackground.backgroundColor = [AmethystAccentColor() colorWithAlphaComponent:0.16];
-    selectedBackground.layer.cornerRadius = 12;
-    selectedBackground.layer.cornerCurve = kCACornerCurveContinuous;
-    selectedBackground.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    cell.selectedBackgroundView = selectedBackground;
-}
+// matching the inset, card-like selection style used across modern iOS sidebars.
+// (Actual geometry lives in AmethystSidebarCell.layoutSubviews above — see its
+// comment for why this can't just be done here in willDisplayCell:.)
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {

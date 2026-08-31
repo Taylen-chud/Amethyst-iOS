@@ -95,9 +95,13 @@ typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
 }
 
 // NEW
+// NEW (deferred a runloop turn — see the fuller explanation in
+// PLPrefTableViewController's amethystAccentColorChanged)
 - (void)amethystAccentColorChanged {
-    self.view.tintColor = AmethystAccentColor();
-    [self.tableView reloadData];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.view.tintColor = AmethystAccentColor();
+        [self.tableView reloadData];
+    });
 }
 
 - (void)viewWillAppear:(BOOL)animated {

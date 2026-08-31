@@ -60,10 +60,16 @@
     return self.helpBtn;
 }
 
-// NEW: re-apply the tint and re-render icon badges/switches after an accent color change
+// NEW: re-apply the tint and re-render icon badges/switches after an accent color change.
+// Deferred to the next runloop turn: reloading synchronously inside the same
+// UIControlEventValueChanged that the color well itself fires interrupts its
+// own system dismiss animation, making the color swatch appear to fly off and
+// land in the wrong place instead of smoothly returning into its row.
 - (void)amethystAccentColorChanged {
-    self.view.tintColor = AmethystAccentColor();
-    [self.tableView reloadData];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.view.tintColor = AmethystAccentColor();
+        [self.tableView reloadData];
+    });
 }
 
 - (void)viewWillAppear:(BOOL)animated {
