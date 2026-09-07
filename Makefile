@@ -311,19 +311,27 @@ dep_mg:
 	echo '[Amethyst v$(VERSION)] dep_mg - start'
 	mkdir -p $(WORKINGDIR)/mobileglues
 	cd $(WORKINGDIR)/mobileglues && cmake \
-		-DMACOS="1" \
-		-DCMAKE_CROSSCOMPILING=true \
-		-DCMAKE_SYSTEM_NAME=Darwin \
-		-DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-		-DCMAKE_OSX_SYSROOT="$(SDKPATH)" \
-		-DCMAKE_OSX_ARCHITECTURES=arm64 \
-		-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
-		-DCMAKE_C_FLAGS="-arch arm64" \
-		$(SOURCEDIR)/Natives/external/MobileGlues/src/main/cpp/
+	-DMACOS="1" \
+	-DCMAKE_CROSSCOMPILING=true \
+	-DCMAKE_SYSTEM_NAME=Darwin \
+	-DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+	-DCMAKE_OSX_SYSROOT="$(SDKPATH)" \
+	-DCMAKE_OSX_ARCHITECTURES=arm64 \
+	-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+	-DCMAKE_C_FLAGS="-arch arm64" \
+	-DSPIRV_CROSS_SHARED=ON \
+	$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/
 
 	cmake --build $(WORKINGDIR)/mobileglues --config RelWithDebInfo -j$(JOBS) --target mobileglues
 	cp $(WORKINGDIR)/mobileglues/libmobileglues.dylib $(WORKINGDIR)/libmobileglues.dylib
-	cp $(SOURCEDIR)/Natives/external/MobileGlues/src/main/cpp/libraries/ios/libspirv-cross-c-shared.0.dylib $(WORKINGDIR)/libspirv-cross-c-shared.0.dylib
+
+	SPIRV_LIB="$$(find $(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/libraries -type f \( -name 'libspirv-cross-c-shared*.dylib' -o -name 'libspirv-cross-c*.dylib' \) | head -n 1)"; \
+	if [ -n "$$SPIRV_LIB" ]; then \
+		cp "$$SPIRV_LIB" $(WORKINGDIR)/libspirv-cross-c-shared.0.dylib; \
+	else \
+		echo 'Warning: SPIRV-Cross shared library not found; continuing without it.'; \
+	fi
+
 	echo '[Amethyst v$(VERSION)] dep_mg - end'
 
 dep_mobilegl:
