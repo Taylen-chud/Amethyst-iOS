@@ -249,6 +249,10 @@ void gl_make_current(gl_render_window_t* bundle) {
 
 void gl_swap_buffers() {
     if (!handle.eglSwapBuffers || !currentBundle) return;
+    // Same rationale as osm_swap_buffers: block the render loop until the app
+    // is active again so eglSwapBuffers (which can trigger Metal command buffer
+    // submission) is never called from the background.
+    pojavWaitForAppForeground();
     if (!handle.eglSwapBuffers(g_EglDisplay, currentBundle->gl.surface) && handle.eglGetError() == EGL_BAD_SURFACE) {
         NSLog(@"eglSwapBuffers error 0x%x", handle.eglGetError());
     }

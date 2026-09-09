@@ -56,6 +56,10 @@ jmethodID method_SystemClipboardDataReceived;
     //JNIEnv* dalvikJNIEnvPtr_ANDROID;
     long showingWindow;
     bool isInputReady, isCursorEntered, isUseStackQueueCall;
+    // Tracks whether the app is active/foreground. When this goes NO the
+    // render bridges block in swap (pojavWaitForAppForeground) until the app
+    // is active again, so no GPU work is ever submitted from the background.
+    bool appIsForeground;
     //int savedWidth, savedHeight;
     int windowWidth, windowHeight;
     int physicalWidth, physicalHeight;

@@ -85,6 +85,13 @@ typedef enum {
 JITFlags DeviceGetJITFlags(BOOL refresh);
 BOOL DeviceHasJITFlags(JITFlags flags);
 
+// Foreground/background gating for the render thread. Set by the main thread
+// on app lifecycle notifications; the render bridges block in swap (via
+// pojavWaitForAppForeground) while the app is not active so no GPU work is
+// ever submitted from the background.
+void pojavSetAppForeground(BOOL foreground);
+void pojavWaitForAppForeground(void);
+
 // Init functions
 void init_bypassDyldLibValidation();
 void init_hookFunctions();
