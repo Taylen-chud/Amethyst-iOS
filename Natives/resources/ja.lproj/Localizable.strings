@@ -188,6 +188,6 @@
 "preference.detail.debug_show_layout_overlap" = "透明な色ですべてのビューをオーバーレイし、重複するビューを表示します。";
 "controller_configurator.playstation.title.named_back" = "選択...";
 
-"preference.title.renderer.release.mg" = "MobileGlues";
-"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
-"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
+"preference.title.renderer.release.mg" = "モバイルグルー";
+"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - OpenGL 4.0 をエクスポートします。";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - OpenGL 4.6 をエクスポート、実験的";

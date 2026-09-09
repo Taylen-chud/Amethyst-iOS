@@ -71,5 +71,5 @@
 "controller_configurator.playstation.title.named_back" = "Сайлау";
 
 "preference.title.renderer.release.mg" = "MobileGlues";
-"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
-"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
+"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - OpenGL 4.0 экспортлый,";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Вулкан (1.17+) - OpenGL 4.6 экспортлый, ТӘPРИБӘ";

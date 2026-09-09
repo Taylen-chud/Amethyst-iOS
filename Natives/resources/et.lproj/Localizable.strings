@@ -71,6 +71,6 @@
 "preference.title.debug_hide_home_indicator" = "Peida koduindikaator";
 "preference.detail.debug_hide_home_indicator" = "See keelab koduindikaatori lukustamise. Koduindikaatori samal ajal peitmiseks ja lukustamiseks pead kasutama Guided Access'i.";
 
-"preference.title.renderer.release.mg" = "MobileGlues";
-"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
-"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
+"preference.title.renderer.release.mg" = "Mobiililiimid";
+"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) – ekspordib OpenGL 4.0,";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) – ekspordib OpenGL 4.6, EKSPERIMENTAALNE";

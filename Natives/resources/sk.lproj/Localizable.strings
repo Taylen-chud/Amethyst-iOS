@@ -51,5 +51,5 @@
 "preference.detail.allocated_memory" = "Určite, koľko pamäti bude mať Minecraft";
 
 "preference.title.renderer.release.mg" = "MobileGlues";
-"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
-"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
+"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) – exportuje OpenGL 4.0,";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exportuje OpenGL 4.6, EXPERIMENTÁLNE";

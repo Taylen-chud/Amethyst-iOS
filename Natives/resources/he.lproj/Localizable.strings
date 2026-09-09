@@ -49,5 +49,5 @@
 "preference.detail.allocated_memory" = "שולט בכמות הזיכרון הניתנת ל- Minecraft";
 
 "preference.title.renderer.release.mg" = "MobileGlues";
-"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
-"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
+"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - מייצא את OpenGL 4.0,";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - מייצא את OpenGL 4.6, ניסיוני";

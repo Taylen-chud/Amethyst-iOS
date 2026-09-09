@@ -286,5 +286,5 @@
 "controller_configurator.section.footer.controller_style" = "إظهار أسماء الأزرار المختلفة لوحدة التحكم في هذا التكوين.";
 
 "preference.title.renderer.release.mg" = "MobileGlues";
-"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
-"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
+"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - يصدر OpenGL 4.0،";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - يصدر OpenGL 4.6، التجريبي";

@@ -85,6 +85,6 @@
 "preference.detail.allocated_memory" = "Minecraft 메모리 할당 조절";
 "controller_configurator.playstation.title.named_back" = "선택";
 
-"preference.title.renderer.release.mg" = "MobileGlues";
-"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
-"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
+"preference.title.renderer.release.mg" = "모바일글루";
+"preference.title.renderer.debug.mg" = "MobileGlues(1.17+) - OpenGL 4.0 내보내기,";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan(1.17+) - OpenGL 4.6 내보내기, 실험적";

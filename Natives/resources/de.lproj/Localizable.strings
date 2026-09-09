@@ -287,5 +287,5 @@ der Minecraft-Version zu wählen. Verringerte Auflösung reduziert die Arbeitsla
 "controller_configurator.section.footer.controller_style" = "Zeige verschiedene Controller-Schaltflächennamen in diesem Konfigurator.";
 
 "preference.title.renderer.release.mg" = "MobileGlues";
-"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
-"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
+"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) – exportiert OpenGL 4.0,";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) – exportiert OpenGL 4.6, EXPERIMENTAL";

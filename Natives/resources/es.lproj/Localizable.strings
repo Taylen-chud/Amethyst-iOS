@@ -172,6 +172,6 @@
 "preference.detail.debug_auto_correction" = "Activar corrección automática al escribir texto en el juego.";
 "preference.title.debug_show_layout_bounds" = "Mostrar límites de diseño";
 
-"preference.title.renderer.release.mg" = "MobileGlues";
-"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
-"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
+"preference.title.renderer.release.mg" = "Pegamentos móviles";
+"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exporta OpenGL 4.0,";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exporta OpenGL 4.6, EXPERIMENTAL";
