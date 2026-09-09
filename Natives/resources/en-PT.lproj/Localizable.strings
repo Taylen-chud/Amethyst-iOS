@@ -18,3 +18,7 @@
 "Settings" = "Settings";
 "preference.title.cosmetica" = "Cosmetica Mantles";
 "preference.title.auto_ram" = "RAM by magic";
+
+"preference.title.renderer.release.mg" = "MobileGlues";
+"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";

@@ -186,3 +186,7 @@
 "preference.title.debug_show_layout_overlap" = "Ipakita ang layout na magkakapatong";
 "preference.detail.debug_show_layout_overlap" = "I-overlay ang bawat view gamit ang isang transparent na kulay upang ipakita ang mga magkakapatong na view.";
 "controller_configurator.playstation.title.named_back" = "Iselekta";
+
+"preference.title.renderer.release.mg" = "MobileGlues";
+"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";

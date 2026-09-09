@@ -2,3 +2,7 @@
 
 "game.title.exit_code" = "গেম কোড সহ প্রস্থান করেছে %d";
 "login.option.select" = "আ্যকাউন্ট নির্বাচন করুন";
+
+"preference.title.renderer.release.mg" = "MobileGlues";
+"preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
+"preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";

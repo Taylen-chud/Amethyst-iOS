@@ -164,12 +164,6 @@
               @"pickKeys": self.rendererKeys,
               @"pickList": self.rendererList
             },
-            @{@"key": @"sodium_compat",
-              @"hasDetail": @YES,
-              @"icon": @"leaf",
-              @"type": self.typeSwitch,
-              @"enableCondition": whenNotInGame
-            },
             @{@"key": @"resolution",
               @"hasDetail": @YES,
               @"icon": @"viewfinder",
