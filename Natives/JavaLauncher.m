@@ -88,6 +88,16 @@ void init_loadDefaultEnv() {
     // Override OpenGL version to 4.1 for Zink
     setenv("MESA_GL_VERSION_OVERRIDE", "4.1", 1);
 
+    // When the app goes to the background, Metal refuses further GPU work
+    // (kIOGPUCommandBufferCallbackErrorBackgroundExecutionNotPermitted), which
+    // MoltenVK reports as VK_ERROR_DEVICE_LOST. By default MoltenVK then marks
+    // the VkDevice as permanently lost, which Zink surfaces as a fatal
+    // "zink: DEVICE LOST!" and kills the game. Enabling this makes MoltenVK
+    // log the transient error but keep the VkDevice (and Zink) alive so the
+    // game survives backgrounding. Note: must be set before MoltenVK is
+    // dlopen'd by LWJGL, which happens later inside the JVM.
+    setenv("MVK_CONFIG_RESUME_LOST_DEVICE", "1", 1);
+
     // Runs JVM in a separate thread
     setenv("HACK_IGNORE_START_ON_FIRST_THREAD", "1", 1);
 }
