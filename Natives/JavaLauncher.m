@@ -9,6 +9,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <mach/mach.h>
+#include <mach/task.h>
+#include <mach/thread_status.h>
+#include <mach/exception_types.h>
+
+
 #include "utils.h"
 
 #import "ios_uikit_bridge.h"
@@ -99,6 +105,74 @@ void init_loadCustomJvmFlags(int* argc, const char** argv) {
     }
 }
 
+// --- LWJGL folder resolution -------------------------------------------
+// Kept at file scope: C/Objective-C forbid function definitions inside a
+// block, which is what broke the build when this was pasted inside
+// launchJVM's if-block below.
+
+static NSString * const AMLWJGLFolder333 = @"lwjgl-3.3.3";
+static NSString * const AMLWJGLFolder341 = @"lwjgl-3.4.1";
+
+// Ordered ascending by minimum version. Add new bundled builds here only —
+// single source of truth for what's actually shipped.
+static NSArray<NSArray<NSString *> *> *AMBundledLWJGLTable(void) {
+    static NSArray<NSArray<NSString *> *> *table;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        table = @[
+            @[@"3.3.3", AMLWJGLFolder333],
+            @[@"3.4.1", AMLWJGLFolder341],
+        ];
+    });
+    return table;
+}
+
+// Parses up to 3 dotted components. Non-numeric-leading components ("b1",
+// "rd-132211", "25w45a") parse their leading digits (matching -intValue),
+// but set isCleanNumeric = NO so callers can tell "really version 0" apart
+// from "this was never a modern numeric id."
+static void AMParseVersion(NSString *versionString, int *major, int *minor, int *patch, BOOL *isCleanNumeric) {
+    int m = 0, n = 0, p = 0;
+    BOOL clean = versionString.length > 0;
+    NSCharacterSet *notDigits = [NSCharacterSet characterSetWithCharactersInString:@"0123456789"].invertedSet;
+    NSArray<NSString *> *parts = [versionString componentsSeparatedByString:@"."];
+    for (NSUInteger i = 0; i < parts.count && i < 3; i++) {
+        NSString *part = parts[i];
+        int value = 0;
+        if (part.length == 0 || [part rangeOfCharacterFromSet:notDigits].location != NSNotFound) {
+            clean = NO;
+            NSScanner *scanner = [NSScanner scannerWithString:part];
+            [scanner scanInt:&value];
+        } else {
+            value = part.intValue;
+        }
+        if (i == 0) m = value; else if (i == 1) n = value; else p = value;
+    }
+    if (major) *major = m;
+    if (minor) *minor = n;
+    if (patch) *patch = p;
+    if (isCleanNumeric) *isCleanNumeric = clean;
+}
+
+// Maps a required LWJGL version to the lowest bundled folder that covers
+// it (e.g. requiring 3.4.0 correctly lands on bundled 3.4.1). Returns nil
+// when nothing bundled qualifies — notably any LWJGL 2.x requirement,
+// which isn't part of this dual-3.x-version setup.
+static NSString *AMBundledFolderForRequiredVersion(NSString *requiredVersion) {
+    int reqMajor, reqMinor, reqPatch;
+    AMParseVersion(requiredVersion, &reqMajor, &reqMinor, &reqPatch, NULL);
+    if (reqMajor < 3) return nil;
+    for (NSArray<NSString *> *entry in AMBundledLWJGLTable()) {
+        int bMajor, bMinor, bPatch;
+        AMParseVersion(entry[0], &bMajor, &bMinor, &bPatch, NULL);
+        BOOL meets = (bMajor > reqMajor) ||
+                     (bMajor == reqMajor && bMinor > reqMinor) ||
+                     (bMajor == reqMajor && bMinor == reqMinor && bPatch >= reqPatch);
+        if (meets) return entry[1];
+    }
+    return nil;
+}
+
 int launchJVM(NSString *username, id launchTarget, int width, int height, int minVersion) {
     NSLog(@"[JavaLauncher] Beginning JVM launch");
 
@@ -151,6 +225,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     BOOL launchJar = NO;
     NSString *gameDir;
     NSString *defaultJRETag;
+    NSString *lwjglFolder = @"lwjgl-3.3.3";
     NSCAssert(launchTarget, @"Unexpected nil launchTarget");
     if ([launchTarget isKindOfClass:NSDictionary.class]) {
         // Get preferred Java version from current profile
@@ -169,10 +244,56 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             defaultJRETag = @"1_17_newer";
         }
 
+
+        // Determine the bundled LWJGL folder. Prefer the ground-truth
+        // version MinecraftResourceUtils already resolved from this
+        // target's `libraries` array (tweakVersionJson scans for
+        // org.lwjgl:lwjgl:<version> there); only fall back to guessing
+        // from the version id when that's missing, and only trust the id
+        // when it's a clean modern numeric release. Snapshot ids
+        // ("25w45a"), legacy ids ("b1.7.3", "rd-132211"), and Forge/Fabric
+        // composite ids intValue to 0/garbage and must not be trusted —
+        // they're left on the lwjgl-3.3.3 default below rather than being
+        // misrouted into whichever bucket 0 happens to satisfy.
+        NSString *resolvedLWJGLFolder = nil;
+        NSString *lwjglVersionStr = launchTarget[@"lwjglVersion"];
+        if ([lwjglVersionStr isKindOfClass:NSString.class] && lwjglVersionStr.length > 0) {
+            resolvedLWJGLFolder = AMBundledFolderForRequiredVersion(lwjglVersionStr);
+        } else {
+            NSString *versionId = launchTarget[@"id"];
+            if ([versionId isKindOfClass:NSString.class]) {
+                int major;
+                BOOL isClean;
+                AMParseVersion(versionId, &major, NULL, NULL, &isClean);
+                if (isClean) {
+                    resolvedLWJGLFolder = AMBundledFolderForRequiredVersion(major >= 26 ? @"3.4.1" : @"3.3.3");
+                }
+            }
+        }
+        if (resolvedLWJGLFolder) {
+            lwjglFolder = resolvedLWJGLFolder;
+        } else {
+            NSLog(@"[JavaLauncher] Could not resolve a bundled LWJGL folder for target %@ — keeping default %@", launchTarget[@"id"], lwjglFolder);
+        }
+        NSLog(@"[JavaLauncher] Using LWJGL from %@", lwjglFolder);
+
         // Setup POJAV_RENDERER
         NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
         NSLog(@"[JavaLauncher] RENDERER is set to %@\n", renderer);
         setenv("POJAV_RENDERER", renderer.UTF8String, 1);
+        if (isMobileGLRenderer(renderer.UTF8String)) {
+    setenv("MOBILEGL_BACKEND_TYPE", "DirectVulkan", 1);
+    
+    const char *pojavHome = getenv("POJAV_HOME");
+    if (pojavHome && *pojavHome) {
+        NSString *mobileGLLogPath = [NSString stringWithFormat:@"%s/mobilegl.log", pojavHome];
+        setenv("MOBILEGL_LOG_FILE_PATH", mobileGLLogPath.UTF8String, 1);
+    }
+} else {
+    unsetenv("MOBILEGL_BACKEND_TYPE");
+    unsetenv("MOBILEGL_LOG_FILE_PATH");
+}
+
         // Setup gameDir
         gameDir = [NSString stringWithFormat:@"%s/instances/%@/%@",
             getenv("POJAV_HOME"), getPrefObject(@"general.game_directory"),
@@ -239,6 +360,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = "-Xms128M";
     margv[++margc] = [NSString stringWithFormat:@"-Xmx%dM", allocmem].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Djava.library.path=%@/Frameworks", NSBundle.mainBundle.bundlePath].UTF8String;
+    margv[++margc] = [NSString stringWithFormat:@"-Dpojav.lwjglVersion=%@", lwjglFolder].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.dir=%@", gameDir].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.home=%s", getenv("POJAV_HOME")].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.timezone=%@", NSTimeZone.localTimeZone.name].UTF8String;
@@ -398,6 +520,41 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
 
     // Free split VC
     tmpRootVC = nil;
+    
+    // for sodium compat
+    BOOL sodiumCompatEnabled = getPrefBool(@"video.sodium_compat");
+    char *savedRendererEnv = NULL;
+    if (sodiumCompatEnabled) {
+        const char *currentRendererEnv = getenv("POJAV_RENDERER");
+        if (currentRendererEnv) {
+            savedRendererEnv = strdup(currentRendererEnv);
+        }
+        unsetenv("POJAV_RENDERER");
+        NSLog(@"[Init] Sodium compatibility mode: hiding POJAV_RENDERER for JLI_Launch");
+    }
+
+    jint jliResult = pJLI_Launch(++margc, margv,
+                   0, NULL, // sizeof(const_jargs) / sizeof(char *), const_jargs,
+                   0, NULL, // sizeof(const_appclasspath) / sizeof(char *), const_appclasspath,
+                   // These values are ignored in Java 17, so keep it anyways
+                   "1.8.0-internal",
+                   "1.8",
+
+                   "java", "openjdk",
+                   /* (const_jargs != NULL) ? JNI_TRUE : */ JNI_FALSE,
+                   JNI_TRUE, JNI_FALSE, JNI_TRUE);
+
+    if (sodiumCompatEnabled) {
+        if (savedRendererEnv) {
+            setenv("POJAV_RENDERER", savedRendererEnv, 1);
+            free(savedRendererEnv);
+        } else {
+            unsetenv("POJAV_RENDERER");
+        }
+        NSLog(@"[Init] Sodium compatibility mode: restored POJAV_RENDERER after JLI_Launch");
+    }
+
+    return jliResult;
 
     return pJLI_Launch(++margc, margv,
                    0, NULL, // sizeof(const_jargs) / sizeof(char *), const_jargs,

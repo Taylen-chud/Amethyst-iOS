@@ -387,6 +387,9 @@ static GameSurfaceView* pojavWindow;
     if ((windowHeight % 2) != 0) {
         --windowHeight;
     }
+    if ([self.surfaceView.layer isKindOfClass:CAMetalLayer.class]) {
+        ((CAMetalLayer *)self.surfaceView.layer).drawableSize = CGSizeMake(MAX(windowWidth, 1), MAX(windowHeight, 1));
+    }
     CallbackBridge_nativeSendScreenSize(windowWidth, windowHeight);
 }
 

@@ -19,7 +19,7 @@ jobs:
           - platform: 2
             platform_name: ios
     
-    runs-on: J316sAP
+    runs-on: macos-latest
     steps:
       - name: Remove work folders
         run: |
@@ -34,7 +34,23 @@ jobs:
         uses: actions/checkout@main
 
       - name: Checkout repository submodules
-        run: git submodule update --init --recursive
+        env:
+          GIT_LFS_SKIP_SMUDGE: 1
+        run: |
+          git lfs install --skip-smudge
+          git config --global filter.lfs.smudge "git-lfs smudge --skip -- %f"
+          git config --global filter.lfs.process "git-lfs filter-process --skip"
+
+          git submodule sync --recursive
+          git submodule update --init --recursive
+
+      - name: Setup Xcode Version
+        uses: maxim-lobanov/setup-xcode@master
+        with:
+          xcode-version: '26.5'
+
+      - name: Install Dependencies
+        run: brew install make ldid temurin@8
 
       - name: Get gl4es latest commit hash
         id: gl4es-sha

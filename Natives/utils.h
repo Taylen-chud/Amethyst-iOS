@@ -37,7 +37,13 @@
 #define RENDERER_NAME_GL4ES "libgl4es_114.dylib"
 #define RENDERER_NAME_MTL_ANGLE "libtinygl4angle.dylib"
 #define RENDERER_NAME_MOBILEGLUES "libmobileglues.dylib"
+#define RENDERER_NAME_MOBILEGL "libMobileGL.dylib"
 #define RENDERER_NAME_VK_ZINK "libOSMesa.8.dylib"
+
+static inline bool isMobileGLRenderer(const char *renderer)
+{
+    return renderer && !strcmp(renderer, RENDERER_NAME_MOBILEGL);
+}
 
 #define SPECIALBTN_KEYBOARD -1
 #define SPECIALBTN_TOGGLECTRL -2
