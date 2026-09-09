@@ -105,6 +105,74 @@ void init_loadCustomJvmFlags(int* argc, const char** argv) {
     }
 }
 
+// --- LWJGL folder resolution -------------------------------------------
+// Kept at file scope: C/Objective-C forbid function definitions inside a
+// block, which is what broke the build when this was pasted inside
+// launchJVM's if-block below.
+
+static NSString * const AMLWJGLFolder333 = @"lwjgl-3.3.3";
+static NSString * const AMLWJGLFolder341 = @"lwjgl-3.4.1";
+
+// Ordered ascending by minimum version. Add new bundled builds here only —
+// single source of truth for what's actually shipped.
+static NSArray<NSArray<NSString *> *> *AMBundledLWJGLTable(void) {
+    static NSArray<NSArray<NSString *> *> *table;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        table = @[
+            @[@"3.3.3", AMLWJGLFolder333],
+            @[@"3.4.1", AMLWJGLFolder341],
+        ];
+    });
+    return table;
+}
+
+// Parses up to 3 dotted components. Non-numeric-leading components ("b1",
+// "rd-132211", "25w45a") parse their leading digits (matching -intValue),
+// but set isCleanNumeric = NO so callers can tell "really version 0" apart
+// from "this was never a modern numeric id."
+static void AMParseVersion(NSString *versionString, int *major, int *minor, int *patch, BOOL *isCleanNumeric) {
+    int m = 0, n = 0, p = 0;
+    BOOL clean = versionString.length > 0;
+    NSCharacterSet *notDigits = [NSCharacterSet characterSetWithCharactersInString:@"0123456789"].invertedSet;
+    NSArray<NSString *> *parts = [versionString componentsSeparatedByString:@"."];
+    for (NSUInteger i = 0; i < parts.count && i < 3; i++) {
+        NSString *part = parts[i];
+        int value = 0;
+        if (part.length == 0 || [part rangeOfCharacterFromSet:notDigits].location != NSNotFound) {
+            clean = NO;
+            NSScanner *scanner = [NSScanner scannerWithString:part];
+            [scanner scanInt:&value];
+        } else {
+            value = part.intValue;
+        }
+        if (i == 0) m = value; else if (i == 1) n = value; else p = value;
+    }
+    if (major) *major = m;
+    if (minor) *minor = n;
+    if (patch) *patch = p;
+    if (isCleanNumeric) *isCleanNumeric = clean;
+}
+
+// Maps a required LWJGL version to the lowest bundled folder that covers
+// it (e.g. requiring 3.4.0 correctly lands on bundled 3.4.1). Returns nil
+// when nothing bundled qualifies — notably any LWJGL 2.x requirement,
+// which isn't part of this dual-3.x-version setup.
+static NSString *AMBundledFolderForRequiredVersion(NSString *requiredVersion) {
+    int reqMajor, reqMinor, reqPatch;
+    AMParseVersion(requiredVersion, &reqMajor, &reqMinor, &reqPatch, NULL);
+    if (reqMajor < 3) return nil;
+    for (NSArray<NSString *> *entry in AMBundledLWJGLTable()) {
+        int bMajor, bMinor, bPatch;
+        AMParseVersion(entry[0], &bMajor, &bMinor, &bPatch, NULL);
+        BOOL meets = (bMajor > reqMajor) ||
+                     (bMajor == reqMajor && bMinor > reqMinor) ||
+                     (bMajor == reqMajor && bMinor == reqMinor && bPatch >= reqPatch);
+        if (meets) return entry[1];
+    }
+    return nil;
+}
+
 int launchJVM(NSString *username, id launchTarget, int width, int height, int minVersion) {
     NSLog(@"[JavaLauncher] Beginning JVM launch");
 
@@ -176,182 +244,38 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             defaultJRETag = @"1_17_newer";
         }
 
-static NSString * const AMLWJGLResolverErrorDomain = @"AMLWJGLResolver";
-static NSString * const AMLWJGLFolder333 = @"lwjgl-3.3.3";
-static NSString * const AMLWJGLFolder341 = @"lwjgl-3.4.1";
 
-// Ordered ascending by minimum version. Add new bundled builds here only —
-// single source of truth for what's actually shipped.
-static NSArray<NSArray<NSString *> *> *AMBundledLWJGLTable(void) {
-    static NSArray<NSArray<NSString *> *> *table;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        table = @[
-            @[@"3.3.3", AMLWJGLFolder333],
-            @[@"3.4.1", AMLWJGLFolder341],
-        ];
-    });
-    return table;
-}
-
-// Parses up to 3 dotted components. Non-numeric-leading components ("b1",
-// "rd-132211", "25w45a") parse their leading digits (matching -intValue),
-// but set isCleanNumeric = NO so callers can tell "really version 0" apart
-// from "this was never a modern numeric id."
-static void AMParseVersion(NSString *versionString, int *major, int *minor, int *patch, BOOL *isCleanNumeric) {
-    int m = 0, n = 0, p = 0;
-    BOOL clean = versionString.length > 0;
-    NSCharacterSet *notDigits = [NSCharacterSet characterSetWithCharactersInString:@"0123456789"].invertedSet;
-    NSArray<NSString *> *parts = [versionString componentsSeparatedByString:@"."];
-    for (NSUInteger i = 0; i < parts.count && i < 3; i++) {
-        NSString *part = parts[i];
-        int value = 0;
-        if (part.length == 0 || [part rangeOfCharacterFromSet:notDigits].location != NSNotFound) {
-            clean = NO;
-            NSScanner *scanner = [NSScanner scannerWithString:part];
-            [scanner scanInt:&value]; // best-effort leading-digit extraction
-        } else {
-            value = part.intValue;
-        }
-        if (i == 0) m = value; else if (i == 1) n = value; else p = value;
-    }
-    if (major) *major = m;
-    if (minor) *minor = n;
-    if (patch) *patch = p;
-    if (isCleanNumeric) *isCleanNumeric = clean;
-}
-
-// Ground truth: pulls the resolved org.lwjgl:lwjgl artifact version out of
-// an already-merged (inheritsFrom-resolved) `libraries` array. This is what
-// Mojang/Fabric/Forge actually say is needed — it does not always move in
-// lockstep with the Minecraft version number.
-static NSString *AMResolvedLWJGLVersion(NSArray<NSDictionary *> *libraries) {
-    for (NSDictionary *lib in libraries) {
-        NSString *name = lib[@"name"];
-        if (![name isKindOfClass:NSString.class]) continue;
-        NSArray<NSString *> *parts = [name componentsSeparatedByString:@":"];
-        if (parts.count >= 3 && [parts[0] isEqualToString:@"org.lwjgl"] && [parts[1] isEqualToString:@"lwjgl"]) {
-            return parts[2];
-        }
-    }
-    return nil;
-}
-
-// Maps a required LWJGL version to the lowest bundled folder that satisfies
-// it. Returns nil + error rather than guessing when nothing qualifies.
-static NSString *AMBundledFolderForRequiredVersion(NSString *requiredVersion, NSError **error) {
-    int reqMajor, reqMinor, reqPatch;
-    AMParseVersion(requiredVersion, &reqMajor, &reqMinor, &reqPatch, NULL);
-
-    if (reqMajor < 3) {
-        if (error) {
-            *error = [NSError errorWithDomain:AMLWJGLResolverErrorDomain code:1 userInfo:@{
-                NSLocalizedDescriptionKey: [NSString stringWithFormat:
-                    @"Requires LWJGL %@ — the bundled dual-version setup only ships 3.x.", requiredVersion]
-            }];
-        }
-        return nil;
-    }
-
-    for (NSArray<NSString *> *entry in AMBundledLWJGLTable()) {
-        int bMajor, bMinor, bPatch;
-        AMParseVersion(entry[0], &bMajor, &bMinor, &bPatch, NULL);
-        BOOL meets = (bMajor > reqMajor) ||
-                     (bMajor == reqMajor && bMinor > reqMinor) ||
-                     (bMajor == reqMajor && bMinor == reqMinor && bPatch >= reqPatch);
-        if (meets) return entry[1];
-    }
-
-    if (error) {
-        *error = [NSError errorWithDomain:AMLWJGLResolverErrorDomain code:2 userInfo:@{
-            NSLocalizedDescriptionKey: [NSString stringWithFormat:
-                @"Requires LWJGL %@ or newer — nothing bundled satisfies it yet.", requiredVersion]
-        }];
-    }
-    return nil;
-}
-
-// Confirms the folder actually exists before we ever hand it to the native
-// loader. On iOS natives are pre-signed and shipped with the app — there's
-// no "just fetch it now" fallback, so a stale/missing folder needs to fail
-// here, not inside dlopen.
-static BOOL AMLWJGLFolderExists(NSString *folder, NSString *lwjglRootPath) {
-    NSString *fullPath = [lwjglRootPath stringByAppendingPathComponent:folder];
-    BOOL isDir = NO;
-    return [NSFileManager.defaultManager fileExistsAtPath:fullPath isDirectory:&isDir] && isDir;
-}
-
-- (nullable NSString *)lwjglFolderForLaunchTarget:(NSDictionary *)launchTarget
-                                 resolvedLibraries:(nullable NSArray<NSDictionary *> *)resolvedLibraries
-                               userVersionOverride:(nullable NSString *)userVersionOverride
-                                     lwjglRootPath:(NSString *)lwjglRootPath
-                                             error:(NSError **)error {
-    NSString *requiredVersion = nil;
-
-    // 1. Explicit override (Settings > Video > LWJGL version) wins outright.
-    if ([userVersionOverride isKindOfClass:NSString.class] && userVersionOverride.length > 0) {
-        requiredVersion = userVersionOverride;
-    }
-    // 2. Ground truth from the resolved libraries list, if the caller has one.
-    else if (resolvedLibraries.count > 0) {
-        requiredVersion = AMResolvedLWJGLVersion(resolvedLibraries);
-    }
-
-    // 3. Amethyst's normalized manifest field, if (1) and (2) came up empty.
-    if (!requiredVersion) {
+        // Determine the bundled LWJGL folder. Prefer the ground-truth
+        // version MinecraftResourceUtils already resolved from this
+        // target's `libraries` array (tweakVersionJson scans for
+        // org.lwjgl:lwjgl:<version> there); only fall back to guessing
+        // from the version id when that's missing, and only trust the id
+        // when it's a clean modern numeric release. Snapshot ids
+        // ("25w45a"), legacy ids ("b1.7.3", "rd-132211"), and Forge/Fabric
+        // composite ids intValue to 0/garbage and must not be trusted —
+        // they're left on the lwjgl-3.3.3 default below rather than being
+        // misrouted into whichever bucket 0 happens to satisfy.
+        NSString *resolvedLWJGLFolder = nil;
         NSString *lwjglVersionStr = launchTarget[@"lwjglVersion"];
         if ([lwjglVersionStr isKindOfClass:NSString.class] && lwjglVersionStr.length > 0) {
-            requiredVersion = lwjglVersionStr;
-        }
-    }
-
-    // 4. Last resort: guess from the id, but only when it's a clean modern
-    // numeric release. Snapshots, legacy ids, and composite modloader ids
-    // are refused rather than misrouted.
-    if (!requiredVersion) {
-        NSString *versionId = launchTarget[@"id"];
-        if ([versionId isKindOfClass:NSString.class]) {
-            int major; BOOL isClean;
-            AMParseVersion(versionId, &major, NULL, NULL, &isClean);
-            if (isClean) {
-                requiredVersion = (major >= 26) ? @"3.4.1" : @"3.3.3";
+            resolvedLWJGLFolder = AMBundledFolderForRequiredVersion(lwjglVersionStr);
+        } else {
+            NSString *versionId = launchTarget[@"id"];
+            if ([versionId isKindOfClass:NSString.class]) {
+                int major;
+                BOOL isClean;
+                AMParseVersion(versionId, &major, NULL, NULL, &isClean);
+                if (isClean) {
+                    resolvedLWJGLFolder = AMBundledFolderForRequiredVersion(major >= 26 ? @"3.4.1" : @"3.3.3");
+                }
             }
         }
-    }
-
-    if (!requiredVersion) {
-        if (error) {
-            *error = [NSError errorWithDomain:AMLWJGLResolverErrorDomain code:3 userInfo:@{
-                NSLocalizedDescriptionKey: @"Can't determine an LWJGL requirement for this profile — "
-                    @"no resolved libraries, no lwjglVersion field, and the id isn't a clean modern release."
-            }];
+        if (resolvedLWJGLFolder) {
+            lwjglFolder = resolvedLWJGLFolder;
+        } else {
+            NSLog(@"[JavaLauncher] Could not resolve a bundled LWJGL folder for target %@ — keeping default %@", launchTarget[@"id"], lwjglFolder);
         }
-        NSLog(@"[JavaLauncher] Could not resolve LWJGL requirement for target: %@", launchTarget[@"id"]);
-        return nil;
-    }
-
-    NSError *bundleError = nil;
-    NSString *folder = AMBundledFolderForRequiredVersion(requiredVersion, &bundleError);
-    if (!folder) {
-        if (error) *error = bundleError;
-        NSLog(@"[JavaLauncher] %@", bundleError.localizedDescription);
-        return nil;
-    }
-
-    if (!AMLWJGLFolderExists(folder, lwjglRootPath)) {
-        if (error) {
-            *error = [NSError errorWithDomain:AMLWJGLResolverErrorDomain code:4 userInfo:@{
-                NSLocalizedDescriptionKey: [NSString stringWithFormat:
-                    @"Resolved folder \"%@\" is missing at %@ — reinstall or redownload.", folder, lwjglRootPath]
-            }];
-        }
-        NSLog(@"[JavaLauncher] Resolved folder %@ missing at %@", folder, lwjglRootPath);
-        return nil;
-    }
-
-    NSLog(@"[JavaLauncher] Using LWJGL %@ from %@ (target %@)", requiredVersion, folder, launchTarget[@"id"]);
-    return folder;
-}
+        NSLog(@"[JavaLauncher] Using LWJGL from %@", lwjglFolder);
 
         // Setup POJAV_RENDERER
         NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
