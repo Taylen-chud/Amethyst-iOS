@@ -1,7 +1,6 @@
 #include <CommonCrypto/CommonDigest.h>
 
 #import "authenticator/BaseAuthenticator.h"
-#import "installer/modpack/CurseForgeManualDownloadViewController.h"
 #import "installer/modpack/ModpackAPI.h"
 #import "installer/modpack/ModpackUtils.h"
 #import "AFNetworking.h"
