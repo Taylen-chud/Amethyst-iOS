@@ -7,7 +7,31 @@
 #include <unistd.h>
 #include <dirent.h>
 
+#include <pthread.h>
+
 #include "utils.h"
+
+// Foreground/background gate. appIsForeground lives in environ.h (shared with
+// the render bridges) but all writes/waits go through these functions so the
+// render thread can block until the app is active again without a busy loop.
+static pthread_mutex_t s_foregroundMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t s_foregroundCond = PTHREAD_COND_INITIALIZER;
+
+void pojavSetAppForeground(BOOL foreground) {
+    pthread_mutex_lock(&s_foregroundMutex);
+    appIsForeground = foreground;
+    pthread_cond_broadcast(&s_foregroundCond);
+    pthread_mutex_unlock(&s_foregroundMutex);
+}
+
+void pojavWaitForAppForeground(void) {
+    pthread_mutex_lock(&s_foregroundMutex);
+    while (!appIsForeground) {
+        pthread_cond_wait(&s_foregroundCond, &s_foregroundMutex);
+    }
+    pthread_mutex_unlock(&s_foregroundMutex);
+}
+
 
 CFTypeRef SecTaskCopyValueForEntitlement(void* task, NSString* entitlement, CFErrorRef  _Nullable *error);
 void* SecTaskCreateFromSelf(CFAllocatorRef allocator);

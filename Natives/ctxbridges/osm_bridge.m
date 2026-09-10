@@ -75,6 +75,7 @@ void osm_make_current(osm_render_window_t* bundle) {
 }
 
 void osm_swap_buffers() {
+    pojavWaitForAppForeground();
     osm_apply_current_ll();
     handle.glFinish(); // this will force osmesa to write the last rendered image into the buffer
     osm_render_window_t bundle = currentBundle->osm;

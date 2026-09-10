@@ -83,6 +83,9 @@ typedef enum {
 JITFlags DeviceGetJITFlags(BOOL refresh);
 BOOL DeviceHasJITFlags(JITFlags flags);
 
+void pojavSetAppForeground(BOOL foreground);
+void pojavWaitForAppForeground(void);
+
 // Init functions
 void init_bypassDyldLibValidation();
 void init_hookFunctions();
