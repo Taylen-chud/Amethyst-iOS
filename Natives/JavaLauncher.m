@@ -55,6 +55,10 @@ void init_loadDefaultEnv() {
     // Override OpenGL version to 4.1 for Zink
     setenv("MESA_GL_VERSION_OVERRIDE", "4.1", 1);
 
+
+    setenv("MVK_CONFIG_RESUME_LOST_DEVICE"
+    , "1", 1);
+
     // Runs JVM in a separate thread
     setenv("HACK_IGNORE_START_ON_FIRST_THREAD", "1", 1);
 }
@@ -538,41 +542,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
 
     // Free split VC
     tmpRootVC = nil;
-    
-    // for sodium compat
-    BOOL sodiumCompatEnabled = getPrefBool(@"video.sodium_compat");
-    char *savedRendererEnv = NULL;
-    if (sodiumCompatEnabled) {
-        const char *currentRendererEnv = getenv("POJAV_RENDERER");
-        if (currentRendererEnv) {
-            savedRendererEnv = strdup(currentRendererEnv);
-        }
-        unsetenv("POJAV_RENDERER");
-        NSLog(@"[Init] Sodium compatibility mode: hiding POJAV_RENDERER for JLI_Launch");
-    }
-
-    jint jliResult = pJLI_Launch(++margc, margv,
-                   0, NULL, // sizeof(const_jargs) / sizeof(char *), const_jargs,
-                   0, NULL, // sizeof(const_appclasspath) / sizeof(char *), const_appclasspath,
-                   // These values are ignored in Java 17, so keep it anyways
-                   "1.8.0-internal",
-                   "1.8",
-
-                   "java", "openjdk",
-                   /* (const_jargs != NULL) ? JNI_TRUE : */ JNI_FALSE,
-                   JNI_TRUE, JNI_FALSE, JNI_TRUE);
-
-    if (sodiumCompatEnabled) {
-        if (savedRendererEnv) {
-            setenv("POJAV_RENDERER", savedRendererEnv, 1);
-            free(savedRendererEnv);
-        } else {
-            unsetenv("POJAV_RENDERER");
-        }
-        NSLog(@"[Init] Sodium compatibility mode: restored POJAV_RENDERER after JLI_Launch");
-    }
-
-    return jliResult;
 
     return pJLI_Launch(++margc, margv,
                    0, NULL, // sizeof(const_jargs) / sizeof(char *), const_jargs,
