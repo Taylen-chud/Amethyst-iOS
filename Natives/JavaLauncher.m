@@ -55,9 +55,6 @@ void init_loadDefaultEnv() {
     // Override OpenGL version to 4.1 for Zink
     setenv("MESA_GL_VERSION_OVERRIDE", "4.1", 1);
 
-  
-    setenv("MVK_CONFIG_RESUME_LOST_DEVICE", "1", 1);
-
     // Runs JVM in a separate thread
     setenv("HACK_IGNORE_START_ON_FIRST_THREAD", "1", 1);
 }
@@ -108,23 +105,21 @@ void init_loadCustomJvmFlags(int* argc, const char** argv) {
     }
 }
 
-// --- LWJGL folder resolution -------------------------------------------
-// Kept at file scope: C/Objective-C forbid function definitions inside a
-// block, which is what broke the build when this was pasted inside
-// launchJVM's if-block below.
+// LWJGL
 
 static NSString * const AMLWJGLFolder333 = @"lwjgl-3.3.3";
 static NSString * const AMLWJGLFolder341 = @"lwjgl-3.4.1";
 
-// Ordered ascending by minimum version. Add new bundled builds here only —
-// single source of truth for what's actually shipped.
+static NSString * const AMLWJGLNativeSubfolder333 = @"lwjgl33";
+static NSString * const AMLWJGLNativeSubfolder341 = @"lwjgl34";
+
 static NSArray<NSArray<NSString *> *> *AMBundledLWJGLTable(void) {
     static NSArray<NSArray<NSString *> *> *table;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         table = @[
-            @[@"3.3.3", AMLWJGLFolder333],
-            @[@"3.4.1", AMLWJGLFolder341],
+            @[@"3.3.3", AMLWJGLFolder333, AMLWJGLNativeSubfolder333],
+            @[@"3.4.1", AMLWJGLFolder341, AMLWJGLNativeSubfolder341],
         ];
     });
     return table;
@@ -172,6 +167,15 @@ static NSString *AMBundledFolderForRequiredVersion(NSString *requiredVersion) {
                      (bMajor == reqMajor && bMinor > reqMinor) ||
                      (bMajor == reqMajor && bMinor == reqMinor && bPatch >= reqPatch);
         if (meets) return entry[1];
+    }
+    return nil;
+}
+
+static NSString *AMNativeSubfolderForBundledFolder(NSString *bundledFolder) {
+    for (NSArray<NSString *> *entry in AMBundledLWJGLTable()) {
+        if ([entry[1] isEqualToString:bundledFolder]) {
+            return entry[2];
+        }
     }
     return nil;
 }
@@ -363,6 +367,17 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = "-Xms128M";
     margv[++margc] = [NSString stringWithFormat:@"-Xmx%dM", allocmem].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Djava.library.path=%@/Frameworks", NSBundle.mainBundle.bundlePath].UTF8String;
+    // LWJGL's own natives live in a version-specific subfolder (see
+    // AMBundledLWJGLTable) rather than flat under Frameworks/, since two
+    // incompatible jar sets can't share one native build. This is
+    // additive to -Djava.library.path above, not a replacement — that one
+    // still covers the renderer/MoltenVK/etc. natives that DO stay flat.
+    NSString *lwjglNativeSubfolder = AMNativeSubfolderForBundledFolder(lwjglFolder);
+    if (lwjglNativeSubfolder) {
+        margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.librarypath=%@/Frameworks/%@", NSBundle.mainBundle.bundlePath, lwjglNativeSubfolder].UTF8String;
+    } else {
+        NSLog(@"[JavaLauncher] No native subfolder mapped for %@ — LWJGL will fall back to the flat Frameworks/ search path", lwjglFolder);
+    }
     margv[++margc] = [NSString stringWithFormat:@"-Dpojav.lwjglVersion=%@", lwjglFolder].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.dir=%@", gameDir].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.home=%s", getenv("POJAV_HOME")].UTF8String;
@@ -523,6 +538,41 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
 
     // Free split VC
     tmpRootVC = nil;
+    
+    // for sodium compat
+    BOOL sodiumCompatEnabled = getPrefBool(@"video.sodium_compat");
+    char *savedRendererEnv = NULL;
+    if (sodiumCompatEnabled) {
+        const char *currentRendererEnv = getenv("POJAV_RENDERER");
+        if (currentRendererEnv) {
+            savedRendererEnv = strdup(currentRendererEnv);
+        }
+        unsetenv("POJAV_RENDERER");
+        NSLog(@"[Init] Sodium compatibility mode: hiding POJAV_RENDERER for JLI_Launch");
+    }
+
+    jint jliResult = pJLI_Launch(++margc, margv,
+                   0, NULL, // sizeof(const_jargs) / sizeof(char *), const_jargs,
+                   0, NULL, // sizeof(const_appclasspath) / sizeof(char *), const_appclasspath,
+                   // These values are ignored in Java 17, so keep it anyways
+                   "1.8.0-internal",
+                   "1.8",
+
+                   "java", "openjdk",
+                   /* (const_jargs != NULL) ? JNI_TRUE : */ JNI_FALSE,
+                   JNI_TRUE, JNI_FALSE, JNI_TRUE);
+
+    if (sodiumCompatEnabled) {
+        if (savedRendererEnv) {
+            setenv("POJAV_RENDERER", savedRendererEnv, 1);
+            free(savedRendererEnv);
+        } else {
+            unsetenv("POJAV_RENDERER");
+        }
+        NSLog(@"[Init] Sodium compatibility mode: restored POJAV_RENDERER after JLI_Launch");
+    }
+
+    return jliResult;
 
     return pJLI_Launch(++margc, margv,
                    0, NULL, // sizeof(const_jargs) / sizeof(char *), const_jargs,
