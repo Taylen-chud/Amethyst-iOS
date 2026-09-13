@@ -14,7 +14,6 @@
 #include <mach/thread_status.h>
 #include <mach/exception_types.h>
 
-
 #include "utils.h"
 
 #import "ios_uikit_bridge.h"
@@ -370,18 +369,32 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     }
     margv[++margc] = "-Xms128M";
     margv[++margc] = [NSString stringWithFormat:@"-Xmx%dM", allocmem].UTF8String;
-    margv[++margc] = [NSString stringWithFormat:@"-Djava.library.path=%@/Frameworks", NSBundle.mainBundle.bundlePath].UTF8String;
     // LWJGL's own natives live in a version-specific subfolder (see
     // AMBundledLWJGLTable) rather than flat under Frameworks/, since two
     // incompatible jar sets can't share one native build. This is
-    // additive to -Djava.library.path above, not a replacement — that one
-    // still covers the renderer/MoltenVK/etc. natives that DO stay flat.
+    // java.library.path itself (colon-separated, subfolder first), NOT
+    // org.lwjgl.librarypath: LWJGL's Library.loadSystem() treats the
+    // latter as an extraction target as well as a search path (it wraps
+    // "extract from classpath, then try org.lwjgl.librarypath" in one
+    // try/catch that silently swallows any exception unless
+    // -Dorg.lwjgl.util.DebugLoader=true is set). Frameworks/ is inside
+    // the read-only, code-signed app bundle at runtime on iOS, so that
+    // extraction attempt fails, gets swallowed, and silently falls
+    // through to plain java.library.path anyway — which is exactly what
+    // kept loading whatever was flat there regardless of this table's
+    // selection. java.library.path-based loading (LWJGL's "METHOD 3")
+    // does no extraction, so it isn't affected by the read-only bundle.
+    NSString *frameworksPath = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Frameworks"];
     NSString *lwjglNativeSubfolder = AMNativeSubfolderForBundledFolder(lwjglFolder);
+    NSString *javaLibraryPath = frameworksPath;
     if (lwjglNativeSubfolder) {
-        margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.librarypath=%@/Frameworks/%@", NSBundle.mainBundle.bundlePath, lwjglNativeSubfolder].UTF8String;
+        javaLibraryPath = [NSString stringWithFormat:@"%@:%@",
+                            [frameworksPath stringByAppendingPathComponent:lwjglNativeSubfolder],
+                            frameworksPath];
     } else {
         NSLog(@"[JavaLauncher] No native subfolder mapped for %@ — LWJGL will fall back to the flat Frameworks/ search path", lwjglFolder);
     }
+    margv[++margc] = [NSString stringWithFormat:@"-Djava.library.path=%@", javaLibraryPath].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Dpojav.lwjglVersion=%@", lwjglFolder].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.dir=%@", gameDir].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.home=%s", getenv("POJAV_HOME")].UTF8String;
