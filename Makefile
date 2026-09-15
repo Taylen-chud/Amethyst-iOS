@@ -1,4 +1,4 @@
-SHELL := /bin/bash
+ SHELL := /bin/bash
 .SHELLFLAGS = -ec
 # Use `make VERBOSE=1` to print commands.
 $(VERBOSE).SILENT:
@@ -398,7 +398,14 @@ payload: native dep_mg dep_mobilegl java jre assets
 	fi
 	cp $(WORKINGDIR)/*.dylib $(WORKINGDIR)/AngelAuraAmethyst.app/Frameworks/ || exit 1
 	cp -R $(SOURCEDIR)/JavaApp/libs/others/* $(WORKINGDIR)/AngelAuraAmethyst.app/libs/ || exit 1
-	cp $(SOURCEDIR)/JavaApp/build/*.jar $(WORKINGDIR)/AngelAuraAmethyst.app/libs/ || exit 1
+	mkdir -p $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl33 $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl34
+	for f in $(SOURCEDIR)/JavaApp/build/*.jar; do \
+		case "$$(basename "$$f")" in \
+			lwjgl-3.3.3.jar) cp "$$f" $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl33/ || exit 1 ;; \
+			lwjgl-3.4.1.jar) cp "$$f" $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl34/ || exit 1 ;; \
+			*) cp "$$f" $(WORKINGDIR)/AngelAuraAmethyst.app/libs/ || exit 1 ;; \
+		esac; \
+	done
 	cp -R $(SOURCEDIR)/JavaApp/libs/caciocavallo/* $(WORKINGDIR)/AngelAuraAmethyst.app/libs_caciocavallo || exit 1
 	cp -R $(SOURCEDIR)/JavaApp/libs/caciocavallo17/* $(WORKINGDIR)/AngelAuraAmethyst.app/libs_caciocavallo17 || exit 1
 	$(call METHOD_DIRCHECK,$(OUTPUTDIR)/Payload)
@@ -429,7 +436,14 @@ deploy:
 		ldid -S$(SOURCEDIR)/entitlements.trollstore.xml $(WORKINGDIR)/AngelAuraAmethyst.app/AngelAuraAmethyst || exit 1; \
 		sudo mv $(WORKINGDIR)/*.dylib $(PREFIX)Applications/AngelAuraAmethyst.app/Frameworks/ || exit 1; \
 		sudo mv $(WORKINGDIR)/AngelAuraAmethyst.app/AngelAuraAmethyst $(PREFIX)Applications/AngelAuraAmethyst.app/AngelAuraAmethyst || exit 1; \
-		sudo mv $(SOURCEDIR)/JavaApp/build/*.jar $(PREFIX)Applications/AngelAuraAmethyst.app/libs/ || exit 1; \
+		sudo mkdir -p $(PREFIX)Applications/AngelAuraAmethyst.app/libs/lwjgl33 $(PREFIX)Applications/AngelAuraAmethyst.app/libs/lwjgl34 || exit 1; \
+		for f in $(SOURCEDIR)/JavaApp/build/*.jar; do \
+			case "$$(basename "$$f")" in \
+				lwjgl-3.3.3.jar) sudo mv "$$f" $(PREFIX)Applications/AngelAuraAmethyst.app/libs/lwjgl33/ || exit 1 ;; \
+				lwjgl-3.4.1.jar) sudo mv "$$f" $(PREFIX)Applications/AngelAuraAmethyst.app/libs/lwjgl34/ || exit 1 ;; \
+				*) sudo mv "$$f" $(PREFIX)Applications/AngelAuraAmethyst.app/libs/ || exit 1 ;; \
+			esac; \
+		done; \
 		cd $(PREFIX)Applications/AngelAuraAmethyst.app/Frameworks || exit 1; \
 		sudo chown -R 501:501 $(PREFIX)Applications/AngelAuraAmethyst.app/* || exit 1; \
 	elif [ '$(IOS)' = '0' ] && [ '$(DETECTPLAT)' = 'Darwin' ]; then \
