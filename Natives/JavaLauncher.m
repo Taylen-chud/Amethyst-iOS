@@ -515,7 +515,14 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     init_loadCustomJvmFlags(&margc, (const char **)margv);
     NSLog(@"[Init] Found JLI lib");
 
-    NSString *classpath = [NSString stringWithFormat:@"%@/*", librariesPath];
+    NSString *classpath;
+    if (lwjglNativeSubfolder) {
+        classpath = [NSString stringWithFormat:@"%@/%@/*:%@/*",
+                     librariesPath, lwjglNativeSubfolder, librariesPath];
+    } else {
+        NSLog(@"[JavaLauncher] No native subfolder mapped for %@ — classpath will fall back to the flat libs/ search path", lwjglFolder);
+        classpath = [NSString stringWithFormat:@"%@/*", librariesPath];
+    }
     if (launchJar) {
         classpath = [classpath stringByAppendingFormat:@":%@", launchTarget];
     }
