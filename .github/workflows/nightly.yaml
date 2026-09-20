@@ -3,7 +3,7 @@ name: Nightly Build
 on:
   push:
     branches:
-      - main
+      - main            # <-- swap for your real dev branch if it's not `main`
   workflow_dispatch:
 
 concurrency:
@@ -12,6 +12,9 @@ concurrency:
 
 permissions:
   contents: write   # needed so the release/tag step can push a release
+
+env:
+  MARKETING_VERSION: "1.2.0"
 
 jobs:
   build:
@@ -31,6 +34,9 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@main
+        with:
+          fetch-depth: 0     # full history, needed to build the changelog below
+          fetch-tags: true   # so we can see where the previous `nightly` tag pointed
 
       - name: Checkout repository submodules
         env:
@@ -50,9 +56,41 @@ jobs:
       - name: Install Dependencies
         run: brew install make ldid temurin@8
 
-      - name: Short SHA
+      - name: Compute build metadata
         id: vars
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          SHORT_SHA=$(git rev-parse --short=8 HEAD)
+          BUILT_AT=$(date -u +"%a %b %d %H:%M:%S %Y")
+          BUILT_DATE=$(date -u +"%Y-%m-%d")
+          VERSION="${MARKETING_VERSION}-$(date -u +%Y%m%d).${{ github.run_number }}+${SHORT_SHA}"
+          {
+            echo "short_sha=$SHORT_SHA"
+            echo "built_at=$BUILT_AT"
+            echo "built_date=$BUILT_DATE"
+            echo "version=$VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build changelog since last nightly
+        id: changelog
+        run: |
+          git fetch --tags --force
+          OLD_SHA=$(git rev-list -n 1 refs/tags/nightly 2>/dev/null || echo "")
+          if [ -z "$OLD_SHA" ]; then
+            CHANGELOG=$(git log -10 --pretty=format:"%s")
+            RANGE_NOTE="_(first nightly build — no previous tag to diff against)_"
+          else
+            CHANGELOG=$(git log ${OLD_SHA}..HEAD --pretty=format:"%s")
+            if [ -z "$CHANGELOG" ]; then
+              CHANGELOG="No new commits since the last nightly."
+            fi
+            RANGE_NOTE="Full Changelog: https://github.com/${{ github.repository }}/compare/${OLD_SHA:0:8}...${{ steps.vars.outputs.short_sha }}"
+          fi
+          {
+            echo "changelog<<CHANGELOG_EOF"
+            echo "$CHANGELOG"
+            echo "CHANGELOG_EOF"
+            echo "range_note=$RANGE_NOTE"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build for ${{ matrix.platform_name }}
         run: |
@@ -76,10 +114,25 @@ jobs:
       - name: Publish rolling nightly release
         uses: ncipollo/release-action@v1
         with:
-          tag: nightly-${{ matrix.platform_name }}
-          name: "Nightly (${{ matrix.platform_name }}) — ${{ steps.vars.outputs.sha_short }}"
+          tag: nightly
+          name: "Nightly"
           body: |
-            Automated nightly build from commit ${{ github.sha }}.
+            ⚠️ EXPERIMENTAL ⚠️ Nightly build for commit ${{ github.sha }}.
+
+            Nightly builds are extremely experimental builds only meant to be used by developers and beta testers. They often contain bugs and experimental features. Use at your own risk!
+
+            ## Build Info
+
+            Built at (UTC): ${{ steps.vars.outputs.built_at }}
+            Built at (UTC date): ${{ steps.vars.outputs.built_date }}
+            Commit SHA: ${{ github.sha }}
+            Version: ${{ steps.vars.outputs.version }}
+
+            ## What's Changed:
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            ${{ steps.changelog.outputs.range_note }}
           artifacts: >-
             artifacts/org.angelauramc.amethyst-*-${{ matrix.platform_name }}.ipa,
             artifacts/org.angelauramc.amethyst-*-${{ matrix.platform_name }}-trollstore.tipa,
