@@ -1,0 +1,93 @@
+name: Nightly Build
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # needed so the release/tag step can push a release
+
+jobs:
+  build:
+    name: Nightly build
+    strategy:
+      matrix:
+        include:
+          - platform: 2
+            platform_name: ios
+
+    runs-on: macos-latest
+    steps:
+      - name: Remove work folders
+        run: |
+          rm -rf ./* || true
+          rm -rf ./.??* || true
+
+      - name: Checkout repository
+        uses: actions/checkout@main
+
+      - name: Checkout repository submodules
+        env:
+          GIT_LFS_SKIP_SMUDGE: 1
+        run: |
+          git lfs install --skip-smudge
+          git config --global filter.lfs.smudge "git-lfs smudge --skip -- %f"
+          git config --global filter.lfs.process "git-lfs filter-process --skip"
+          git submodule sync --recursive
+          git submodule update --init --recursive
+
+      - name: Setup Xcode Version
+        uses: maxim-lobanov/setup-xcode@master
+        with:
+          xcode-version: '26.5'
+
+      - name: Install Dependencies
+        run: brew install make ldid temurin@8
+
+      - name: Short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build for ${{ matrix.platform_name }}
+        run: |
+          export PATH=/opt/homebrew/bin:$PATH
+          export SLIMMED=1
+          if [ "${{ matrix.platform_name }}" == "ios" ]; then
+            gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }}
+            gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }} TROLLSTORE_JIT_ENT=1
+          elif [ "${{ matrix.platform_name }}" == "tvos" ]; then
+            gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }} TROLLSTORE_JIT_ENT=1
+          else
+            gmake -j$(sysctl -n hw.ncpu) dsym package PLATFORM=${{ matrix.platform }}
+          fi
+
+      - name: Zip dSYM
+        if: matrix.platform_name == 'ios'
+        run: |
+          cd artifacts
+          zip -r AngelAuraAmethyst.dSYM.zip AngelAuraAmethyst.dSYM
+
+      - name: Publish rolling nightly release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: nightly-${{ matrix.platform_name }}
+          name: "Nightly (${{ matrix.platform_name }}) — ${{ steps.vars.outputs.sha_short }}"
+          body: |
+            Automated nightly build from commit ${{ github.sha }}.
+          artifacts: >-
+            artifacts/org.angelauramc.amethyst-*-${{ matrix.platform_name }}.ipa,
+            artifacts/org.angelauramc.amethyst-*-${{ matrix.platform_name }}-trollstore.tipa,
+            artifacts/org.angelauramc.amethyst.slimmed-*-${{ matrix.platform_name }}.ipa,
+            artifacts/org.angelauramc.amethyst.slimmed-*-${{ matrix.platform_name }}-trollstore.tipa,
+            artifacts/AngelAuraAmethyst.dSYM.zip
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          prerelease: true
+          makeLatest: false
