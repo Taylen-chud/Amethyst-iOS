@@ -3,8 +3,7 @@ name: Nightly Build
 on:
   push:
     branches:
-      - main            # <-- swap for your real dev branch if it's not `main`
-  workflow_dispatch:
+      - main
 
 concurrency:
   group: nightly
