@@ -492,6 +492,10 @@ dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
     }
 }
 
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    return YES;
+}
+
 - (BOOL)textFieldShouldReturn:(UITextField *)textField {
     self.inputTextField.sendKey(GLFW_KEY_ENTER, 0, 1, 0);
     //self.inputTextField.sendKey(GLFW_KEY_ENTER, 0, 0, 0);
