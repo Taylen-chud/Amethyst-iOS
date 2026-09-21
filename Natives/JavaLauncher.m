@@ -412,10 +412,25 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             // workaround only applies to 1.20.2+
             glLibName = RENDERER_NAME_MTL_ANGLE;
         }
-        if (strcmp(glLibName, RENDERER_NAME_MOLTENVK) != 0) {
-            margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%s", glLibName].UTF8String;
+        if (!strcmp(glLibName, RENDERER_NAME_MOLTENVK)) {
+            // Sodium 0.9+ picks its Graphics API (OpenGL vs Vulkan) at
+            // runtime from its own in-game video settings, not at launch.
+            // Blaze3D's native bootstrap loads a real OpenGL binding
+            // unconditionally before that setting is ever read, so we
+            // can't skip org.lwjgl.opengl.libname here — fall back to a
+            // normal GL backend for it, and point LWJGL's Vulkan bindings
+            // at MoltenVK separately below.
+            glLibName = RENDERER_NAME_MOBILEGL;
         }
+        margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%s", glLibName].UTF8String;
     }
+
+    // LWJGL defaults to a bundled MoltenVK build on platforms reporting as
+    // "macosx" (which is what we report), but its normal discovery can't
+    // find it inside this app's sandboxed bundle — the same issue as the
+    // OpenGL bundle lookup above. Point it at the real dylib explicitly so
+    // Sodium's in-game "Graphics API: Vulkan" option has something to load.
+    margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.vulkan.libname=%s", RENDERER_NAME_MOLTENVK].UTF8String;
 
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
     margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", librariesPath].UTF8String;
