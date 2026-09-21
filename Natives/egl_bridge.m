@@ -68,6 +68,8 @@ int pojavInitOpenGL() {
     } else if ([renderer hasPrefix:@"libOSMesa"]) {
         setenv("GALLIUM_DRIVER","zink",1);
         set_osm_bridge_tbl();
+        } else if ([renderer isEqualToString:@ RENDERER_NAME_MOLTENVK]) {
+        set_vk_bridge_tbl();
     }
     JNI_LWJGL_changeRenderer(renderer.UTF8String);
     // Preload renderer library
@@ -97,10 +99,12 @@ void pojavSetWindowHint(int hint, int value) {
 }
 
 void pojavSwapBuffers() {
+    if (!br_swap_buffers) return;
     br_swap_buffers();
 }
 
 void pojavMakeCurrent(basic_render_window_t* window) {
+    if (!br_make_current) return;
     br_make_current(window);
 }
 

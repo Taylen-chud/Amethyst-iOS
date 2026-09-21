@@ -186,6 +186,7 @@
 "preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
 "preference.title.renderer.debug.zink" = "Zink (Mesa 25.0) - exports OpenGL 4.1";
 "preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
+"preference.title.renderer.debug.moltenvk" = "MoltenVK (26.2+) exports Vulkan 1.4 ";
 
 "preference.detail.renderer" = "Change the OpenGL render engine to use. Zink is temporarily disabled on iOS 16 and later to diagnose issues.";
 

@@ -108,6 +108,7 @@ add_executable(AngelAuraAmethyst
 
   ctxbridges/gl_bridge.m
   ctxbridges/osm_bridge.m
+  ctxbridges/vk_bridge.m
  
   customcontrols/ControlButton.m
   customcontrols/ControlDrawer.m
