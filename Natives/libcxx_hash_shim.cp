@@ -13,9 +13,9 @@ size_t __amethyst_hash_memory(const void *ptr, size_t size) {
     return hash;
 }
 
-// Alias or direct binding to resolve libc++ __hash_memory dependency on iOS 18.2+
-__attribute__((visibility("default"))) 
-size_t __ZNSt3__113__hash_memoryEPKvm(const void *ptr, size_t size) {
+// Single leading underscore in C code compiles to __ZNSt3... at Mach-O ABI level
+__attribute__((visibility("default"), used))
+size_t _ZNSt3__113__hash_memoryEPKvm(const void *ptr, size_t size) {
     return __amethyst_hash_memory(ptr, size);
 }
 
