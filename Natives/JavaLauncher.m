@@ -291,6 +291,14 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
         NSLog(@"[JavaLauncher] RENDERER is set to %@\n", renderer);
         setenv("POJAV_RENDERER", renderer.UTF8String, 1);
+        if (!strcmp(renderer.UTF8String, RENDERER_NAME_MOLTENVK)) {
+            // Verbose MoltenVK logging while we're tracking down the black-
+            // screen-after-launch issue: prints instance/device/surface/
+            // swapchain creation results (and any Vulkan validation errors)
+            // straight to the log instead of failing silently.
+            setenv("MVK_CONFIG_LOG_LEVEL", "4", 1);
+            setenv("MVK_DEBUG", "1", 1);
+        }
         if (isMobileGLRenderer(renderer.UTF8String)) {
     setenv("MOBILEGL_BACKEND_TYPE", "DirectVulkan", 1);
     
