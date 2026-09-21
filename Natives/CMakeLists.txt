@@ -101,7 +101,6 @@ add_executable(AngelAuraAmethyst
   JavaLauncher.m
   external/fishhook/fishhook.c
   UIKit+hook.m
-  Natives/libcxx_hash_shim.cpp
 
   authenticator/BaseAuthenticator.m
   authenticator/LocalAuthenticator.m
