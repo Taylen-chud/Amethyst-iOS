@@ -350,7 +350,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         margv[++margc] = "-Djava.system.class.loader=net.kdt.pojavlaunch.PojavClassLoader";
     }
     margv[++margc] = "-Xms128M";
-    margv[++margc] = [NSString stringWithFormat:@"-Xmx%dM", allocmem].
+    margv[++margc] = [NSString stringWithFormat:@"-Xmx%dM", allocmem].UTF8String;
     
     NSString *frameworksPath = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Frameworks"];
     NSString *lwjglNativeSubfolder = AMNativeSubfolderForBundledFolder(lwjglFolder);
