@@ -39,7 +39,7 @@
 #define RENDERER_NAME_MOBILEGLUES "libmobileglues.dylib"
 #define RENDERER_NAME_MOBILEGL "libMobileGL.dylib"
 #define RENDERER_NAME_VK_ZINK "libOSMesa.8.dylib"
-#define RENDERER_NAME_VULKAN "libMoltenVK.dylib"
+#define RENDERER_NAME_MOLTENVK "libMoltenVK.dylib"
 
 static inline bool isMobileGLRenderer(const char *renderer)
 {
