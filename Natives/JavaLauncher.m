@@ -128,10 +128,6 @@ static NSArray<NSArray<NSString *> *> *AMBundledLWJGLTable(void) {
     return table;
 }
 
-// Parses up to 3 dotted components. Non-numeric-leading components ("b1",
-// "rd-132211", "25w45a") parse their leading digits (matching -intValue),
-// but set isCleanNumeric = NO so callers can tell "really version 0" apart
-// from "this was never a modern numeric id."
 static void AMParseVersion(NSString *versionString, int *major, int *minor, int *patch, BOOL *isCleanNumeric) {
     int m = 0, n = 0, p = 0;
     BOOL clean = versionString.length > 0;
@@ -155,10 +151,6 @@ static void AMParseVersion(NSString *versionString, int *major, int *minor, int 
     if (isCleanNumeric) *isCleanNumeric = clean;
 }
 
-// Maps a required LWJGL version to the lowest bundled folder that covers
-// it (e.g. requiring 3.4.0 correctly lands on bundled 3.4.1). Returns nil
-// when nothing bundled qualifies — notably any LWJGL 2.x requirement,
-// which isn't part of this dual-3.x-version setup.
 static NSString *AMBundledFolderForRequiredVersion(NSString *requiredVersion) {
     int reqMajor, reqMinor, reqPatch;
     AMParseVersion(requiredVersion, &reqMajor, &reqMinor, &reqPatch, NULL);
@@ -255,16 +247,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         }
 
 
-        // Determine the bundled LWJGL folder. Prefer the ground-truth
-        // version MinecraftResourceUtils already resolved from this
-        // target's `libraries` array (tweakVersionJson scans for
-        // org.lwjgl:lwjgl:<version> there); only fall back to guessing
-        // from the version id when that's missing, and only trust the id
-        // when it's a clean modern numeric release. Snapshot ids
-        // ("25w45a"), legacy ids ("b1.7.3", "rd-132211"), and Forge/Fabric
-        // composite ids intValue to 0/garbage and must not be trusted —
-        // they're left on the lwjgl-3.3.3 default below rather than being
-        // misrouted into whichever bucket 0 happens to satisfy.
         NSString *resolvedLWJGLFolder = nil;
         NSString *lwjglVersionStr = launchTarget[@"lwjglVersion"];
         if ([lwjglVersionStr isKindOfClass:NSString.class] && lwjglVersionStr.length > 0) {
@@ -368,22 +350,8 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         margv[++margc] = "-Djava.system.class.loader=net.kdt.pojavlaunch.PojavClassLoader";
     }
     margv[++margc] = "-Xms128M";
-    margv[++margc] = [NSString stringWithFormat:@"-Xmx%dM", allocmem].UTF8String;
-    // LWJGL's own natives live in a version-specific subfolder (see
-    // AMBundledLWJGLTable) rather than flat under Frameworks/, since two
-    // incompatible jar sets can't share one native build. This is
-    // java.library.path itself (colon-separated, subfolder first), NOT
-    // org.lwjgl.librarypath: LWJGL's Library.loadSystem() treats the
-    // latter as an extraction target as well as a search path (it wraps
-    // "extract from classpath, then try org.lwjgl.librarypath" in one
-    // try/catch that silently swallows any exception unless
-    // -Dorg.lwjgl.util.DebugLoader=true is set). Frameworks/ is inside
-    // the read-only, code-signed app bundle at runtime on iOS, so that
-    // extraction attempt fails, gets swallowed, and silently falls
-    // through to plain java.library.path anyway — which is exactly what
-    // kept loading whatever was flat there regardless of this table's
-    // selection. java.library.path-based loading (LWJGL's "METHOD 3")
-    // does no extraction, so it isn't affected by the read-only bundle.
+    margv[++margc] = [NSString stringWithFormat:@"-Xmx%dM", allocmem].
+    
     NSString *frameworksPath = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Frameworks"];
     NSString *lwjglNativeSubfolder = AMNativeSubfolderForBundledFolder(lwjglFolder);
     NSString *javaLibraryPath = frameworksPath;
