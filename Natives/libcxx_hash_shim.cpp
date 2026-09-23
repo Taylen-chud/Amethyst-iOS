@@ -1,22 +1,19 @@
 #include <cstddef>
 
-extern "C" {
+// Fallback implementation of std::__1::__hash_memory for older iOS/macOS runtimes 
+// that lack the symbol in system libc++.1.dylib.
+extern "C" size_t __amethyst_hash_memory(const void *ptr, size_t size)
+    __asm__("__ZNSt3__113__hash_memoryEPKvm");
 
-// Custom/Internal hash memory implementation
-size_t __amethyst_hash_memory(const void *ptr, size_t size) {
-    const unsigned char *data = static_cast<const unsigned char *>(ptr);
-    size_t hash = 14695981039346656037ULL; // FNV-1a offset basis
-    for (size_t i = 0; i < size; i++) {
-        hash ^= data[i];
-        hash *= 1099511628211ULL; // FNV-1a prime
+extern "C" size_t __amethyst_hash_memory(const void *ptr, size_t size) {
+    const auto *bytes = static_cast<const unsigned char *>(ptr);
+    
+    // Standard 64-bit FNV-1a hash
+    size_t hash = 14695981039346656037ULL;
+    for (size_t i = 0; i < size; ++i) {
+        hash ^= bytes[i];
+        hash *= 1099511628211ULL;
     }
+    
     return hash;
 }
-
-// Single leading underscore in C code compiles to __ZNSt3... at Mach-O ABI level
-__attribute__((visibility("default"), used))
-size_t _ZNSt3__113__hash_memoryEPKvm(const void *ptr, size_t size) {
-    return __amethyst_hash_memory(ptr, size);
-}
-
-} // extern "C"
