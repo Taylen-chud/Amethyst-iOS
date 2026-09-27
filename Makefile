@@ -325,22 +325,13 @@ dep_mg:
 	cp $(WORKINGDIR)/mobileglues/libmobileglues.dylib $(WORKINGDIR)/libmobileglues.dylib
 	echo '[Amethyst v$(VERSION)] dep_mg - end'
 
-patch_mobilegl:
-	echo '[Amethyst v$(VERSION)] patch_mobilegl - start'
-	if [ ! -d "$(MOBILEGL_SOURCE_DIR)" ]; then \
-		echo 'MobileGL source directory not found: $(MOBILEGL_SOURCE_DIR)'; \
-		exit 1; \
-	fi
-	python3 $(SOURCEDIR)/Natives/patch_mobilegl.py
-	echo '[Amethyst v$(VERSION)] patch_mobilegl - end'
-
 dep_mobilegl:
 	echo '[Amethyst v$(VERSION)] dep_mobilegl - start'
 	if [ ! -d "$(MOBILEGL_SOURCE_DIR)" ]; then \
 		echo 'MobileGL source directory not found: $(MOBILEGL_SOURCE_DIR)'; \
 		exit 1; \
 	fi
-	$(MAKE) patch_mobilegl
+
 	if [ -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang" ]; then \
 		cd $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang && python3 update_glslang_sources.py; \
 	fi
@@ -349,6 +340,7 @@ dep_mobilegl:
 	python3 $(SOURCEDIR)/Natives/patch_mobilegl_ios_visibility.py $(MOBILEGL_SOURCE_DIR)
 	python3 $(SOURCEDIR)/Natives/patch_mobilegl_hash_shim.py $(MOBILEGL_SOURCE_DIR)
 	python3 $(SOURCEDIR)/Natives/patch_mobilegl_enable_availability.py $(MOBILEGL_SOURCE_DIR)
+    python3 $(SOURCEDIR)/Natives/patch_mobilegl.py $(MOBILEGL_SOURCE_DIR)
 	mkdir -p $(WORKINGDIR)/mobilegl
 	cd $(WORKINGDIR)/mobilegl && cmake \
 		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
