@@ -263,7 +263,7 @@
 "preference.detail.custom_env" = "This option is under construction. Create and edit custom_env.txt in the meantime.";
 
 "preference.title.debug_verbose_graphics_logging" = "Verbose graphics logging";
-"preference.detail.debug_verbose_graphics_logging" = "Adds detailed MoltenVK/Vulkan output to latestlog.txt. Leave off unless you're reporting a rendering issue - it's noisy.";
+"preference.detail.debug_verbose_graphics_logging" = "Adds detailed MoltenVK/Vulkan output to latestlog.txt.";
 "preference.title.debug_always_attached_jit" = "Keep attached to StikDebug";
 "preference.detail.debug_always_attached_jit" = "Enable this if your mods require loading .dylib at runtime. When this is on, StikDebug's PiP should not be closed during gameplay.";
 "preference.title.debug_skip_wait_jit" = "Skip \"Waiting for JIT\" dialog";
