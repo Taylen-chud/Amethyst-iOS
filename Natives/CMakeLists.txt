@@ -3,25 +3,13 @@ project(AngelAuraAmethyst)
 
 configure_file(${CMAKE_CURRENT_LIST_DIR}/config.h.in ${CMAKE_CURRENT_LIST_DIR}/config.h)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -target arm64-apple-ios -mcpu=apple-a8 -fcommon -fobjc-arc -ObjC -F'${CMAKE_OSX_SYSROOT}/System/Cryptexes/OS/System/Library/Fram#import <Foundation/Foundation.h>
-
-NS_ASSUME_NONNULL_BEGIN
-
-@interface RendererCrashTracker : NSObject
-
-+ (NSUInteger)consecutiveFailuresForRenderer:(NSString *)renderer;
-+ (void)recordLaunchAttemptForRenderer:(NSString *)renderer;
-+ (void)markLaunchStableForRenderer:(NSString *)renderer;
-
-@end
-
-NS_ASSUME_NONNULL_ENDeworks'")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -target arm64-apple-ios -mcpu=apple-a8 -fcommon -fobjc-arc -ObjC -F'${CMAKE_OSX_SYSROOT}/System/Cryptexes/OS/System/Library/Frameworks'")
 set(CMAKE_C_FLAGS_DEBUG "-funwind-tables -g")
 
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux|^GNU$|Android")
-set(GLOBAL_LDFLAGS "-isysroot ${CMAKE_OSX_SYSROOT} -Wl,-syslibroot,${CMAKE_OSX_SYSROOT} -fuse-ld=lld")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${GLOBAL_LDFLAGS}")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${GLOBAL_LDFLAGS}")
+  set(GLOBAL_LDFLAGS "-isysroot ${CMAKE_OSX_SYSROOT} -Wl,-syslibroot,${CMAKE_OSX_SYSROOT} -fuse-ld=lld")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${GLOBAL_LDFLAGS}")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${GLOBAL_LDFLAGS}")
 endif()
 
 include_directories(
@@ -48,12 +36,14 @@ set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -rpath @loader_path 
 add_library(awt_headless SHARED
   awt_xawt/empty.m
 )
+
 target_link_libraries(awt_headless)
 
 # EXT: cacio support library
 add_library(awt_xawt SHARED
   awt_xawt/xawt_fake.m
 )
+
 target_link_libraries(awt_xawt
   "-L'${CMAKE_CURRENT_LIST_DIR}/build'"
   awt_headless
@@ -69,6 +59,7 @@ add_library(tinygl4angle SHARED
   external/gl4es/string_utils.c
   external/gl4es/tinygl4angle.c
 )
+
 target_link_libraries(tinygl4angle
   "${GLOBAL_LDFLAGS}"
   "-F'${CMAKE_CURRENT_LIST_DIR}/resources/Frameworks'"
@@ -90,6 +81,7 @@ add_library(AFNetworking SHARED
   external/AFNetworking/UIKit+AFNetworking/UIButton+AFNetworking.m
   external/AFNetworking/UIKit+AFNetworking/UIImageView+AFNetworking.m
 )
+
 target_link_libraries(AFNetworking
   "-framework CoreGraphics"
   "-framework CoreServices"
@@ -102,6 +94,7 @@ target_link_libraries(AFNetworking
 add_library(AmethystAccountJNI SHARED
   authenticator/MinecraftAccountJNI.m
 )
+
 target_link_libraries(AmethystAccountJNI)
 
 # Angel Aura Amethyst
@@ -120,7 +113,7 @@ add_executable(AngelAuraAmethyst
 
   ctxbridges/gl_bridge.m
   ctxbridges/osm_bridge.m
- 
+
   customcontrols/ControlButton.m
   customcontrols/ControlDrawer.m
   customcontrols/ControlJoystick.m
@@ -191,7 +184,7 @@ add_executable(AngelAuraAmethyst
 )
 
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux|^GNU$|Android")
-target_sources(AngelAuraAmethyst PUBLIC non_darwin_utils.m)
+  target_sources(AngelAuraAmethyst PUBLIC non_darwin_utils.m)
 endif()
 
 target_link_libraries(AngelAuraAmethyst
@@ -216,7 +209,9 @@ target_link_libraries(AngelAuraAmethyst
   "-framework WebKit"
   "-weak_framework SafariServices"
 )
+
 set_target_properties(AngelAuraAmethyst PROPERTIES
   MACOSX_BUNDLE TRUE
   MACOSX_FRAMEWORK_IDENTIFIER org.cmake.ExecutableTarget
-  MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_LIST_DIR}/Info.plist")
+  MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_LIST_DIR}/Info.plist"
+)
