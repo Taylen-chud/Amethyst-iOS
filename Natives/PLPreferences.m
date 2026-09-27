@@ -80,6 +80,7 @@
 
         defaults[@"java"][@"manage_runtime"] = @""; // stub
         defaults[@"debug"] = @{
+            @"debug_verbose_graphics_logging": @NO,
             @"debug_always_attached_jit": @NO,
             @"debug_skip_wait_jit": @NO,
             @"debug_hide_home_indicator": @NO,
