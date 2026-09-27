@@ -3,16 +3,19 @@
 from pathlib import Path
 import sys
 
-ROOT = Path(__file__).resolve().parent
-TARGET = (
-    ROOT / "Natives" / "external" / "MobileGL" / "MobileGL"
-    / "MG_Backend" / "DirectVulkan" / "Pipeline"
-    / "FramebufferBlitter.cpp"
+if len(sys.argv) != 2:
+    print("Usage: patch_mobilegl.py <MobileGL directory>")
+    sys.exit(1)
+
+root = Path(sys.argv[1])
+target = (
+    root / "MobileGL" / "MG_Backend" / "DirectVulkan"
+    / "Pipeline" / "FramebufferBlitter.cpp"
 )
 
-MARKER = "// AMETHYST_RESOLUTION_SCALE_FIX"
+marker = "// AMETHYST_RESOLUTION_SCALE_FIX"
 
-OLD = """        if (drawFbo.IsDefaultFramebuffer()) {
+old = """        if (drawFbo.IsDefaultFramebuffer()) {
             Uint32 defaultWidth = 0;
             Uint32 defaultHeight = 0;
             drawFbo.GetDimensions(defaultWidth, defaultHeight);
@@ -24,7 +27,7 @@ OLD = """        if (drawFbo.IsDefaultFramebuffer()) {
         }
 """
 
-NEW = """        if (drawFbo.IsDefaultFramebuffer()) {
+new = """        if (drawFbo.IsDefaultFramebuffer()) {
             Uint32 defaultWidth = 0;
             Uint32 defaultHeight = 0;
             drawFbo.GetDimensions(defaultWidth, defaultHeight);
@@ -58,31 +61,20 @@ NEW = """        if (drawFbo.IsDefaultFramebuffer()) {
         }
 """
 
+if not target.exists():
+    print(f"[Amethyst] MobileGL file not found: {target}")
+    sys.exit(1)
 
-def main():
-    print("[Amethyst] Patching MobileGL...")
+print("[Amethyst] Patching MobileGL...")
+source = target.read_text(encoding="utf-8")
 
-    if not TARGET.exists():
-        print(f"[Amethyst] MobileGL file not found: {TARGET}", file=sys.stderr)
-        sys.exit(1)
+if marker in source:
+    print("[Amethyst] MobileGL already patched.")
+    sys.exit(0)
 
-    source = TARGET.read_text(encoding="utf-8")
+if old not in source:
+    print("[Amethyst] Could not find MobileGL code to patch.")
+    sys.exit(1)
 
-    if MARKER in source:
-        print("[Amethyst] MobileGL already patched.")
-        return
-
-    if OLD not in source:
-        print("[Amethyst] Could not find MobileGL code to patch.", file=sys.stderr)
-        sys.exit(1)
-
-    TARGET.write_text(
-        source.replace(OLD, MARKER + "\n" + NEW, 1),
-        encoding="utf-8"
-    )
-
-    print("[Amethyst] MobileGL patched.")
-
-
-if __name__ == "__main__":
-    main()
+target.write_text(source.replace(old, marker + "\n" + new, 1), encoding="utf-8")
+print("[Amethyst] MobileGL patched.")
