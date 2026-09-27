@@ -8,10 +8,24 @@ if len(sys.argv) != 2:
     sys.exit(1)
 
 root = Path(sys.argv[1])
-target = (
-    root / "MobileGL" / "MG_Backend" / "DirectVulkan"
-    / "Pipeline" / "FramebufferBlitter.cpp"
-)
+
+# MobileGL's repository layout may differ between revisions.
+# Find the actual FramebufferBlitter.cpp without assuming an extra
+# "MobileGL/" directory under the repository root.
+matches = list(root.rglob("FramebufferBlitter.cpp"))
+
+target = None
+for candidate in matches:
+    if (
+        candidate.parent.name == "Pipeline"
+        and candidate.parent.parent.name == "DirectVulkan"
+    ):
+        target = candidate
+        break
+
+if target is None:
+    print(f"[Amethyst] MobileGL FramebufferBlitter.cpp not found under: {root}")
+    sys.exit(1)
 
 marker = "// AMETHYST_RESOLUTION_SCALE_FIX"
 
@@ -65,7 +79,8 @@ if not target.exists():
     print(f"[Amethyst] MobileGL file not found: {target}")
     sys.exit(1)
 
-print("[Amethyst] Patching MobileGL...")
+print(f"[Amethyst] Patching MobileGL: {target}")
+
 source = target.read_text(encoding="utf-8")
 
 if marker in source:
@@ -76,5 +91,9 @@ if old not in source:
     print("[Amethyst] Could not find MobileGL code to patch.")
     sys.exit(1)
 
-target.write_text(source.replace(old, marker + "\n" + new, 1), encoding="utf-8")
-print("[Amethyst] MobileGL patched.")
+target.write_text(
+    source.replace(old, marker + "\n" + new, 1),
+    encoding="utf-8"
+)
+
+print("[Amethyst] MobileGL resolution scaling patch applied.")
