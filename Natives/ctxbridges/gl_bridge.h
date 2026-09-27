@@ -31,6 +31,10 @@ typedef struct {
     EGLint     format;
     EGLContext context;
     EGLSurface surface;
+    EGLint surfaceWidth;
+    EGLint surfaceHeight;
 } gl_render_window_t;
+
+void gl_notify_screen_size(int width, int height);
 
 void set_gl_bridge_tbl();

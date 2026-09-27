@@ -4,6 +4,7 @@
 
 #include <dlfcn.h>
 #include <string.h>
+#include <stdatomic.h>
 #include "bridge_tbl.h"
 #include "environ.h"
 #include "gl_bridge.h"
@@ -12,8 +13,23 @@
 static EGLDisplay g_EglDisplay;
 static egl_library handle;
 
+// Resolution changes arrive from the UIKit thread, while EGL/Vulkan calls must stay on
+// the render thread. Queue the new drawable size atomically and apply it immediately
+// before the next eglSwapBuffers().
+static atomic_int pending_surface_width = 0;
+static atomic_int pending_surface_height = 0;
+
 static BOOL gl_is_mobilegl_renderer() {
     return isMobileGLRenderer(getenv("POJAV_RENDERER"));
+}
+
+void gl_notify_screen_size(int width, int height) {
+    if (!gl_is_mobilegl_renderer()) return;
+
+    width = MAX(width, 1);
+    height = MAX(height, 1);
+    atomic_store_explicit(&pending_surface_width, width, memory_order_release);
+    atomic_store_explicit(&pending_surface_height, height, memory_order_release);
 }
 
 static void* load_egl_symbol(void *dl_handle, const char *symbol) {
@@ -133,6 +149,8 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
     };
     bundle->surface = handle.eglCreateWindowSurface(g_EglDisplay, bundle->config, (__bridge EGLNativeWindowType)layer,
         mobileGL ? mobileGLSurfaceAttribs : NULL);
+    bundle->surfaceWidth = mobileGL ? mobileGLSurfaceAttribs[1] : 0;
+    bundle->surfaceHeight = mobileGL ? mobileGLSurfaceAttribs[3] : 0;
     if (!bundle->surface) {
         NSDebugLog(@"EGLBridge: eglCreateWindowSurface finished with error: 0x%x", handle.eglGetError());
         free(bundle);
@@ -176,11 +194,67 @@ void gl_make_current(gl_render_window_t* bundle) {
     }
 }
 
+static void gl_apply_pending_surface_resize(gl_render_window_t *bundle) {
+    if (!bundle || !gl_is_mobilegl_renderer()) return;
+
+    const int width = atomic_load_explicit(&pending_surface_width, memory_order_acquire);
+    const int height = atomic_load_explicit(&pending_surface_height, memory_order_acquire);
+    if (width <= 0 || height <= 0 || (width == bundle->surfaceWidth && height == bundle->surfaceHeight)) {
+        return;
+    }
+
+    const EGLint attrs[] = {
+        EGL_WIDTH, width,
+        EGL_HEIGHT, height,
+        EGL_NONE
+    };
+    EGLSurface oldSurface = bundle->surface;
+
+    // Keep the EGL/Vulkan resize on the render thread. MobileGL receives the new
+    // WindowHandle dimensions when the replacement EGL surface is created, which
+    // causes its DirectVulkan backend to request a matching swapchain resize.
+    if (!handle.eglMakeCurrent(g_EglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT)) {
+        NSDebugLog(@"EGLBridge: couldn't release current surface before resize: 0x%x", handle.eglGetError());
+        return;
+    }
+
+    EGLSurface newSurface = handle.eglCreateWindowSurface(
+        g_EglDisplay, bundle->config, (__bridge EGLNativeWindowType)SurfaceViewController.surface.layer, attrs);
+    if (newSurface == EGL_NO_SURFACE) {
+        NSDebugLog(@"EGLBridge: couldn't recreate MobileGL surface at %dx%d: 0x%x", width, height, handle.eglGetError());
+        handle.eglMakeCurrent(g_EglDisplay, oldSurface, oldSurface, bundle->context);
+        return;
+    }
+
+    if (!handle.eglMakeCurrent(g_EglDisplay, newSurface, newSurface, bundle->context)) {
+        NSDebugLog(@"EGLBridge: couldn't bind resized MobileGL surface: 0x%x", handle.eglGetError());
+        handle.eglDestroySurface(g_EglDisplay, newSurface);
+        handle.eglMakeCurrent(g_EglDisplay, oldSurface, oldSurface, bundle->context);
+        return;
+    }
+
+    bundle->surface = newSurface;
+    bundle->surfaceWidth = width;
+    bundle->surfaceHeight = height;
+    handle.eglDestroySurface(g_EglDisplay, oldSurface);
+
+    // Consume exactly the size we applied. If UIKit posts another size while this
+    // operation was in progress, it remains pending for the next frame.
+    int expectedWidth = width;
+    int expectedHeight = height;
+    atomic_compare_exchange_strong_explicit(&pending_surface_width, &expectedWidth, 0,
+                                            memory_order_acq_rel, memory_order_acquire);
+    expectedWidth = width;
+    atomic_compare_exchange_strong_explicit(&pending_surface_height, &expectedHeight, 0,
+                                            memory_order_acq_rel, memory_order_acquire);
+}
+
 void gl_swap_buffers() {
     // Same rationale as osm_swap_buffers: block the render loop until the app
     // is active again so eglSwapBuffers (which can trigger Metal command buffer
     // submission) is never called from the background.
     pojavWaitForAppForeground();
+    gl_apply_pending_surface_resize(&currentBundle->gl);
     if (!handle.eglSwapBuffers(g_EglDisplay, currentBundle->gl.surface) && handle.eglGetError() == EGL_BAD_SURFACE) {
         NSLog(@"eglSwapBuffers error 0x%x", handle.eglGetError());
         //stopSwapBuffers = true;
