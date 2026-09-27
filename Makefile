@@ -325,7 +325,12 @@ dep_mg:
 	cp $(WORKINGDIR)/mobileglues/libmobileglues.dylib $(WORKINGDIR)/libmobileglues.dylib
 	echo '[Amethyst v$(VERSION)] dep_mg - end'
 
-dep_mobilegl:
+patch_mobilegl:
+	echo '[Amethyst v$(VERSION)] patch_mobilegl - start'
+	python3 $(SOURCEDIR)/Natives/patch_mobilegl.py
+	echo '[Amethyst v$(VERSION)] patch_mobilegl - end'
+
+dep_mobilegl: patch_mobilegl:
 	echo '[Amethyst v$(VERSION)] dep_mobilegl - start'
 	if [ ! -d "$(MOBILEGL_SOURCE_DIR)" ]; then \
 		echo 'MobileGL source directory not found: $(MOBILEGL_SOURCE_DIR)'; \
