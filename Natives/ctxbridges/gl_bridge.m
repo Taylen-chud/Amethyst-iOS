@@ -126,9 +126,16 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
     if (!bindResult) NSDebugLog(@"EGLBridge: bind failed: %p\n", handle.eglGetError());
 
     CALayer *layer = SurfaceViewController.surface.layer;
+    CGSize drawableSize = layer.bounds.size;
+    if ([layer isKindOfClass:CAMetalLayer.class]) {
+        drawableSize = ((CAMetalLayer *)layer).drawableSize;
+    } else {
+        drawableSize = CGSizeMake(layer.bounds.size.width * layer.contentsScale,
+                                  layer.bounds.size.height * layer.contentsScale);
+    }
     const EGLint mobileGLSurfaceAttribs[] = {
-        EGL_WIDTH, (EGLint)MAX(1.0, round(layer.bounds.size.width * layer.contentsScale)),
-        EGL_HEIGHT, (EGLint)MAX(1.0, round(layer.bounds.size.height * layer.contentsScale)),
+        EGL_WIDTH, (EGLint)MAX(1.0, round(drawableSize.width)),
+        EGL_HEIGHT, (EGLint)MAX(1.0, round(drawableSize.height)),
         EGL_NONE
     };
     bundle->surface = handle.eglCreateWindowSurface(g_EglDisplay, bundle->config, (__bridge EGLNativeWindowType)layer,
