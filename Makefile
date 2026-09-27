@@ -340,7 +340,7 @@ dep_mobilegl:
 	python3 $(SOURCEDIR)/Natives/patch_mobilegl_ios_visibility.py $(MOBILEGL_SOURCE_DIR)
 	python3 $(SOURCEDIR)/Natives/patch_mobilegl_hash_shim.py $(MOBILEGL_SOURCE_DIR)
 	python3 $(SOURCEDIR)/Natives/patch_mobilegl_enable_availability.py $(MOBILEGL_SOURCE_DIR)
-    python3 $(SOURCEDIR)/Natives/patch_mobilegl.py $(MOBILEGL_SOURCE_DIR)
+	python3 $(SOURCEDIR)/Natives/patch_mobilegl.py $(MOBILEGL_SOURCE_DIR)
 	mkdir -p $(WORKINGDIR)/mobilegl
 	cd $(WORKINGDIR)/mobilegl && cmake \
 		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
