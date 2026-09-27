@@ -361,8 +361,6 @@ static GameSurfaceView* pojavWindow;
     [self setNeedsUpdateOfPrefersPointerLocked];
 }
 
-windowHeight);
-
 - (void)updateSavedResolution {
     for (UIWindowScene *scene in UIApplication.sharedApplication.connectedScenes.allObjects) {
         self.screenScale = scene.screen.scale;
@@ -395,7 +393,7 @@ windowHeight);
 
     if ([self.surfaceView.layer isKindOfClass:CAMetalLayer.class]) {
         ((CAMetalLayer *)self.surfaceView.layer).drawableSize =
-            CGSizeMake(MAX(physicalWidth, 1), MAX(physicalHeight, 1));
+            CGSizeMake(MAX(windowWidth, 1), MAX(windowHeight, 1));
     }
 
     // Tell Minecraft/MobileGL about the internal render resolution.
