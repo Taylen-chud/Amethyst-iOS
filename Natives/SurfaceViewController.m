@@ -361,6 +361,8 @@ static GameSurfaceView* pojavWindow;
     [self setNeedsUpdateOfPrefersPointerLocked];
 }
 
+windowHeight);
+
 - (void)updateSavedResolution {
     for (UIWindowScene *scene in UIApplication.sharedApplication.connectedScenes.allObjects) {
         self.screenScale = scene.screen.scale;
@@ -378,18 +380,25 @@ static GameSurfaceView* pojavWindow;
 
     physicalWidth = roundf(self.surfaceView.frame.size.width * self.screenScale);
     physicalHeight = roundf(self.surfaceView.frame.size.height * self.screenScale);
+
+    // Minecraft's internal render resolution.
     windowWidth = roundf(physicalWidth * resolutionScale);
     windowHeight = roundf(physicalHeight * resolutionScale);
-    // Resolution should not be odd
+
+    // Resolution should not be odd.
     if ((windowWidth % 2) != 0) {
         --windowWidth;
     }
     if ((windowHeight % 2) != 0) {
         --windowHeight;
     }
+
     if ([self.surfaceView.layer isKindOfClass:CAMetalLayer.class]) {
-        ((CAMetalLayer *)self.surfaceView.layer).drawableSize = CGSizeMake(MAX(windowWidth, 1), MAX(windowHeight, 1));
+        ((CAMetalLayer *)self.surfaceView.layer).drawableSize =
+            CGSizeMake(MAX(physicalWidth, 1), MAX(physicalHeight, 1));
     }
+
+    // Tell Minecraft/MobileGL about the internal render resolution.
     CallbackBridge_nativeSendScreenSize(windowWidth, windowHeight);
 }
 
