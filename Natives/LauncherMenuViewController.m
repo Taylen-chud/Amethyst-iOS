@@ -2,6 +2,7 @@
 #import "AccountListViewController.h"
 #import "AFNetworking.h"
 #import "ALTServerConnection.h"
+#import "HostManagerBridge.h"
 #import "LauncherNavigationController.h"
 #import "LauncherMenuViewController.h"
 #import "LauncherNewsViewController.h"
@@ -15,6 +16,7 @@
 #import "ios_uikit_bridge.h"
 #import "utils.h"
 
+#include "config.h"
 #include <dlfcn.h>
 
 @implementation LauncherMenuCustomItem
@@ -78,28 +80,30 @@
         [contentNavigationController performSelector:@selector(enterModInstaller)];
     }]];
     
-    // TODO: Finish log-uploading service integration
     [self.options addObject:
      (id)[LauncherMenuCustomItem
           title:localize(@"login.menu.sendlogs", nil)
           imageName:@"square.and.arrow.up" action:^{
-        NSString *latestlogPath = [NSString stringWithFormat:@"file://%s/latestlog.old.txt", getenv("POJAV_HOME")];
-        NSLog(@"Path is %@", latestlogPath);
-        UIActivityViewController *activityVC;
-        if (realUIIdiom != UIUserInterfaceIdiomTV) {
-            activityVC = [[UIActivityViewController alloc]
-                          initWithActivityItems:@[[NSURL URLWithString:latestlogPath]]
-                          applicationActivities:nil];
-        } else {
-            dlopen("/System/Library/PrivateFrameworks/SharingUI.framework/SharingUI", RTLD_GLOBAL);
-            activityVC =
-            [[NSClassFromString(@"SFAirDropSharingViewControllerTV") alloc]
-             performSelector:@selector(initWithSharingItems:)
-             withObject:@[[NSURL URLWithString:latestlogPath]]];
-        }
-        activityVC.popoverPresentationController.sourceView = titleView;
-        activityVC.popoverPresentationController.sourceRect = titleView.bounds;
-        [self presentViewController:activityVC animated:YES completion:nil];
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            NSArray<NSURL *> *items = [self collectDiagnosticReportItems];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                UIActivityViewController *activityVC;
+                if (realUIIdiom != UIUserInterfaceIdiomTV) {
+                    activityVC = [[UIActivityViewController alloc]
+                                  initWithActivityItems:items
+                                  applicationActivities:nil];
+                } else {
+                    dlopen("/System/Library/PrivateFrameworks/SharingUI.framework/SharingUI", RTLD_GLOBAL);
+                    activityVC =
+                    [[NSClassFromString(@"SFAirDropSharingViewControllerTV") alloc]
+                     performSelector:@selector(initWithSharingItems:)
+                     withObject:items];
+                }
+                activityVC.popoverPresentationController.sourceView = titleView;
+                activityVC.popoverPresentationController.sourceRect = titleView.bounds;
+                [self presentViewController:activityVC animated:YES completion:nil];
+            });
+        });
     }]];
     
     NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
@@ -369,6 +373,65 @@
             [connection disconnect];
         }];
     }];
+}
+
+- (NSArray<NSURL *> *)collectDiagnosticReportItems {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    const char *homeEnv = getenv("POJAV_HOME");
+    if (!homeEnv || !*homeEnv) return @[];
+    NSString *home = @(homeEnv);
+    NSMutableArray<NSURL *> *items = [NSMutableArray array];
+
+    for (NSString *name in @[@"latestlog.txt", @"latestlog.old.txt", @"mobilegl.log"]) {
+        NSString *path = [home stringByAppendingPathComponent:name];
+        if ([fm fileExistsAtPath:path]) {
+            [items addObject:[NSURL fileURLWithPath:path]];
+        }
+    }
+
+    NSDirectoryEnumerator *enumerator =
+        [fm enumeratorAtURL:[NSURL fileURLWithPath:home]
+  includingPropertiesForKeys:@[NSURLIsDirectoryKey]
+                     options:NSDirectoryEnumerationSkipsHiddenFiles
+                errorHandler:nil];
+    NSUInteger hsErrFound = 0;
+    static NSSet<NSString *> *skipDirNames;
+    if (!skipDirNames) {
+        skipDirNames = [NSSet setWithArray:@[@"versions", @"libraries", @"assets", @"java_runtimes"]];
+    }
+    for (NSURL *url in enumerator) {
+        NSNumber *isDir = nil;
+        [url getResourceValue:&isDir forKey:NSURLIsDirectoryKey error:nil];
+        NSString *name = url.lastPathComponent;
+        if (isDir.boolValue && [skipDirNames containsObject:name]) {
+            [enumerator skipDescendants];
+            continue;
+        }
+        if (!isDir.boolValue && [name hasPrefix:@"hs_err_pid"] && [url.pathExtension isEqualToString:@"log"]) {
+            [items addObject:url];
+            hsErrFound++;
+            if (hsErrFound >= 3) break; // don't attach an unbounded number
+        }
+    }
+
+    NSMutableString *info = [NSMutableString string];
+    [info appendFormat:@"Amethyst version: %@-%s\n", NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"], CONFIG_TYPE];
+    [info appendFormat:@"Commit: %s (%s)\n", CONFIG_COMMIT, CONFIG_BRANCH];
+    [info appendFormat:@"Device: %@\n", [HostManager GetModelName]];
+    [info appendFormat:@"OS: %@\n", UIDevice.currentDevice.completeOSVersion];
+    const char *installType = getenv("POJAV_DETECTEDINST");
+    [info appendFormat:@"Install type: %s\n", installType ? installType : "unknown"];
+    [info appendFormat:@"Renderer: %@\n", [PLProfiles resolveKeyForCurrentProfile:@"renderer"]];
+
+    NSString *infoPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"amethyst_diagnostic_info.txt"];
+    NSError *writeError = nil;
+    if ([info writeToFile:infoPath atomically:YES encoding:NSUTF8StringEncoding error:&writeError]) {
+        [items addObject:[NSURL fileURLWithPath:infoPath]];
+    } else {
+        NSLog(@"[LauncherMenuViewController] Failed to write diagnostic info file: %@", writeError);
+    }
+
+    return items;
 }
 
 @end

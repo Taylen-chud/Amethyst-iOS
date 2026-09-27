@@ -22,6 +22,7 @@
 #import "MinecraftOptionUtils.h"
 #import "PLLogOutputView.h"
 #import "PLProfiles.h"
+#import "RendererCrashTracker.h"
 
 #define fm NSFileManager.defaultManager
 
@@ -273,6 +274,24 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
         NSLog(@"[JavaLauncher] RENDERER is set to %@\n", renderer);
         setenv("POJAV_RENDERER", renderer.UTF8String, 1);
+
+       
+        NSUInteger consecutiveRendererFailures = [RendererCrashTracker consecutiveFailuresForRenderer:renderer];
+        if (consecutiveRendererFailures >= 2) {
+            NSString *message = [NSString stringWithFormat:localize(@"renderer.crash_fallback.message", nil),
+                                  (unsigned long)consecutiveRendererFailures, renderer];
+            showDialog(localize(@"renderer.crash_fallback.title", nil), message);
+        }
+        [RendererCrashTracker recordLaunchAttemptForRenderer:renderer];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [RendererCrashTracker markLaunchStableForRenderer:renderer];
+        });
+
+        if (getPrefBool(@"debug.debug_verbose_graphics_logging")) {
+            setenv("MVK_CONFIG_LOG_LEVEL", "4", 1);
+            setenv("MVK_DEBUG", "1", 1);
+        }
+
         if (isMobileGLRenderer(renderer.UTF8String)) {
     setenv("MOBILEGL_BACKEND_TYPE", "DirectVulkan", 1);
     

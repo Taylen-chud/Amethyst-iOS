@@ -366,6 +366,12 @@
         ], @[
             // Debug settings - only recommended for developer use
             @{@"icon": @"ladybug"},
+            @{@"key": @"debug_verbose_graphics_logging",
+                @"hasDetail": @YES,
+                @"icon": @"waveform.path.ecg.rectangle",
+                @"type": self.typeSwitch,
+                @"enableCondition": whenNotInGame
+            },
             @{@"key": @"debug_always_attached_jit",
                 @"hasDetail": @YES,
                 @"icon": @"app.connected.to.app.below.fill",

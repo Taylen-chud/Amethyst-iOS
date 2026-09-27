@@ -3,7 +3,19 @@ project(AngelAuraAmethyst)
 
 configure_file(${CMAKE_CURRENT_LIST_DIR}/config.h.in ${CMAKE_CURRENT_LIST_DIR}/config.h)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -target arm64-apple-ios -mcpu=apple-a8 -fcommon -fobjc-arc -ObjC -F'${CMAKE_OSX_SYSROOT}/System/Cryptexes/OS/System/Library/Frameworks'")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -target arm64-apple-ios -mcpu=apple-a8 -fcommon -fobjc-arc -ObjC -F'${CMAKE_OSX_SYSROOT}/System/Cryptexes/OS/System/Library/Fram#import <Foundation/Foundation.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+@interface RendererCrashTracker : NSObject
+
++ (NSUInteger)consecutiveFailuresForRenderer:(NSString *)renderer;
++ (void)recordLaunchAttemptForRenderer:(NSString *)renderer;
++ (void)markLaunchStableForRenderer:(NSString *)renderer;
+
+@end
+
+NS_ASSUME_NONNULL_ENDeworks'")
 set(CMAKE_C_FLAGS_DEBUG "-funwind-tables -g")
 
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux|^GNU$|Android")
@@ -164,6 +176,7 @@ add_executable(AngelAuraAmethyst
   PLPreferences.m
   PLPrefTableViewController.m
   PLProfiles.m
+  RendererCrashTracker.m
   SceneDelegate.m
   SceneExternalDelegate.m
   SurfaceViewController.m
