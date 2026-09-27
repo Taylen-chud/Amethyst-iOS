@@ -49,13 +49,13 @@ typedef unsigned long MTLLanguageVersion;
  *   - 401215    (version 4.12.15)
  */
 #define MVK_VERSION_MAJOR   1
-#define MVK_VERSION_MINOR   1
-#define MVK_VERSION_PATCH   2
+#define MVK_VERSION_MINOR   4
+#define MVK_VERSION_PATCH   3
 
 #define MVK_MAKE_VERSION(major, minor, patch)    (((major) * 10000) + ((minor) * 100) + (patch))
 #define MVK_VERSION     MVK_MAKE_VERSION(MVK_VERSION_MAJOR, MVK_VERSION_MINOR, MVK_VERSION_PATCH)
 
-#define VK_MVK_MOLTENVK_SPEC_VERSION            30
+#define VK_MVK_MOLTENVK_SPEC_VERSION            31
 #define VK_MVK_MOLTENVK_EXTENSION_NAME          "VK_MVK_moltenvk"
 
 /**
@@ -709,6 +709,21 @@ typedef struct {
 	 * performance will be logged only when frame activity is logged.
 	 */
 	VkBool32 logActivityPerformanceInline;
+
+	/* MoltenVK 1.4.x configuration fields appended after the legacy 1.1.x layout.
+	 * Keep the legacy members above unchanged: MoltenVK supports size-negotiated
+	 * configuration structures for dynamically linked applications. */
+	uint32_t apiVersionToAdvertise;
+	uint32_t advertiseExtensions;
+	VkBool32 resumeLostDevice;
+	VkBool32 useMetalArgumentBuffers;
+	uint32_t shaderSourceCompressionAlgorithm;
+	VkBool32 shouldMaximizeConcurrentCompilation;
+	float timestampPeriodLowPassAlpha;
+	VkBool32 useMetalPrivateAPI;
+	const char* shaderDumpDir;
+	VkBool32 shaderLogEstimatedGLSL;
+	VkBool32 liveCheckAllResources;
 
 } MVKConfiguration;
 

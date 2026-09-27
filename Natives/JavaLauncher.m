@@ -37,6 +37,7 @@ BOOL validateVirtualMemorySpace(size_t size) {
     return YES;
 }
 
+
 void init_loadDefaultEnv() {
     /* Define default env */
 
@@ -55,9 +56,16 @@ void init_loadDefaultEnv() {
     // Override OpenGL version to 4.1 for Zink
     setenv("MESA_GL_VERSION_OVERRIDE", "4.1", 1);
 
-
-    setenv("MVK_CONFIG_RESUME_LOST_DEVICE"
-    , "1", 1);
+    // MoltenVK 1.4.3 performance defaults for Apple GPUs.
+    // Use setenv(..., 0) so per-profile/user Java environment overrides win.
+    setenv("MVK_CONFIG_FAST_MATH_ENABLED", "2", 0);
+    setenv("MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS", "1", 0);
+    setenv("MVK_CONFIG_PREFILL_METAL_COMMAND_BUFFERS", "0", 0);
+    setenv("MVK_CONFIG_USE_COMMAND_POOLING", "1", 0);
+    setenv("MVK_CONFIG_USE_MTLHEAP", "1", 0);
+    setenv("MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS", "1", 0);
+    setenv("MVK_CONFIG_VK_SEMAPHORE_SUPPORT_STYLE", "1", 0);
+    setenv("MVK_CONFIG_RESUME_LOST_DEVICE", "1", 0);
 
     // Runs JVM in a separate thread
     setenv("HACK_IGNORE_START_ON_FIRST_THREAD", "1", 1);
