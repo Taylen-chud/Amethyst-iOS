@@ -22,6 +22,7 @@
 #include "glfw_keycodes.h"
 #include "ios_uikit_bridge.h"
 #include "utils.h"
+#include "ctxbridges/gl_bridge.h"
 
 #include "JavaLauncher.h"
 
@@ -670,6 +671,7 @@ void CallbackBridge_nativeSendMouseButton(int button, int action, int mods) {
 void CallbackBridge_nativeSendScreenSize(int width, int height) {
     windowWidth = width;
     windowHeight = height;
+    gl_notify_screen_size(width, height);
     
     if (isInputReady) {
         if (GLFW_invoke_FramebufferSize) {
