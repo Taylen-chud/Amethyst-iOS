@@ -206,7 +206,7 @@ public class SDLVideo {
    }
 
    @NativeType("char const *")
-   public static @Nullable String SDL_GetVideoDriver(int index) {
+   public static String SDL_GetVideoDriver(int index) {
       long __result = nSDL_GetVideoDriver(index);
       return MemoryUtil.memASCIISafe(__result);
    }
@@ -217,7 +217,7 @@ public class SDLVideo {
    }
 
    @NativeType("char const *")
-   public static @Nullable String SDL_GetCurrentVideoDriver() {
+   public static String SDL_GetCurrentVideoDriver() {
       long __result = nSDL_GetCurrentVideoDriver();
       return MemoryUtil.memASCIISafe(__result);
    }
@@ -234,7 +234,7 @@ public class SDLVideo {
    }
 
    @NativeType("SDL_DisplayID *")
-   public static @Nullable IntBuffer SDL_GetDisplays() {
+   public static IntBuffer SDL_GetDisplays() {
       MemoryStack stack = MemoryStack.stackGet();
       int stackPointer = stack.getPointer();
       IntBuffer count = stack.callocInt(1);
@@ -268,7 +268,7 @@ public class SDLVideo {
    }
 
    @NativeType("char const *")
-   public static @Nullable String SDL_GetDisplayName(@NativeType("SDL_DisplayID") int displayID) {
+   public static String SDL_GetDisplayName(@NativeType("SDL_DisplayID") int displayID) {
       long __result = nSDL_GetDisplayName(displayID);
       return MemoryUtil.memUTF8Safe(__result);
    }
@@ -316,7 +316,7 @@ public class SDLVideo {
    }
 
    @NativeType("SDL_DisplayMode **")
-   public static @Nullable PointerBuffer SDL_GetFullscreenDisplayModes(@NativeType("SDL_DisplayID") int displayID) {
+   public static PointerBuffer SDL_GetFullscreenDisplayModes(@NativeType("SDL_DisplayID") int displayID) {
       MemoryStack stack = MemoryStack.stackGet();
       int stackPointer = stack.getPointer();
       IntBuffer count = stack.callocInt(1);
@@ -348,7 +348,7 @@ public class SDLVideo {
    }
 
    @NativeType("SDL_DisplayMode const *")
-   public static @Nullable SDL_DisplayMode SDL_GetDesktopDisplayMode(@NativeType("SDL_DisplayID") int displayID) {
+   public static SDL_DisplayMode SDL_GetDesktopDisplayMode(@NativeType("SDL_DisplayID") int displayID) {
       long __result = nSDL_GetDesktopDisplayMode(displayID);
       return SDL_DisplayMode.createSafe(__result);
    }
@@ -359,7 +359,7 @@ public class SDLVideo {
    }
 
    @NativeType("SDL_DisplayMode const *")
-   public static @Nullable SDL_DisplayMode SDL_GetCurrentDisplayMode(@NativeType("SDL_DisplayID") int displayID) {
+   public static SDL_DisplayMode SDL_GetCurrentDisplayMode(@NativeType("SDL_DisplayID") int displayID) {
       long __result = nSDL_GetCurrentDisplayMode(displayID);
       return SDL_DisplayMode.createSafe(__result);
    }
@@ -425,7 +425,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_SetWindowFullscreenMode(@NativeType("SDL_Window *") long window, @NativeType("SDL_DisplayMode const *") @Nullable SDL_DisplayMode mode) {
+   public static boolean SDL_SetWindowFullscreenMode(@NativeType("SDL_Window *") long window, @NativeType("SDL_DisplayMode const *") SDL_DisplayMode mode) {
       return nSDL_SetWindowFullscreenMode(window, MemoryUtil.memAddressSafe(mode));
    }
 
@@ -439,7 +439,7 @@ public class SDLVideo {
    }
 
    @NativeType("SDL_DisplayMode const *")
-   public static @Nullable SDL_DisplayMode SDL_GetWindowFullscreenMode(@NativeType("SDL_Window *") long window) {
+   public static SDL_DisplayMode SDL_GetWindowFullscreenMode(@NativeType("SDL_Window *") long window) {
       long __result = nSDL_GetWindowFullscreenMode(window);
       return SDL_DisplayMode.createSafe(__result);
    }
@@ -454,7 +454,7 @@ public class SDLVideo {
    }
 
    @NativeType("void *")
-   public static @Nullable ByteBuffer SDL_GetWindowICCProfile(@NativeType("SDL_Window *") long window) {
+   public static ByteBuffer SDL_GetWindowICCProfile(@NativeType("SDL_Window *") long window) {
       MemoryStack stack = MemoryStack.stackGet();
       int stackPointer = stack.getPointer();
       PointerBuffer size = stack.callocPointer(1);
@@ -486,7 +486,7 @@ public class SDLVideo {
    }
 
    @NativeType("SDL_Window **")
-   public static @Nullable PointerBuffer SDL_GetWindows() {
+   public static PointerBuffer SDL_GetWindows() {
       MemoryStack stack = MemoryStack.stackGet();
       int stackPointer = stack.getPointer();
       IntBuffer count = stack.callocInt(1);
@@ -512,7 +512,7 @@ public class SDLVideo {
    }
 
    @NativeType("SDL_Window *")
-   public static long SDL_CreateWindow(@NativeType("char const *") @Nullable ByteBuffer title, int w, int h, @NativeType("SDL_WindowFlags") long flags) {
+   public static long SDL_CreateWindow(@NativeType("char const *") ByteBuffer title, int w, int h, @NativeType("SDL_WindowFlags") long flags) {
       if (Checks.CHECKS) {
          Checks.checkNT1Safe(title);
       }
@@ -521,7 +521,7 @@ public class SDLVideo {
    }
 
    @NativeType("SDL_Window *")
-   public static long SDL_CreateWindow(@NativeType("char const *") @Nullable CharSequence title, int w, int h, @NativeType("SDL_WindowFlags") long flags) {
+   public static long SDL_CreateWindow(@NativeType("char const *") CharSequence title, int w, int h, @NativeType("SDL_WindowFlags") long flags) {
       MemoryStack stack = MemoryStack.stackGet();
       int stackPointer = stack.getPointer();
 
@@ -613,7 +613,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_SetWindowTitle(@NativeType("SDL_Window *") long window, @NativeType("char const *") @Nullable ByteBuffer title) {
+   public static boolean SDL_SetWindowTitle(@NativeType("SDL_Window *") long window, @NativeType("char const *") ByteBuffer title) {
       if (Checks.CHECKS) {
          Checks.checkNT1Safe(title);
       }
@@ -622,7 +622,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_SetWindowTitle(@NativeType("SDL_Window *") long window, @NativeType("char const *") @Nullable CharSequence title) {
+   public static boolean SDL_SetWindowTitle(@NativeType("SDL_Window *") long window, @NativeType("char const *") CharSequence title) {
       MemoryStack stack = MemoryStack.stackGet();
       int stackPointer = stack.getPointer();
 
@@ -648,7 +648,7 @@ public class SDLVideo {
    }
 
    @NativeType("char const *")
-   public static @Nullable String SDL_GetWindowTitle(@NativeType("SDL_Window *") long window) {
+   public static String SDL_GetWindowTitle(@NativeType("SDL_Window *") long window) {
       long __result = nSDL_GetWindowTitle(window);
       return MemoryUtil.memUTF8Safe(__result);
    }
@@ -687,7 +687,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_GetWindowPosition(@NativeType("SDL_Window *") long window, @NativeType("int *") @Nullable IntBuffer x, @NativeType("int *") @Nullable IntBuffer y) {
+   public static boolean SDL_GetWindowPosition(@NativeType("SDL_Window *") long window, @NativeType("int *") IntBuffer x, @NativeType("int *") IntBuffer y) {
       if (Checks.CHECKS) {
          Checks.checkSafe(x, 1);
          Checks.checkSafe(y, 1);
@@ -716,7 +716,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_GetWindowSize(@NativeType("SDL_Window *") long window, @NativeType("int *") @Nullable IntBuffer w, @NativeType("int *") @Nullable IntBuffer h) {
+   public static boolean SDL_GetWindowSize(@NativeType("SDL_Window *") long window, @NativeType("int *") IntBuffer w, @NativeType("int *") IntBuffer h) {
       if (Checks.CHECKS) {
          Checks.checkSafe(w, 1);
          Checks.checkSafe(h, 1);
@@ -759,7 +759,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_GetWindowAspectRatio(@NativeType("SDL_Window *") long window, @NativeType("float *") @Nullable FloatBuffer min_aspect, @NativeType("float *") @Nullable FloatBuffer max_aspect) {
+   public static boolean SDL_GetWindowAspectRatio(@NativeType("SDL_Window *") long window, @NativeType("float *") FloatBuffer min_aspect, @NativeType("float *") FloatBuffer max_aspect) {
       if (Checks.CHECKS) {
          Checks.checkSafe(min_aspect, 1);
          Checks.checkSafe(max_aspect, 1);
@@ -778,7 +778,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_GetWindowBordersSize(@NativeType("SDL_Window *") long window, @NativeType("int *") @Nullable IntBuffer top, @NativeType("int *") @Nullable IntBuffer left, @NativeType("int *") @Nullable IntBuffer bottom, @NativeType("int *") @Nullable IntBuffer right) {
+   public static boolean SDL_GetWindowBordersSize(@NativeType("SDL_Window *") long window, @NativeType("int *") IntBuffer top, @NativeType("int *") IntBuffer left, @NativeType("int *") IntBuffer bottom, @NativeType("int *") IntBuffer right) {
       if (Checks.CHECKS) {
          Checks.checkSafe(top, 1);
          Checks.checkSafe(left, 1);
@@ -799,7 +799,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_GetWindowSizeInPixels(@NativeType("SDL_Window *") long window, @NativeType("int *") @Nullable IntBuffer w, @NativeType("int *") @Nullable IntBuffer h) {
+   public static boolean SDL_GetWindowSizeInPixels(@NativeType("SDL_Window *") long window, @NativeType("int *") IntBuffer w, @NativeType("int *") IntBuffer h) {
       if (Checks.CHECKS) {
          Checks.checkSafe(w, 1);
          Checks.checkSafe(h, 1);
@@ -828,7 +828,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_GetWindowMinimumSize(@NativeType("SDL_Window *") long window, @NativeType("int *") @Nullable IntBuffer w, @NativeType("int *") @Nullable IntBuffer h) {
+   public static boolean SDL_GetWindowMinimumSize(@NativeType("SDL_Window *") long window, @NativeType("int *") IntBuffer w, @NativeType("int *") IntBuffer h) {
       if (Checks.CHECKS) {
          Checks.checkSafe(w, 1);
          Checks.checkSafe(h, 1);
@@ -857,7 +857,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_GetWindowMaximumSize(@NativeType("SDL_Window *") long window, @NativeType("int *") @Nullable IntBuffer w, @NativeType("int *") @Nullable IntBuffer h) {
+   public static boolean SDL_GetWindowMaximumSize(@NativeType("SDL_Window *") long window, @NativeType("int *") IntBuffer w, @NativeType("int *") IntBuffer h) {
       if (Checks.CHECKS) {
          Checks.checkSafe(w, 1);
          Checks.checkSafe(h, 1);
@@ -1006,7 +1006,7 @@ public class SDLVideo {
    }
 
    @NativeType("SDL_Surface *")
-   public static @Nullable SDL_Surface SDL_GetWindowSurface(@NativeType("SDL_Window *") long window) {
+   public static SDL_Surface SDL_GetWindowSurface(@NativeType("SDL_Window *") long window) {
       long __result = nSDL_GetWindowSurface(window);
       return SDL_Surface.createSafe(__result);
    }
@@ -1143,7 +1143,7 @@ public class SDLVideo {
    }
 
    @NativeType("SDL_Rect const *")
-   public static @Nullable SDL_Rect SDL_GetWindowMouseRect(@NativeType("SDL_Window *") long window) {
+   public static SDL_Rect SDL_GetWindowMouseRect(@NativeType("SDL_Window *") long window) {
       long __result = nSDL_GetWindowMouseRect(window);
       return SDL_Rect.createSafe(__result);
    }
@@ -1217,7 +1217,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_SetWindowHitTest(@NativeType("SDL_Window *") long window, @NativeType("SDL_HitTest") @Nullable SDL_HitTestI callback, @NativeType("void *") long callback_data) {
+   public static boolean SDL_SetWindowHitTest(@NativeType("SDL_Window *") long window, @NativeType("SDL_HitTest") SDL_HitTestI callback, @NativeType("void *") long callback_data) {
       return nSDL_SetWindowHitTest(window, MemoryUtil.memAddressSafe(callback), callback_data);
    }
 
@@ -1231,7 +1231,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_SetWindowShape(@NativeType("SDL_Window *") long window, @NativeType("SDL_Surface *") @Nullable SDL_Surface shape) {
+   public static boolean SDL_SetWindowShape(@NativeType("SDL_Window *") long window, @NativeType("SDL_Surface *") SDL_Surface shape) {
       return nSDL_SetWindowShape(window, MemoryUtil.memAddressSafe(shape));
    }
 
@@ -1317,7 +1317,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_GL_LoadLibrary(@NativeType("char const *") @Nullable ByteBuffer path) {
+   public static boolean SDL_GL_LoadLibrary(@NativeType("char const *") ByteBuffer path) {
       if (Checks.CHECKS) {
          Checks.checkNT1Safe(path);
       }
@@ -1326,7 +1326,7 @@ public class SDLVideo {
    }
 
    @NativeType("bool")
-   public static boolean SDL_GL_LoadLibrary(@NativeType("char const *") @Nullable CharSequence path) {
+   public static boolean SDL_GL_LoadLibrary(@NativeType("char const *") CharSequence path) {
       MemoryStack stack = MemoryStack.stackGet();
       int stackPointer = stack.getPointer();
 
@@ -1520,7 +1520,7 @@ public class SDLVideo {
       JNI.invokePPPPV(platformAttribCallback, surfaceAttribCallback, contextAttribCallback, userdata, __functionAddress);
    }
 
-   public static void SDL_EGL_SetAttributeCallbacks(@NativeType("SDL_EGLAttribArrayCallback") @Nullable SDL_EGLAttribArrayCallbackI platformAttribCallback, @NativeType("SDL_EGLIntArrayCallback") @Nullable SDL_EGLIntArrayCallbackI surfaceAttribCallback, @NativeType("SDL_EGLIntArrayCallback") @Nullable SDL_EGLIntArrayCallbackI contextAttribCallback, @NativeType("void *") long userdata) {
+   public static void SDL_EGL_SetAttributeCallbacks(@NativeType("SDL_EGLAttribArrayCallback") SDL_EGLAttribArrayCallbackI platformAttribCallback, @NativeType("SDL_EGLIntArrayCallback") SDL_EGLIntArrayCallbackI surfaceAttribCallback, @NativeType("SDL_EGLIntArrayCallback") SDL_EGLIntArrayCallbackI contextAttribCallback, @NativeType("void *") long userdata) {
       nSDL_EGL_SetAttributeCallbacks(MemoryUtil.memAddressSafe(platformAttribCallback), MemoryUtil.memAddressSafe(surfaceAttribCallback), MemoryUtil.memAddressSafe(contextAttribCallback), userdata);
    }
 
