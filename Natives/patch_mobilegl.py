@@ -9,25 +9,35 @@ if len(sys.argv) != 2:
 
 root = Path(sys.argv[1])
 
-# MobileGL's repository layout may differ between revisions.
-# Find the actual FramebufferBlitter.cpp without assuming an extra
-# "MobileGL/" directory under the repository root.
-matches = list(root.rglob("FramebufferBlitter.cpp"))
+print(f"[Amethyst] Searching MobileGL source: {root}")
 
+# Find the source file containing ResolveBlitRectangles.
 target = None
-for candidate in matches:
-    if (
-        candidate.parent.name == "Pipeline"
-        and candidate.parent.parent.name == "DirectVulkan"
-    ):
+
+for candidate in root.rglob("*.cpp"):
+    try:
+        source = candidate.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        continue
+
+    if "ResolveBlitRectangles" in source:
         target = candidate
         break
 
 if target is None:
-    print(f"[Amethyst] MobileGL FramebufferBlitter.cpp not found under: {root}")
+    print("[Amethyst] Could not find ResolveBlitRectangles in MobileGL.")
+    print("[Amethyst] No resolution-scaling patch was applied.")
     sys.exit(1)
 
+print(f"[Amethyst] Found blit implementation: {target}")
+
 marker = "// AMETHYST_RESOLUTION_SCALE_FIX"
+
+source = target.read_text(encoding="utf-8")
+
+if marker in source:
+    print("[Amethyst] MobileGL resolution patch already applied.")
+    sys.exit(0)
 
 old = """        if (drawFbo.IsDefaultFramebuffer()) {
             Uint32 defaultWidth = 0;
@@ -40,6 +50,11 @@ old = """        if (drawFbo.IsDefaultFramebuffer()) {
             }
         }
 """
+
+if old not in source:
+    print("[Amethyst] Found ResolveBlitRectangles, but its expected code does not match.")
+    print("[Amethyst] MobileGL revision uses different blit code.")
+    sys.exit(1)
 
 new = """        if (drawFbo.IsDefaultFramebuffer()) {
             Uint32 defaultWidth = 0;
@@ -75,25 +90,9 @@ new = """        if (drawFbo.IsDefaultFramebuffer()) {
         }
 """
 
-if not target.exists():
-    print(f"[Amethyst] MobileGL file not found: {target}")
-    sys.exit(1)
-
-print(f"[Amethyst] Patching MobileGL: {target}")
-
-source = target.read_text(encoding="utf-8")
-
-if marker in source:
-    print("[Amethyst] MobileGL already patched.")
-    sys.exit(0)
-
-if old not in source:
-    print("[Amethyst] Could not find MobileGL code to patch.")
-    sys.exit(1)
-
 target.write_text(
     source.replace(old, marker + "\n" + new, 1),
     encoding="utf-8"
 )
 
-print("[Amethyst] MobileGL resolution scaling patch applied.")
+print("[Amethyst] MobileGL resolution-scaling patch applied.")
