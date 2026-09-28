@@ -239,7 +239,7 @@ static JNIEnv* getThreadJNIEnv() {
     JNIEnv *env = NULL;
     (*runtimeJavaVMPtr)->GetEnv(runtimeJavaVMPtr, (void **)&env, JNI_VERSION_1_4);
     if (env == NULL) {
-        (*runtimeJavaVMPtr)->AttachCurrentThreadAsDaemon(runtimeJavaVMPtr, (void **)&env, NULL);
+        (*runtimeJavaVMPtr)->AttachCurrentThreadAsDaemon(runtimeJavaVMPtr, (JNIEnv **)&env, NULL);
     }
     return env;
 }
@@ -523,12 +523,6 @@ JNIEXPORT jlong JNICALL Java_org_lwjgl_glfw_CallbackBridge_nativeGetCocoaView(
     }
 
     return (jlong)(__bridge void *)surface;
-}
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        SurfaceViewController *vc = ((SurfaceViewController *)UIWindow.mainWindow.rootViewController);
-        [vc updateGrabState];
-    });
 }
 
 JNIEXPORT jboolean JNICALL Java_org_lwjgl_glfw_CallbackBridge_nativeIsGrabbing(JNIEnv* env, jclass clazz) {
