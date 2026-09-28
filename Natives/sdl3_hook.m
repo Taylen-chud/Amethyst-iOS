@@ -93,10 +93,8 @@ static void AMAttachSDLWindowOnMain(long long sdlWindow,
 
 static BOOL AMSDL3SetMainReady(void) {
     const char *libraryPaths[] = {
-        "@executable_path/Frameworks/libSDL3.dylib",
-        "@executable_path/Frameworks/SDL3.framework/SDL3",
-        "@loader_path/Frameworks/libSDL3.dylib",
-        "@loader_path/Frameworks/SDL3.framework/SDL3",
+        "@executable_path/Frameworks/lwjgl34/libSDL3.dylib",
+        "@loader_path/Frameworks/lwjgl34/libSDL3.dylib",
         NULL
     };
 
