@@ -3,7 +3,6 @@ package org.lwjgl.sdl;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
-import org.jspecify.annotations.Nullable;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.APIUtil;
 import org.lwjgl.system.Checks;
