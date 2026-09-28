@@ -266,8 +266,14 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
                 int major;
                 BOOL isClean;
                 AMParseVersion(versionId, &major, NULL, NULL, &isClean);
-                if (isClean) {
-                    resolvedLWJGLFolder = AMBundledFolderForRequiredVersion(major >= 26 ? @"3.4.1" : @"3.3.3");
+                if (major >= 26) {
+                    // 26.3 Snapshot 4+ switched Minecraft from GLFW to SDL3.
+                    // Snapshot/pre-release IDs are not clean numeric versions, so
+                    // do not require isClean here; the major component is enough
+                    // to select the bundled LWJGL 3.4.1 SDL-capable stack.
+                    resolvedLWJGLFolder = AMBundledFolderForRequiredVersion(@"3.4.1");
+                } else if (isClean) {
+                    resolvedLWJGLFolder = AMBundledFolderForRequiredVersion(@"3.3.3");
                 }
             }
         }

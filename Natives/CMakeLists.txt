@@ -104,6 +104,7 @@ add_executable(AngelAuraAmethyst
   main.m
   main_hook.m
   JavaLauncher.m
+  sdl3_hook.m
   external/fishhook/fishhook.c
   UIKit+hook.m
 
