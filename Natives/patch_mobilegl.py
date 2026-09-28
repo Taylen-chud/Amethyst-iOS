@@ -21,22 +21,31 @@ def main():
 
     content = target.read_text(encoding="utf-8")
 
-    # Print the actual BlitFramebuffer implementation from this revision.
-    marker = "Bool VulkanRenderer::BlitFramebuffer("
+    marker = "void VulkanRenderer::BlitFramebuffer("
+
     start = content.find(marker)
 
     if start == -1:
-        print("[Amethyst] Could not find BlitFramebuffer in VulkanRenderer.cpp.")
-        print("[Amethyst] Printing VulkanRenderer symbols instead:")
+        print("[Amethyst] Could not find void VulkanRenderer::BlitFramebuffer().")
+        print("[Amethyst] Printing matching renderer symbols instead:")
 
         for line in content.splitlines():
-            if "VulkanRenderer::" in line:
+            if "VulkanRenderer::Blit" in line:
                 print(line)
 
         return 1
 
-    # Find the next function after BlitFramebuffer.
-    next_function = content.find("\nBool VulkanRenderer::", start + len(marker))
+    # Find the next VulkanRenderer function after BlitFramebuffer.
+    next_function = content.find("\nvoid VulkanRenderer::", start + len(marker))
+
+    if next_function == -1:
+        next_function = content.find("\nBool VulkanRenderer::", start + len(marker))
+
+    if next_function == -1:
+        next_function = content.find("\nUint32 VulkanRenderer::", start + len(marker))
+
+    if next_function == -1:
+        next_function = content.find("\nVk", start + len(marker))
 
     if next_function == -1:
         section = content[start:]
