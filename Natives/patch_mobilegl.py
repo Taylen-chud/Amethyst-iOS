@@ -11,56 +11,62 @@ root = Path(sys.argv[1])
 
 print(f"[Amethyst] Searching MobileGL source: {root}")
 
-# Find the VulkanRenderer implementation used by this MobileGL revision.
-target = None
+marker = "// AMETHYST_RESOLUTION_SCALE_FIX"
 
+target = None
+source = None
+
+# Find the source containing the Vulkan image copy/blit decision.
 for candidate in root.rglob("*.cpp"):
     try:
-        source = candidate.read_text(encoding="utf-8")
+        text = candidate.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
         continue
 
-    if "Bool VulkanRenderer::BlitFramebuffer(" in source:
+    if (
+        "vkCmdCopyImage(" in text
+        and "vkCmdBlitImage(" in text
+        and "sameSize" in text
+    ):
         target = candidate
+        source = text
         break
 
 if target is None:
-    print("[Amethyst] Could not find VulkanRenderer::BlitFramebuffer.")
+    print("[Amethyst] Could not find the MobileGL Vulkan blit/copy implementation.")
     print("[Amethyst] No resolution-scaling patch was applied.")
     sys.exit(1)
 
-print(f"[Amethyst] Found Vulkan blit implementation: {target}")
-
-marker = "// AMETHYST_RESOLUTION_SCALE_FIX"
-
-source = target.read_text(encoding="utf-8")
+print(f"[Amethyst] Found Vulkan blit/copy implementation: {target}")
 
 if marker in source:
     print("[Amethyst] MobileGL resolution patch already applied.")
     sys.exit(0)
 
-old = """        const Int srcWidth = std::abs(srcX1 - srcX0);
-        const Int srcHeight = std::abs(srcY1 - srcY0);
-        const Int dstWidth = std::abs(dstX1 - dstX0);
-        const Int dstHeight = std::abs(dstY1 - dstY0);
+old = """        const Bool sameSize = (srcWidth == dstWidth) && (srcHeight == dstHeight);
+        const Bool sameFormat = (srcBinding.format == dstBinding.format);
 
-        const Bool sameSize = (srcWidth == dstWidth) && (srcHeight == dstHeight);
+        if (sameSize && sameFormat && (srcBinding.sampleCount == VK_SAMPLE_COUNT_1_BIT) &&
+            (dstBinding.sampleCount == VK_SAMPLE_COUNT_1_BIT)) {
 """
 
 if old not in source:
-    print("[Amethyst] Found VulkanRenderer::BlitFramebuffer,")
-    print("[Amethyst] but its expected size-calculation code does not match.")
-    print("[Amethyst] MobileGL revision uses different blit code.")
+    print("[Amethyst] Found the Vulkan blit/copy implementation,")
+    print("[Amethyst] but its expected copy/blit decision code does not match.")
+    print("[Amethyst] MobileGL revision uses different code.")
     sys.exit(1)
 
-new = """        const Int srcWidth = std::abs(srcX1 - srcX0);
-        const Int srcHeight = std::abs(srcY1 - srcY0);
-        Int dstWidth = std::abs(dstX1 - dstX0);
-        Int dstHeight = std::abs(dstY1 - dstY0);
-
-        if (drawFbo.IsDefaultFramebuffer() &&
-            srcWidth > 0 && srcHeight > 0) {
-
+new = """        // AMETHYST_RESOLUTION_SCALE_FIX
+        //
+        // Minecraft's resolution slider changes the size of its internal
+        // framebuffer, while the default framebuffer remains the physical
+        // display/swapchain size.
+        //
+        // If the reduced framebuffer is copied directly into the swapchain,
+        // only the smaller region is updated. Force a scaled Vulkan blit
+        // whenever the destination is the default framebuffer and the
+        // source size differs from the swapchain extent.
+        if (drawFbo.IsDefaultFramebuffer()) {
             const auto swapchainExtent = m_swapchainObject.GetExtent();
 
             if (swapchainExtent.width > 0 &&
@@ -86,6 +92,10 @@ new = """        const Int srcWidth = std::abs(srcX1 - srcX0);
         }
 
         const Bool sameSize = (srcWidth == dstWidth) && (srcHeight == dstHeight);
+        const Bool sameFormat = (srcBinding.format == dstBinding.format);
+
+        if (sameSize && sameFormat && (srcBinding.sampleCount == VK_SAMPLE_COUNT_1_BIT) &&
+            (dstBinding.sampleCount == VK_SAMPLE_COUNT_1_BIT)) {
 """
 
 target.write_text(
