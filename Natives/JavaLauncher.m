@@ -163,15 +163,36 @@ static void AMParseVersion(NSString *versionString, int *major, int *minor, int 
 static NSString *AMBundledFolderForRequiredVersion(NSString *requiredVersion) {
     int reqMajor, reqMinor, reqPatch;
     AMParseVersion(requiredVersion, &reqMajor, &reqMinor, &reqPatch, NULL);
+
     if (reqMajor < 3) return nil;
-    for (NSArray<NSString *> *entry in AMBundledLWJGLTable()) {
+
+    NSArray<NSArray<NSString *> *> *table = AMBundledLWJGLTable();
+
+    // First try to find the first bundled LWJGL version that satisfies
+    // the requested version.
+    for (NSArray<NSString *> *entry in table) {
         int bMajor, bMinor, bPatch;
         AMParseVersion(entry[0], &bMajor, &bMinor, &bPatch, NULL);
+
         BOOL meets = (bMajor > reqMajor) ||
                      (bMajor == reqMajor && bMinor > reqMinor) ||
                      (bMajor == reqMajor && bMinor == reqMinor && bPatch >= reqPatch);
-        if (meets) return entry[1];
+
+        if (meets) {
+            return entry[1];
+        }
     }
+    
+    if (table.count > 0) {
+        NSArray<NSString *> *latest = table.lastObject;
+
+        NSLog(@"[JavaLauncher] Requested LWJGL %@ is newer than bundled versions — using newest bundled LWJGL %@",
+              requiredVersion,
+              latest[0]);
+
+        return latest[1];
+    }
+
     return nil;
 }
 
