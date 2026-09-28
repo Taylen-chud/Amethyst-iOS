@@ -1,71 +1,37 @@
 #!/usr/bin/env python3
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
-if len(sys.argv) != 2:
-    print("Usage: patch_mobilegl.py <MobileGL directory>")
-    sys.exit(1)
+TARGET_FILE = "MobileGL/MG_Backend/DirectVulkan/Renderer/VulkanRenderer.cpp"
 
-root = Path(sys.argv[1])
+OLD_BLOCK = """        const Int srcWidth = std::abs(srcX1 - srcX0);
+        const Int srcHeight = std::abs(srcY1 - srcY0);
+        const Int dstWidth = std::abs(dstX1 - dstX0);
+        const Int dstHeight = std::abs(dstY1 - dstY0);
 
-print(f"[Amethyst] Searching MobileGL source: {root}")
-
-marker = "// AMETHYST_RESOLUTION_SCALE_FIX"
-
-target = None
-source = None
-
-# Find the source containing the Vulkan image copy/blit decision.
-for candidate in root.rglob("*.cpp"):
-    try:
-        text = candidate.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, OSError):
-        continue
-
-    if (
-        "vkCmdCopyImage(" in text
-        and "vkCmdBlitImage(" in text
-        and "sameSize" in text
-    ):
-        target = candidate
-        source = text
-        break
-
-if target is None:
-    print("[Amethyst] Could not find the MobileGL Vulkan blit/copy implementation.")
-    print("[Amethyst] No resolution-scaling patch was applied.")
-    sys.exit(1)
-
-print(f"[Amethyst] Found Vulkan blit/copy implementation: {target}")
-
-if marker in source:
-    print("[Amethyst] MobileGL resolution patch already applied.")
-    sys.exit(0)
-
-old = """        const Bool sameSize = (srcWidth == dstWidth) && (srcHeight == dstHeight);
+        const Bool sameSize = (srcWidth == dstWidth) && (srcHeight == dstHeight);
         const Bool sameFormat = (srcBinding.format == dstBinding.format);
 
         if (sameSize && sameFormat && (srcBinding.sampleCount == VK_SAMPLE_COUNT_1_BIT) &&
             (dstBinding.sampleCount == VK_SAMPLE_COUNT_1_BIT)) {
 """
 
-if old not in source:
-    print("[Amethyst] Found the Vulkan blit/copy implementation,")
-    print("[Amethyst] but its expected copy/blit decision code does not match.")
-    print("[Amethyst] MobileGL revision uses different code.")
-    sys.exit(1)
+NEW_BLOCK = """        const Int srcWidth = std::abs(srcX1 - srcX0);
+        const Int srcHeight = std::abs(srcY1 - srcY0);
+        Int dstWidth = std::abs(dstX1 - dstX0);
+        Int dstHeight = std::abs(dstY1 - dstY0);
 
-new = """        // AMETHYST_RESOLUTION_SCALE_FIX
+        // AMETHYST_RESOLUTION_SCALE_FIX
         //
-        // Minecraft's resolution slider changes the size of its internal
-        // framebuffer, while the default framebuffer remains the physical
+        // Minecraft's resolution slider changes the internal framebuffer
+        // resolution while the default framebuffer remains the physical
         // display/swapchain size.
         //
-        // If the reduced framebuffer is copied directly into the swapchain,
-        // only the smaller region is updated. Force a scaled Vulkan blit
-        // whenever the destination is the default framebuffer and the
-        // source size differs from the swapchain extent.
+        // When the render resolution is reduced, the source framebuffer can
+        // be smaller than the swapchain. Make the destination rectangle use
+        // the full swapchain extent so Vulkan performs a scaled blit instead
+        // of copying the reduced framebuffer into a smaller region.
         if (drawFbo.IsDefaultFramebuffer()) {
             const auto swapchainExtent = m_swapchainObject.GetExtent();
 
@@ -98,10 +64,53 @@ new = """        // AMETHYST_RESOLUTION_SCALE_FIX
             (dstBinding.sampleCount == VK_SAMPLE_COUNT_1_BIT)) {
 """
 
-target.write_text(
-    source.replace(old, marker + "\n" + new, 1),
-    encoding="utf-8"
-)
+def main():
+    if len(sys.argv) != 2:
+        print(
+            f"Usage: {sys.argv[0]} <path-to-mobilegl-repo>",
+            file=sys.stderr
+        )
+        return 1
 
-print("[Amethyst] MobileGL resolution-scaling patch applied.")
-print("[Amethyst] Reduced render resolutions will be scaled to the swapchain.")
+    root = Path(sys.argv[1]).resolve()
+    target = root / TARGET_FILE
+
+    print(f"[Amethyst] Patching MobileGL resolution scaling: {target}")
+
+    if not target.is_file():
+        print(
+            f"Error: Couldn't find {target}",
+            file=sys.stderr
+        )
+        return 1
+
+    content = target.read_text(encoding="utf-8")
+
+    if "AMETHYST_RESOLUTION_SCALE_FIX" in content:
+        print("MobileGL resolution-scaling patch already applied, skipping.")
+        return 0
+
+    if OLD_BLOCK not in content:
+        print(
+            "Error: Expected VulkanRenderer blit block not found.",
+            file=sys.stderr
+        )
+        print(
+            "The MobileGL revision does not match the source this patch targets.",
+            file=sys.stderr
+        )
+        return 1
+
+    patched_content = content.replace(OLD_BLOCK, NEW_BLOCK, 1)
+
+    target.write_text(patched_content, encoding="utf-8")
+
+    print(
+        "Successfully patched MobileGL resolution scaling in VulkanRenderer.cpp"
+    )
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
