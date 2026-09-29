@@ -53,7 +53,9 @@ static void AMAttachSDLWindowOnMain(long long sdlWindow, long long uiWindowPoint
     if (sdlView.superview != host) {
         [sdlView removeFromSuperview];
         sdlView.translatesAutoresizingMaskIntoConstraints = NO;
-        [host addSubview:sdlView];
+
+        [host insertSubview:sdlView atIndex:0];
+
         [NSLayoutConstraint activateConstraints:@[
             [sdlView.leadingAnchor constraintEqualToAnchor:host.leadingAnchor],
             [sdlView.trailingAnchor constraintEqualToAnchor:host.trailingAnchor],
@@ -62,16 +64,24 @@ static void AMAttachSDLWindowOnMain(long long sdlWindow, long long uiWindowPoint
         ]];
     }
 
+    /*
+     * Keep SDL's UIKit view interactive.  SDL's iOS backend receives touch
+     * and pointer events through this view and converts them into SDL events.
+     */
     sdlView.hidden = NO;
     sdlView.userInteractionEnabled = YES;
+    sdlView.multipleTouchEnabled = YES;
+    sdlView.exclusiveTouch = NO;
 
     if (window != nil) {
         window.hidden = YES;
         window.userInteractionEnabled = NO;
     }
 
-    NSLog(@"[SDL3] attached %@ to GameSurfaceView (SDL window=%p)",
-          NSStringFromClass(sdlView.class), (void *)(uintptr_t)sdlWindow);
+    NSLog(@"[SDL3] attached %@ to GameSurfaceView at index 0; host subviews=%lu (SDL window=%p)",
+          NSStringFromClass(sdlView.class),
+          (unsigned long)host.subviews.count,
+          (void *)(uintptr_t)sdlWindow);
 }
 
 static void AMSDL3SetMainReady(void) {
