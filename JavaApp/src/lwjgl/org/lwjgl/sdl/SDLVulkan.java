@@ -89,7 +89,10 @@ public class SDLVulkan {
          Checks.check(window);
       }
 
-      return JNI.invokePPPPZ(window, instance, allocator, surface, __functionAddress);
+      System.out.println("[SDL3 TRACE] SDL_Vulkan_CreateSurface BEGIN");
+      boolean result = (SDL3Bridge.invokeOnMain(__functionAddress, window, instance, allocator, surface) & 0xFFL) != 0L;
+      System.out.println("[SDL3 TRACE] SDL_Vulkan_CreateSurface END result=" + result);
+      return result;
    }
 
    @NativeType("bool")
@@ -103,7 +106,7 @@ public class SDLVulkan {
 
    public static void nSDL_Vulkan_DestroySurface(long instance, long surface, long allocator) {
       long __functionAddress = SDLVulkan.Functions.Vulkan_DestroySurface;
-      JNI.invokePJPV(instance, surface, allocator, __functionAddress);
+      SDL3Bridge.invokeOnMain(__functionAddress, instance, surface, allocator, 0L);
    }
 
    public static void SDL_Vulkan_DestroySurface(VkInstance instance, @NativeType("VkSurfaceKHR") long surface, @NativeType("VkAllocationCallbacks const *") VkAllocationCallbacks allocator) {

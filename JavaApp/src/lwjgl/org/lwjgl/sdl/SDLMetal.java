@@ -17,7 +17,10 @@ public class SDLMetal {
          Checks.check(window);
       }
 
-      return JNI.invokePP(window, __functionAddress);
+      System.out.println("[SDL3 TRACE] SDL_Metal_CreateView BEGIN");
+      long view = SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L);
+      System.out.println("[SDL3 TRACE] SDL_Metal_CreateView END view=" + view);
+      return view;
    }
 
    public static void SDL_Metal_DestroyView(@NativeType("SDL_MetalView") long view) {
@@ -26,7 +29,7 @@ public class SDLMetal {
          Checks.check(view);
       }
 
-      JNI.invokePV(view, __functionAddress);
+      SDL3Bridge.invokeOnMain(__functionAddress, view, 0L, 0L, 0L);
    }
 
    @NativeType("void *")
@@ -36,7 +39,7 @@ public class SDLMetal {
          Checks.check(view);
       }
 
-      return JNI.invokePP(view, __functionAddress);
+      return SDL3Bridge.invokeOnMain(__functionAddress, view, 0L, 0L, 0L);
    }
 
    public static final class Functions {

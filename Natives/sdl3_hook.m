@@ -207,6 +207,24 @@ Java_org_lwjgl_sdl_SDL3Bridge_nativeCreateWindowWithProperties(JNIEnv *env, jcla
     return (jlong)(uintptr_t)window;
 }
 
+JNIEXPORT jlong JNICALL
+Java_org_lwjgl_sdl_SDL3Bridge_nativeInvokeOnMain(JNIEnv *env, jclass clazz,
+                                                 jlong functionAddress,
+                                                 jlong a0, jlong a1, jlong a2, jlong a3) {
+    (void)env;
+    (void)clazz;
+    if (functionAddress == 0) return 0;
+
+    NSLog(@"[SDL3 TRACE] invokeOnMain fn=%p main=%d", (void *)(uintptr_t)functionAddress, [NSThread isMainThread]);
+    __block uint64_t result = 0;
+    AMRunSyncOnMain(^{
+        uint64_t (*fn)(uint64_t, uint64_t, uint64_t, uint64_t) =
+            (uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t))(uintptr_t)functionAddress;
+        result = fn((uint64_t)a0, (uint64_t)a1, (uint64_t)a2, (uint64_t)a3);
+    });
+    return (jlong)result;
+}
+
 JNIEXPORT void JNICALL
 Java_org_lwjgl_sdl_SDL3Bridge_nativeAttachWindow(JNIEnv *env, jclass clazz,
                                                    jlong sdlWindow, jlong uiWindow) {
