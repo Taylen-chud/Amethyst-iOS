@@ -117,8 +117,12 @@ static void AMEmbedSDLViewOnMain(void) {
      */
     if (sdlView.superview == host) {
         sdlView.hidden = NO;
+<<<<<<< HEAD
         sdlView.userInteractionEnabled = YES;
         sdlView.multipleTouchEnabled = YES;
+=======
+        sdlView.userInteractionEnabled = NO; // see below
+>>>>>>> 8dfa3b8 (WIP: SDL Fixes)
         gSDLInstalled = YES;
 
         NSLog(@"[SDL3 EMBED] SDL view already embedded");
@@ -132,9 +136,13 @@ static void AMEmbedSDLViewOnMain(void) {
 
     sdlView.translatesAutoresizingMaskIntoConstraints = NO;
     sdlView.hidden = NO;
-    sdlView.userInteractionEnabled = YES;
-    sdlView.multipleTouchEnabled = YES;
-    sdlView.exclusiveTouch = NO;
+    /*
+     * Interaction has to stay OFF. SDL's view handles touches itself and never calls
+     * super, so with it enabled Amethyst's touchView never gets touchesBegan/Moved
+     * (cursor, camera, hotbar) and the SDL touch->mouse events would double up with the
+     * input Amethyst already forwards (see AmethystSDL3ForwardInput).
+     */
+    sdlView.userInteractionEnabled = NO;
 
     /*
      * Put SDL behind Amethyst's existing controls.
@@ -449,6 +457,7 @@ Java_org_lwjgl_sdl_SDL3Bridge_nativeCreateWindowWithProperties(
     return (jlong)(uintptr_t)window;
 }
 
+<<<<<<< HEAD
 JNIEXPORT jlong JNICALL
 Java_org_lwjgl_sdl_SDL3Bridge_nativeInvokeOnMain(JNIEnv *env,
                                                  jclass clazz,
@@ -484,6 +493,141 @@ Java_org_lwjgl_sdl_SDL3Bridge_nativeAttachWindow(JNIEnv *env,
                                                  jclass clazz,
                                                  jlong sdlWindow,
                                                  jlong uiWindow) {
+=======
+/*
+ * Input: Amethyst's touch/keyboard/controls all go through CallbackBridge_nativeSend*, which
+ * only ever fed GLFW callbacks. Once SDL3Bridge registers itself those calls are forwarded to
+ * SDL3Bridge.onInput() and become SDL events.
+ */
+static JavaVM *sSDLInputVM = NULL;
+static jclass sSDLInputClass = NULL;
+static jmethodID sSDLInputMethod = NULL;
+static volatile bool sSDLInputActive = false;
+
+bool AmethystSDL3InputActive(void) {
+    return sSDLInputActive;
+}
+
+void AmethystSDL3ForwardInput(int kind, int a, int b, int c, int d, float f1, float f2) {
+    if (!sSDLInputActive || sSDLInputVM == NULL) return;
+
+    JNIEnv *env = NULL;
+    jint status = (*sSDLInputVM)->GetEnv(sSDLInputVM, (void **)&env, JNI_VERSION_1_6);
+    if (status == JNI_EDETACHED) {
+        if ((*sSDLInputVM)->AttachCurrentThreadAsDaemon(sSDLInputVM, (JNIEnv **)&env, NULL) != JNI_OK) return;
+    } else if (status != JNI_OK || env == NULL) {
+        return;
+    }
+
+    (*env)->CallStaticVoidMethod(env, sSDLInputClass, sSDLInputMethod,
+                                 (jint)kind, (jint)a, (jint)b, (jint)c, (jint)d,
+                                 (jfloat)f1, (jfloat)f2);
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_org_lwjgl_sdl_SDL3Bridge_nativeRegisterInput(JNIEnv *env, jclass clazz) {
+    (*env)->GetJavaVM(env, &sSDLInputVM);
+    if (sSDLInputClass == NULL) {
+        sSDLInputClass = (*env)->NewGlobalRef(env, clazz);
+    }
+    sSDLInputMethod = (*env)->GetStaticMethodID(env, clazz, "onInput", "(IIIIIFF)V");
+    if (sSDLInputMethod == NULL) {
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+        NSLog(@"[SDL3] SDL3Bridge.onInput not found, input bridge disabled");
+        return;
+    }
+    sSDLInputActive = true;
+    NSLog(@"[SDL3] input bridge active");
+}
+
+// defined in input_bridge_v3.m: sets isGrabbing and refreshes controls / virtual mouse
+JNIEXPORT void JNICALL
+Java_org_lwjgl_glfw_CallbackBridge_nativeSetGrabbing(JNIEnv *env, jclass clazz,
+                                                     jboolean grabbing, jfloat xset, jfloat yset);
+
+JNIEXPORT void JNICALL
+Java_org_lwjgl_sdl_SDL3Bridge_nativeSetGrabbing(JNIEnv *env, jclass clazz, jboolean grabbing) {
+    NSLog(@"[SDL3 TRACE] setGrabbing %d", (int)grabbing);
+    Java_org_lwjgl_glfw_CallbackBridge_nativeSetGrabbing(env, clazz, grabbing, 0.0f, 0.0f);
+}
+
+JNIEXPORT jlong JNICALL
+Java_org_lwjgl_sdl_SDL3Bridge_nativeInvokeOnMain(JNIEnv *env,
+                                                 jclass clazz,
+                                                 jlong functionAddress,
+                                                 jlong a0,
+                                                 jlong a1,
+                                                 jlong a2,
+                                                 jlong a3) {
+>>>>>>> 8dfa3b8 (WIP: SDL Fixes)
+    (void)env;
+    (void)clazz;
+    (void)sdlWindow;
+    (void)uiWindow;
+
+<<<<<<< HEAD
+    /*
+     * Do not trust the Java-side uiWindow pointer. The real MC 26.3 path
+     * creates SDL's UIKit window internally. Rediscover it from UIKit.
+     */
+    dispatch_async(dispatch_get_main_queue(), ^{
+        AMEmbedSDLViewOnMain();
+=======
+    if (functionAddress == 0)
+        return 0;
+
+    __block uint64_t result = 0;
+
+    AMRunSyncOnMain(^{
+        uint64_t (*fn)(uint64_t, uint64_t, uint64_t, uint64_t) =
+            (uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t))
+                (uintptr_t)functionAddress;
+
+        result = fn((uint64_t)a0,
+                    (uint64_t)a1,
+                    (uint64_t)a2,
+                    (uint64_t)a3);
+    });
+
+    return (jlong)result;
+}
+
+/*
+ * The metal view only exists once minecraft has made its vulkan surface, which is after
+ * SDL_CreateWindow and not necessarily followed by a UIWindow notification. Keep trying.
+ */
+static BOOL AMSDLViewIsEmbedded(void) {
+    GameSurfaceView *host = [SurfaceViewController surface];
+    return gSDLInstalled && gSDLView != nil && host != nil && gSDLView.superview == host;
+}
+
+static void AMScheduleEmbedRetry(int attempt) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (AMSDLViewIsEmbedded()) return;
+
+        AMEmbedSDLViewOnMain();
+
+        if (AMSDLViewIsEmbedded() || attempt >= 100) {
+            return;
+        }
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+                       dispatch_get_main_queue(), ^{
+            AMScheduleEmbedRetry(attempt + 1);
+        });
+>>>>>>> 8dfa3b8 (WIP: SDL Fixes)
+    });
+}
+
+JNIEXPORT void JNICALL
+Java_org_lwjgl_sdl_SDL3Bridge_nativeAttachWindow(JNIEnv *env,
+                                                 jclass clazz,
+                                                 jlong sdlWindow,
+                                                 jlong uiWindow) {
     (void)env;
     (void)clazz;
     (void)sdlWindow;
@@ -493,7 +637,5 @@ Java_org_lwjgl_sdl_SDL3Bridge_nativeAttachWindow(JNIEnv *env,
      * Do not trust the Java-side uiWindow pointer. The real MC 26.3 path
      * creates SDL's UIKit window internally. Rediscover it from UIKit.
      */
-    dispatch_async(dispatch_get_main_queue(), ^{
-        AMEmbedSDLViewOnMain();
-    });
+    AMScheduleEmbedRetry(0);
 }

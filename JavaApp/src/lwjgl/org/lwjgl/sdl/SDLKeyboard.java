@@ -237,12 +237,12 @@ public class SDLKeyboard {
 
    @NativeType("bool")
    public static boolean SDL_StartTextInput(@NativeType("SDL_Window *") long window) {
-      long __functionAddress = SDLKeyboard.Functions.StartTextInput;
+      // no-op on purpose: real SDL_StartTextInput would put up SDL's own uikit keyboard (off the main thread too)
       if (Checks.CHECKS) {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, __functionAddress);
+      return true;
    }
 
    @NativeType("bool")
@@ -267,12 +267,12 @@ public class SDLKeyboard {
 
    @NativeType("bool")
    public static boolean SDL_StopTextInput(@NativeType("SDL_Window *") long window) {
-      long __functionAddress = SDLKeyboard.Functions.StopTextInput;
+      // no-op, see SDL_StartTextInput
       if (Checks.CHECKS) {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, __functionAddress);
+      return true;
    }
 
    @NativeType("bool")

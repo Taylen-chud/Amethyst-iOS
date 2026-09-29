@@ -167,7 +167,9 @@ public class SDLMouse {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, enabled, __functionAddress);
+      boolean result = (SDL3Bridge.invokeOnMain(__functionAddress, window, enabled ? 1L : 0L, 0L, 0L) & 0xFFL) != 0L;
+      SDL3Bridge.setGrabbing(enabled);
+      return result;
    }
 
    @NativeType("bool")
@@ -261,13 +263,13 @@ public class SDLMouse {
    @NativeType("bool")
    public static boolean SDL_ShowCursor() {
       long __functionAddress = SDLMouse.Functions.ShowCursor;
-      return JNI.invokeZ(__functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, 0L, 0L, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
    public static boolean SDL_HideCursor() {
       long __functionAddress = SDLMouse.Functions.HideCursor;
-      return JNI.invokeZ(__functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, 0L, 0L, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
