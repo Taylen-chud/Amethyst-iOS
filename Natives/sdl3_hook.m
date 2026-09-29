@@ -24,6 +24,14 @@ static UIView *AMFindSDLView(UIView *root) {
     return nil;
 }
 
+static void AMRunSyncOnMain(void (^block)(void)) {
+    if ([NSThread isMainThread]) {
+        block();
+        return;
+    }
+    dispatch_sync(dispatch_get_main_queue(), block);
+}
+
 static void AMAttachSDLWindowOnMain(long long sdlWindow, long long uiWindowPointer) {
     GameSurfaceView *host = [SurfaceViewController surface];
     if (host == nil) {
@@ -67,38 +75,41 @@ static void AMAttachSDLWindowOnMain(long long sdlWindow, long long uiWindowPoint
 }
 
 static void AMSDL3SetMainReady(void) {
-    const char *paths[] = {
-        "@executable_path/Frameworks/lwjgl34/libSDL3.dylib",
-        "@loader_path/Frameworks/lwjgl34/libSDL3.dylib",
-        NULL
-    };
+    AMRunSyncOnMain(^{
+        const char *paths[] = {
+            "@executable_path/Frameworks/lwjgl34/libSDL3.dylib",
+            "@loader_path/Frameworks/lwjgl34/libSDL3.dylib",
+            NULL
+        };
 
-    for (int i = 0; paths[i] != NULL; i++) {
-        void *handle = dlopen(paths[i], RTLD_NOW | RTLD_LOCAL);
-        if (handle == NULL) continue;
+        for (int i = 0; paths[i] != NULL; i++) {
+            void *handle = dlopen(paths[i], RTLD_NOW | RTLD_LOCAL);
+            if (handle == NULL) continue;
 
-        void (*setMainReady)(void) = (void (*)(void))dlsym(handle, "SDL_SetMainReady");
-        if (setMainReady != NULL) {
-            setMainReady();
-            NSLog(@"[SDL3] SDL_SetMainReady called");
+            void (*setMainReady)(void) = (void (*)(void))dlsym(handle, "SDL_SetMainReady");
+            if (setMainReady != NULL) {
+                setMainReady();
+                NSLog(@"[SDL3] SDL_SetMainReady called");
+                dlclose(handle);
+                return;
+            }
             dlclose(handle);
-            return;
         }
-        dlclose(handle);
-    }
 
-    void *handle = dlopen("@rpath/SDL3.framework/SDL3", RTLD_NOW | RTLD_LOCAL);
-    if (handle != NULL) {
-        void (*setMainReady)(void) = (void (*)(void))dlsym(handle, "SDL_SetMainReady");
-        if (setMainReady != NULL) {
-            setMainReady();
-            NSLog(@"[SDL3] SDL_SetMainReady called");
+        void *handle = dlopen("@rpath/SDL3.framework/SDL3", RTLD_NOW | RTLD_LOCAL);
+        if (handle != NULL) {
+            void (*setMainReady)(void) = (void (*)(void))dlsym(handle, "SDL_SetMainReady");
+            if (setMainReady != NULL) {
+                setMainReady();
+                NSLog(@"[SDL3] SDL_SetMainReady called");
+            }
+            dlclose(handle);
         }
-        dlclose(handle);
-    }
+    });
 }
 
 void AmethystSDL3Prepare(void) {
+    NSLog(@"[SDL3 TRACE] nativePrepare BEGIN main=%d", [NSThread isMainThread]);
     AMSDL3SetMainReady();
     setenv("SDL_IOS_HIDE_HOME_INDICATOR", "2", 0);
 
@@ -106,11 +117,26 @@ void AmethystSDL3Prepare(void) {
         stringByAppendingPathComponent:@"Frameworks/libMoltenVK.dylib"];
     if ([[NSFileManager defaultManager] fileExistsAtPath:moltenVK]) {
         setenv("SDL_VULKAN_LIBRARY", moltenVK.UTF8String, 1);
+        NSLog(@"[SDL3] SDL_VULKAN_LIBRARY=%@", moltenVK);
+    } else {
+        NSLog(@"[SDL3] libMoltenVK.dylib not found");
     }
+    NSLog(@"[SDL3 TRACE] nativePrepare END");
 }
 
 void AmethystSDL3Loaded(void) {
-    NSLog(@"[SDL3] LWJGL SDL3 library loaded");
+    NSLog(@"[SDL3 TRACE] nativeLoaded main=%d", [NSThread isMainThread]);
+}
+
+static BOOL AMInvokeBoolOnMain(long long functionAddress, int flags) {
+    if (functionAddress == 0) return NO;
+
+    __block BOOL result = NO;
+    AMRunSyncOnMain(^{
+        BOOL (*fn)(int) = (BOOL (*)(int))(uintptr_t)functionAddress;
+        result = fn(flags);
+    });
+    return result;
 }
 
 JNIEXPORT void JNICALL
@@ -125,6 +151,60 @@ Java_org_lwjgl_sdl_SDL3Bridge_nativeLoaded(JNIEnv *env, jclass clazz) {
     (void)env;
     (void)clazz;
     AmethystSDL3Loaded();
+}
+
+JNIEXPORT jboolean JNICALL
+Java_org_lwjgl_sdl_SDL3Bridge_nativeInit(JNIEnv *env, jclass clazz,
+                                         jlong functionAddress, jint flags) {
+    (void)env;
+    (void)clazz;
+    NSLog(@"[SDL3 TRACE] nativeInit flags=%d main=%d", (int)flags, [NSThread isMainThread]);
+    BOOL result = AMInvokeBoolOnMain((long long)functionAddress, (int)flags);
+    NSLog(@"[SDL3 TRACE] nativeInit result=%d", result);
+    return result ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_org_lwjgl_sdl_SDL3Bridge_nativeInitSubSystem(JNIEnv *env, jclass clazz,
+                                                  jlong functionAddress, jint flags) {
+    (void)env;
+    (void)clazz;
+    NSLog(@"[SDL3 TRACE] nativeInitSubSystem flags=%d main=%d", (int)flags, [NSThread isMainThread]);
+    BOOL result = AMInvokeBoolOnMain((long long)functionAddress, (int)flags);
+    NSLog(@"[SDL3 TRACE] nativeInitSubSystem result=%d", result);
+    return result ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jlong JNICALL
+Java_org_lwjgl_sdl_SDL3Bridge_nativeCreateWindow(JNIEnv *env, jclass clazz,
+                                                  jlong functionAddress, jlong title,
+                                                  jint w, jint h, jlong flags) {
+    (void)env;
+    (void)clazz;
+    NSLog(@"[SDL3 TRACE] nativeCreateWindow main=%d", [NSThread isMainThread]);
+    __block void *window = NULL;
+    AMRunSyncOnMain(^{
+        void *(*fn)(const char *, int, int, uint64_t) =
+            (void *(*)(const char *, int, int, uint64_t))(uintptr_t)functionAddress;
+        window = fn((const char *)(uintptr_t)title, (int)w, (int)h, (uint64_t)flags);
+    });
+    NSLog(@"[SDL3 TRACE] nativeCreateWindow result=%p", window);
+    return (jlong)(uintptr_t)window;
+}
+
+JNIEXPORT jlong JNICALL
+Java_org_lwjgl_sdl_SDL3Bridge_nativeCreateWindowWithProperties(JNIEnv *env, jclass clazz,
+                                                               jlong functionAddress, jint props) {
+    (void)env;
+    (void)clazz;
+    NSLog(@"[SDL3 TRACE] nativeCreateWindowWithProperties main=%d", [NSThread isMainThread]);
+    __block void *window = NULL;
+    AMRunSyncOnMain(^{
+        void *(*fn)(uint32_t) = (void *(*)(uint32_t))(uintptr_t)functionAddress;
+        window = fn((uint32_t)props);
+    });
+    NSLog(@"[SDL3 TRACE] nativeCreateWindowWithProperties result=%p", window);
+    return (jlong)(uintptr_t)window;
 }
 
 JNIEXPORT void JNICALL

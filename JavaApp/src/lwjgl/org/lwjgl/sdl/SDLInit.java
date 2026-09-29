@@ -35,13 +35,19 @@ public class SDLInit {
    @NativeType("bool")
    public static boolean SDL_Init(@NativeType("SDL_InitFlags") int flags) {
       long __functionAddress = SDLInit.Functions.Init;
-      return JNI.invokeZ(flags, __functionAddress);
+      System.out.println("[SDL3 TRACE] SDL_Init BEGIN flags=" + flags);
+      boolean result = SDL3Bridge.nativeInit(__functionAddress, flags);
+      System.out.println("[SDL3 TRACE] SDL_Init END result=" + result);
+      return result;
    }
 
    @NativeType("bool")
    public static boolean SDL_InitSubSystem(@NativeType("SDL_InitFlags") int flags) {
       long __functionAddress = SDLInit.Functions.InitSubSystem;
-      return JNI.invokeZ(flags, __functionAddress);
+      System.out.println("[SDL3 TRACE] SDL_InitSubSystem BEGIN flags=" + flags);
+      boolean result = SDL3Bridge.nativeInitSubSystem(__functionAddress, flags);
+      System.out.println("[SDL3 TRACE] SDL_InitSubSystem END result=" + result);
+      return result;
    }
 
    public static void SDL_QuitSubSystem(@NativeType("SDL_InitFlags") int flags) {
