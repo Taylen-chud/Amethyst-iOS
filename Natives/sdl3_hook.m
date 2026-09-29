@@ -14,6 +14,9 @@ static UIView *gSDLView = nil;
 static BOOL gSDLInstalled = NO;
 static BOOL gObserversInstalled = NO;
 
+// Forward declaration for window retry helper
+static void AMScheduleEmbedRetry(int attempt);
+
 static BOOL AMIsSDLView(UIView *view) {
     if (view == nil) return NO;
 
@@ -117,12 +120,7 @@ static void AMEmbedSDLViewOnMain(void) {
      */
     if (sdlView.superview == host) {
         sdlView.hidden = NO;
-<<<<<<< HEAD
-        sdlView.userInteractionEnabled = YES;
-        sdlView.multipleTouchEnabled = YES;
-=======
-        sdlView.userInteractionEnabled = NO; // see below
->>>>>>> 8dfa3b8 (WIP: SDL Fixes)
+        sdlView.userInteractionEnabled = NO; // Interaction stays off so touchView handles inputs
         gSDLInstalled = YES;
 
         NSLog(@"[SDL3 EMBED] SDL view already embedded");
@@ -457,43 +455,6 @@ Java_org_lwjgl_sdl_SDL3Bridge_nativeCreateWindowWithProperties(
     return (jlong)(uintptr_t)window;
 }
 
-<<<<<<< HEAD
-JNIEXPORT jlong JNICALL
-Java_org_lwjgl_sdl_SDL3Bridge_nativeInvokeOnMain(JNIEnv *env,
-                                                 jclass clazz,
-                                                 jlong functionAddress,
-                                                 jlong a0,
-                                                 jlong a1,
-                                                 jlong a2,
-                                                 jlong a3) {
-    (void)env;
-    (void)clazz;
-
-    if (functionAddress == 0)
-        return 0;
-
-    __block uint64_t result = 0;
-
-    AMRunSyncOnMain(^{
-        uint64_t (*fn)(uint64_t, uint64_t, uint64_t, uint64_t) =
-            (uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t))
-                (uintptr_t)functionAddress;
-
-        result = fn((uint64_t)a0,
-                    (uint64_t)a1,
-                    (uint64_t)a2,
-                    (uint64_t)a3);
-    });
-
-    return (jlong)result;
-}
-
-JNIEXPORT void JNICALL
-Java_org_lwjgl_sdl_SDL3Bridge_nativeAttachWindow(JNIEnv *env,
-                                                 jclass clazz,
-                                                 jlong sdlWindow,
-                                                 jlong uiWindow) {
-=======
 /*
  * Input: Amethyst's touch/keyboard/controls all go through CallbackBridge_nativeSend*, which
  * only ever fed GLFW callbacks. Once SDL3Bridge registers itself those calls are forwarded to
@@ -564,20 +525,9 @@ Java_org_lwjgl_sdl_SDL3Bridge_nativeInvokeOnMain(JNIEnv *env,
                                                  jlong a1,
                                                  jlong a2,
                                                  jlong a3) {
->>>>>>> 8dfa3b8 (WIP: SDL Fixes)
     (void)env;
     (void)clazz;
-    (void)sdlWindow;
-    (void)uiWindow;
 
-<<<<<<< HEAD
-    /*
-     * Do not trust the Java-side uiWindow pointer. The real MC 26.3 path
-     * creates SDL's UIKit window internally. Rediscover it from UIKit.
-     */
-    dispatch_async(dispatch_get_main_queue(), ^{
-        AMEmbedSDLViewOnMain();
-=======
     if (functionAddress == 0)
         return 0;
 
@@ -619,7 +569,6 @@ static void AMScheduleEmbedRetry(int attempt) {
                        dispatch_get_main_queue(), ^{
             AMScheduleEmbedRetry(attempt + 1);
         });
->>>>>>> 8dfa3b8 (WIP: SDL Fixes)
     });
 }
 
