@@ -5,12 +5,6 @@ import org.lwjgl.system.Library;
 import org.lwjgl.system.Platform;
 import org.lwjgl.system.SharedLibrary;
 
-/**
- * Amethyst SDL bootstrap.
- *
- * The rest of the SDL bindings remain the official LWJGL 3.4.1 bindings.
- * This class only adds the iOS host-surface bootstrap before SDL is loaded.
- */
 public final class SDL {
     private static final SharedLibrary SDL;
 

@@ -1,61 +1,40 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#include <dlfcn.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include "jni.h"
 
 #import "GameSurfaceView.h"
 #import "SurfaceViewController.h"
-#import "sdl3_hook.h"
-
-#include <stdint.h>
-#include <stdlib.h>
-#include <dlfcn.h>
-#include "jni.h"
-
-typedef void (*AMSDLSetMainReadyFunc)(void);
 
 static UIView *AMFindSDLView(UIView *root) {
-    if (root == nil) {
-        return nil;
-    }
+    if (root == nil) return nil;
 
-    NSString *className = NSStringFromClass(root.class);
-
-    if ([className containsString:@"SDL_uikitmetalview"] ||
-        [className containsString:@"SDL_uikitopenglview"]) {
+    NSString *name = NSStringFromClass(root.class);
+    if ([name containsString:@"SDL_uikitmetalview"] ||
+        [name containsString:@"SDL_uikitopenglview"]) {
         return root;
     }
 
-    for (UIView *subview in root.subviews) {
-        UIView *found = AMFindSDLView(subview);
-
-        if (found != nil) {
-            return found;
-        }
+    for (UIView *view in root.subviews) {
+        UIView *found = AMFindSDLView(view);
+        if (found != nil) return found;
     }
-
     return nil;
 }
 
-static void AMAttachSDLWindowOnMain(long long sdlWindow,
-                                    long long uiWindowPointer) {
+static void AMAttachSDLWindowOnMain(long long sdlWindow, long long uiWindowPointer) {
     GameSurfaceView *host = [SurfaceViewController surface];
-
     if (host == nil) {
         NSLog(@"[SDL3] host GameSurfaceView is unavailable");
         return;
     }
 
-    UIWindow *sdlWindowObject =
-        (__bridge UIWindow *)(void *)uiWindowPointer;
-
+    UIWindow *window = (__bridge UIWindow *)(void *)uiWindowPointer;
     UIView *sdlView = nil;
-
-    if (sdlWindowObject != nil) {
-        UIViewController *rootController =
-            sdlWindowObject.rootViewController;
-
-        if (rootController != nil) {
-            sdlView = AMFindSDLView(rootController.view);
-        }
+    if (window != nil && window.rootViewController != nil) {
+        sdlView = AMFindSDLView(window.rootViewController.view);
     }
 
     if (sdlView == nil) {
@@ -65,11 +44,8 @@ static void AMAttachSDLWindowOnMain(long long sdlWindow,
 
     if (sdlView.superview != host) {
         [sdlView removeFromSuperview];
-
         sdlView.translatesAutoresizingMaskIntoConstraints = NO;
-
         [host addSubview:sdlView];
-
         [NSLayoutConstraint activateConstraints:@[
             [sdlView.leadingAnchor constraintEqualToAnchor:host.leadingAnchor],
             [sdlView.trailingAnchor constraintEqualToAnchor:host.trailingAnchor],
@@ -81,101 +57,55 @@ static void AMAttachSDLWindowOnMain(long long sdlWindow,
     sdlView.hidden = NO;
     sdlView.userInteractionEnabled = YES;
 
-    if (sdlWindowObject != nil) {
-        sdlWindowObject.hidden = YES;
-        sdlWindowObject.userInteractionEnabled = NO;
+    if (window != nil) {
+        window.hidden = YES;
+        window.userInteractionEnabled = NO;
     }
 
-    NSLog(@"[SDL3] attached %@ to Amethyst GameSurfaceView (SDL window=%p)",
-          NSStringFromClass(sdlView.class),
-          (void *)(uintptr_t)sdlWindow);
+    NSLog(@"[SDL3] attached %@ to GameSurfaceView (SDL window=%p)",
+          NSStringFromClass(sdlView.class), (void *)(uintptr_t)sdlWindow);
 }
 
-static BOOL AMSDL3SetMainReady(void) {
-    const char *libraryPaths[] = {
+static void AMSDL3SetMainReady(void) {
+    const char *paths[] = {
         "@executable_path/Frameworks/lwjgl34/libSDL3.dylib",
         "@loader_path/Frameworks/lwjgl34/libSDL3.dylib",
         NULL
     };
 
-    void *handle = NULL;
+    for (int i = 0; paths[i] != NULL; i++) {
+        void *handle = dlopen(paths[i], RTLD_NOW | RTLD_LOCAL);
+        if (handle == NULL) continue;
 
-    for (NSUInteger i = 0; libraryPaths[i] != NULL; i++) {
-        handle = dlopen(libraryPaths[i], RTLD_NOW);
-
-        if (handle != NULL) {
-            NSLog(@"[SDL3] found SDL3 native library at %s",
-                  libraryPaths[i]);
-            break;
+        void (*setMainReady)(void) = (void (*)(void))dlsym(handle, "SDL_SetMainReady");
+        if (setMainReady != NULL) {
+            setMainReady();
+            NSLog(@"[SDL3] SDL_SetMainReady called");
+            dlclose(handle);
+            return;
         }
+        dlclose(handle);
     }
 
-    if (handle == NULL) {
-        handle = dlopen("@rpath/SDL3.framework/SDL3", RTLD_NOW);
-
-        if (handle != NULL) {
-            NSLog(@"[SDL3] found SDL3 through @rpath");
+    void *handle = dlopen("@rpath/SDL3.framework/SDL3", RTLD_NOW | RTLD_LOCAL);
+    if (handle != NULL) {
+        void (*setMainReady)(void) = (void (*)(void))dlsym(handle, "SDL_SetMainReady");
+        if (setMainReady != NULL) {
+            setMainReady();
+            NSLog(@"[SDL3] SDL_SetMainReady called");
         }
+        dlclose(handle);
     }
-
-    if (handle == NULL) {
-        const char *error = dlerror();
-
-        NSLog(@"[SDL3] ERROR: could not load SDL3 before SDL_Init()");
-
-        if (error != NULL) {
-            NSLog(@"[SDL3] dlopen error: %s", error);
-        }
-
-        return NO;
-    }
-
-    dlerror();
-
-    AMSDLSetMainReadyFunc setMainReady =
-        (AMSDLSetMainReadyFunc)dlsym(handle, "SDL_SetMainReady");
-
-    const char *symbolError = dlerror();
-
-    if (symbolError != NULL || setMainReady == NULL) {
-        NSLog(@"[SDL3] ERROR: SDL_SetMainReady was not found");
-
-        if (symbolError != NULL) {
-            NSLog(@"[SDL3] dlsym error: %s", symbolError);
-        }
-
-        return NO;
-    }
-
-    setMainReady();
-
-    NSLog(@"[SDL3] SDL_SetMainReady() completed successfully");
-
-    return YES;
 }
 
 void AmethystSDL3Prepare(void) {
-    if (!AMSDL3SetMainReady()) {
-        NSLog(@"[SDL3] WARNING: SDL main-entry initialization failed");
-    }
-
+    AMSDL3SetMainReady();
     setenv("SDL_IOS_HIDE_HOME_INDICATOR", "2", 0);
 
-    NSString *moltenVK =
-        [NSBundle.mainBundle.bundlePath
-            stringByAppendingPathComponent:
-                @"Frameworks/libMoltenVK.dylib"];
-
+    NSString *moltenVK = [NSBundle.mainBundle.bundlePath
+        stringByAppendingPathComponent:@"Frameworks/libMoltenVK.dylib"];
     if ([[NSFileManager defaultManager] fileExistsAtPath:moltenVK]) {
-        setenv("SDL_VULKAN_LIBRARY",
-               moltenVK.UTF8String,
-               0);
-
-        NSLog(@"[SDL3] SDL_VULKAN_LIBRARY=%@",
-              moltenVK);
-    } else {
-        NSLog(@"[SDL3] WARNING: libMoltenVK.dylib not found at %@",
-              moltenVK);
+        setenv("SDL_VULKAN_LIBRARY", moltenVK.UTF8String, 1);
     }
 }
 
@@ -184,33 +114,26 @@ void AmethystSDL3Loaded(void) {
 }
 
 JNIEXPORT void JNICALL
-Java_org_lwjgl_sdl_SDL3Bridge_nativePrepare(JNIEnv *env,
-                                             jclass clazz) {
+Java_org_lwjgl_sdl_SDL3Bridge_nativePrepare(JNIEnv *env, jclass clazz) {
     (void)env;
     (void)clazz;
-
     AmethystSDL3Prepare();
 }
 
 JNIEXPORT void JNICALL
-Java_org_lwjgl_sdl_SDL3Bridge_nativeLoaded(JNIEnv *env,
-                                            jclass clazz) {
+Java_org_lwjgl_sdl_SDL3Bridge_nativeLoaded(JNIEnv *env, jclass clazz) {
     (void)env;
     (void)clazz;
-
     AmethystSDL3Loaded();
 }
 
 JNIEXPORT void JNICALL
-Java_org_lwjgl_sdl_SDL3Bridge_nativeAttachWindow(JNIEnv *env,
-                                                  jclass clazz,
-                                                  jlong sdlWindow,
-                                                  jlong uiWindow) {
+Java_org_lwjgl_sdl_SDL3Bridge_nativeAttachWindow(JNIEnv *env, jclass clazz,
+                                                   jlong sdlWindow, jlong uiWindow) {
     (void)env;
     (void)clazz;
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        AMAttachSDLWindowOnMain((long long)sdlWindow,
-                                (long long)uiWindow);
+        AMAttachSDLWindowOnMain((long long)sdlWindow, (long long)uiWindow);
     });
 }
