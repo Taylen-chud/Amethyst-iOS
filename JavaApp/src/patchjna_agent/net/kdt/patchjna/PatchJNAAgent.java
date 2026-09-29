@@ -144,8 +144,14 @@ public class PatchJNAAgent implements ClassFileTransformer {
 
                 boolean stub = false;
                 if (codePos >= 0 && !"<init>".equals(name)) {
+                    
+                    boolean iosMacosUtilNoOp =
+                        "com/mojang/blaze3d/platform/MacosUtil".equals(className)
+                        && "setWindowColorSpaceForOpenGLBecauseGLFWDoesnt".equals(name);
+
                     int codeStart = codePos + 14;
-                    stub = findBlockedReference(codeStart, codeStart + u4(codePos + 10)) != null;
+                    stub = iosMacosUtilNoOp
+                        || findBlockedReference(codeStart, codeStart + u4(codePos + 10)) != null;
                 }
 
                 if (!stub) {
