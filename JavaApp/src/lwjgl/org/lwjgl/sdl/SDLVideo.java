@@ -421,7 +421,7 @@ public class SDLVideo {
          }
       }
 
-      return JNI.invokePPZ(window, mode, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, mode, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -613,7 +613,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePPZ(window, title, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, title, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -663,7 +663,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePPZ(window, icon, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, icon, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -678,7 +678,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, x, y, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, x, y, 0L) & 0xFFL) != 0L;
    }
 
    public static boolean nSDL_GetWindowPosition(long window, long x, long y) {
@@ -707,7 +707,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, w, h, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, w, h, 0L) & 0xFFL) != 0L;
    }
 
    public static boolean nSDL_GetWindowSize(long window, long w, long h) {
@@ -819,7 +819,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, min_w, min_h, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, min_w, min_h, 0L) & 0xFFL) != 0L;
    }
 
    public static boolean nSDL_GetWindowMinimumSize(long window, long w, long h) {
@@ -848,7 +848,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, max_w, max_h, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, max_w, max_h, 0L) & 0xFFL) != 0L;
    }
 
    public static boolean nSDL_GetWindowMaximumSize(long window, long w, long h) {
@@ -877,7 +877,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, bordered, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, (bordered ? 1L : 0L), 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -887,7 +887,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, resizable, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, (resizable ? 1L : 0L), 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -897,7 +897,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, on_top, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, (on_top ? 1L : 0L), 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -917,7 +917,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -927,7 +927,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -937,7 +937,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -947,7 +947,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -957,7 +957,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -967,7 +967,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -977,7 +977,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, fullscreen, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, (fullscreen ? 1L : 0L), 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -987,7 +987,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -1022,7 +1022,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, vsync, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, vsync, 0L, 0L) & 0xFFL) != 0L;
    }
 
    public static boolean nSDL_GetWindowSurfaceVSync(long window, long vsync) {
@@ -1084,7 +1084,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, grabbed, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, (grabbed ? 1L : 0L), 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -1094,7 +1094,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, grabbed, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, (grabbed ? 1L : 0L), 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -1178,7 +1178,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePPZ(window, parent, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, parent, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -1188,7 +1188,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, modal, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, (modal ? 1L : 0L), 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -1198,7 +1198,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, focusable, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, (focusable ? 1L : 0L), 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -1246,7 +1246,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePZ(window, operation, __functionAddress);
+      return (SDL3Bridge.invokeOnMain(__functionAddress, window, operation, 0L, 0L) & 0xFFL) != 0L;
    }
 
    @NativeType("bool")
@@ -1294,7 +1294,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      JNI.invokePV(window, __functionAddress);
+      SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L);
    }
 
    @NativeType("bool")
