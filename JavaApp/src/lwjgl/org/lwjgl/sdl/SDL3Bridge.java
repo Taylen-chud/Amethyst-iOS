@@ -8,6 +8,17 @@ final class SDL3Bridge {
     private SDL3Bridge() {
     }
 
+    // minecraft replaces System.out/err with log4j streams (INFO/ERROR, and log4j has no config
+    // here) so use fd 2 directly, that one ends up in latestlog.txt
+    private static final java.io.FileOutputStream RAW_ERR = new java.io.FileOutputStream(java.io.FileDescriptor.err);
+
+    static void trace(String line) {
+        try {
+            RAW_ERR.write((line + "\n").getBytes("UTF-8"));
+        } catch (Throwable ignored) {
+        }
+    }
+
     static native void nativePrepare();
     static native void nativeLoaded();
     static native boolean nativeInit(long functionAddress, int flags);
@@ -27,7 +38,7 @@ final class SDL3Bridge {
     static void attachWindow(long sdlWindow) {
         // note: minecraft swaps System.out for a log4j stream with no config, so anything
         // on System.out after startup vanishes. System.err still shows up
-        System.err.println("[SDL3 TRACE] attachWindow(" + sdlWindow + ")");
+        trace("[SDL3 TRACE] attachWindow(" + sdlWindow + ")");
         if (sdlWindow == 0L) {
             return;
         }
@@ -79,10 +90,15 @@ final class SDL3Bridge {
     private static float curX, curY, lastX, lastY;
     private static int buttonState;
     private static int inputCount;
+    private static int pushOk, pushFail;
+    private static final int[] polled = new int[0x1400];
+    private static long lastSummary = System.nanoTime();
+    private static int lastPolledTotal;
     private static final ByteBuffer[] textRing = new ByteBuffer[64];
     private static int textRingPos;
 
     static {
+        trace("[SDL3 BUILD] input bridge v2 loaded");
         for (int i = 0; i < 26; i++) {
             SCANCODES[65 + i] = SDLScancode.SDL_SCANCODE_A + i;
         }
@@ -157,7 +173,7 @@ final class SDL3Bridge {
             registered = true;
             nativeRegisterInput();
         }
-        System.err.println("[SDL3 TRACE] input bridge registered, windowID=" + inputWindowId);
+        trace("[SDL3 TRACE] input bridge registered, windowID=" + inputWindowId);
     }
 
     // relative mouse mode == amethyst's "grabbing" (hides the virtual mouse, shows in-game controls)
@@ -195,7 +211,7 @@ final class SDL3Bridge {
             t.printStackTrace();
         }
         if (++inputCount <= 12) {
-            System.err.println("[SDL3 TRACE] input kind=" + kind + " a=" + a + " b=" + b + " c=" + c + " f=" + f1 + "," + f2);
+            trace("[SDL3 TRACE] input kind=" + kind + " a=" + a + " b=" + b + " c=" + c + " f=" + f1 + "," + f2);
         }
     }
 
@@ -259,7 +275,7 @@ final class SDL3Bridge {
             ev.button().set(
                 down ? SDLEvents.SDL_EVENT_MOUSE_BUTTON_DOWN : SDLEvents.SDL_EVENT_MOUSE_BUTTON_UP,
                 0L, inputWindowId, 0, (byte) sdlButton, down, (byte) 1, curX, curY);
-            SDLEvents.SDL_PushEvent(ev);
+            push(ev);
         }
     }
 
@@ -269,7 +285,7 @@ final class SDL3Bridge {
             ev.wheel().set(
                 SDLEvents.SDL_EVENT_MOUSE_WHEEL,
                 0L, inputWindowId, 0, x, y, 0, curX, curY, Math.round(x), Math.round(y));
-            SDLEvents.SDL_PushEvent(ev);
+            push(ev);
         }
     }
 
@@ -288,7 +304,7 @@ final class SDL3Bridge {
                 down ? SDLEvents.SDL_EVENT_KEY_DOWN : SDLEvents.SDL_EVENT_KEY_UP,
                 0L, inputWindowId, 0, scancode, keycodeFor(glfwKey, scancode),
                 (short) sdlMods(glfwMods), (short) 0, down, false);
-            SDLEvents.SDL_PushEvent(ev);
+            push(ev);
         }
     }
 
@@ -308,7 +324,7 @@ final class SDL3Bridge {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             SDL_Event ev = SDL_Event.calloc(stack);
             ev.text().type(SDLEvents.SDL_EVENT_TEXT_INPUT).windowID(inputWindowId).text(text);
-            SDLEvents.SDL_PushEvent(ev);
+            push(ev);
         }
     }
 
@@ -318,7 +334,43 @@ final class SDL3Bridge {
             ev.motion().set(
                 SDLEvents.SDL_EVENT_MOUSE_MOTION,
                 0L, inputWindowId, 0, buttonState, curX, curY, dx, dy);
-            SDLEvents.SDL_PushEvent(ev);
+            push(ev);
+        }
+    }
+
+    private static void push(SDL_Event ev) {
+        boolean ok = SDLEvents.SDL_PushEvent(ev);
+        if (ok) {
+            pushOk++;
+        } else if (pushFail++ < 5) {
+            trace("[SDL3 TRACE] SDL_PushEvent failed: " + SDLError.SDL_GetError());
+        }
+    }
+
+    // called for every event minecraft pulls out of SDL (PollEvent/WaitEvent*)
+    static void polledEvent(int type) {
+        if (type < 0 || type >= polled.length) {
+            return;
+        }
+        if (polled[type]++ == 0) {
+            trace("[SDL3 TRACE] first polled event type=0x" + Integer.toHexString(type));
+        }
+        long now = System.nanoTime();
+        if (now - lastSummary < 5000000000L) {
+            return;
+        }
+        lastSummary = now;
+        int total = 0;
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < polled.length; i++) {
+            if (polled[i] != 0) {
+                total += polled[i];
+                sb.append(" 0x").append(Integer.toHexString(i)).append("=").append(polled[i]);
+            }
+        }
+        if (total != lastPolledTotal) {
+            lastPolledTotal = total;
+            trace("[SDL3 TRACE] polled:" + sb + " | pushed ok=" + pushOk + " failed=" + pushFail + " grabbed=" + grabbed);
         }
     }
 

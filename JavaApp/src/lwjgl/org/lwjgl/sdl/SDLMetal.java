@@ -17,9 +17,9 @@ public class SDLMetal {
          Checks.check(window);
       }
 
-      System.err.println("[SDL3 TRACE] SDL_Metal_CreateView BEGIN");
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_Metal_CreateView BEGIN");
       long view = SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L);
-      System.err.println("[SDL3 TRACE] SDL_Metal_CreateView END view=" + view);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_Metal_CreateView END view=" + view);
       if (view != 0L) {
          SDL3Bridge.attachWindow(window);
       }

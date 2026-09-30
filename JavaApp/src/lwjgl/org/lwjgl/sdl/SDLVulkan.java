@@ -89,9 +89,9 @@ public class SDLVulkan {
          Checks.check(window);
       }
 
-      System.err.println("[SDL3 TRACE] SDL_Vulkan_CreateSurface BEGIN");
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_Vulkan_CreateSurface BEGIN");
       boolean result = (SDL3Bridge.invokeOnMain(__functionAddress, window, instance, allocator, surface) & 0xFFL) != 0L;
-      System.err.println("[SDL3 TRACE] SDL_Vulkan_CreateSurface END result=" + result);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_Vulkan_CreateSurface END result=" + result);
       if (result) {
          // SDL's metal view exists now, make sure it gets moved under amethyst's controls
          SDL3Bridge.attachWindow(window);
