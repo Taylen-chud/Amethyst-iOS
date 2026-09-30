@@ -90,6 +90,9 @@ final class SDL3Bridge {
     private static float curX, curY, lastX, lastY;
     private static int buttonState;
     private static int inputCount;
+    private static int cursorTraces, buttonTraces;
+    private static int winW, winH, pixW, pixH;
+    private static long winSizeAt;
     private static int pushOk, pushFail;
     private static final int[] polled = new int[0x1400];
     private static long lastSummary = System.nanoTime();
@@ -174,6 +177,8 @@ final class SDL3Bridge {
             nativeRegisterInput();
         }
         trace("[SDL3 TRACE] input bridge registered, windowID=" + inputWindowId);
+        winW = 0;
+        refreshWindowSize();
     }
 
     // relative mouse mode == amethyst's "grabbing" (hides the virtual mouse, shows in-game controls)
@@ -190,7 +195,7 @@ final class SDL3Bridge {
         try {
             switch (kind) {
                 case INPUT_CURSOR:
-                    onCursor(a, f1, f2);
+                    onCursor(a, b != 0, f1, f2);
                     break;
                 case INPUT_BUTTON:
                     onButton(a, b != 0);
@@ -215,7 +220,48 @@ final class SDL3Bridge {
         }
     }
 
-    private static void onCursor(int action, float x, float y) {
+    // SDL's logical window size (points) and pixel size. amethyst sends absolute cursor positions
+    // as a 0..1 fraction of its own game window so they can be scaled to whatever SDL calls the window
+    private static void refreshWindowSize() {
+        long now = System.nanoTime();
+        if (winW > 0 && now - winSizeAt < 250000000L) {
+            return;
+        }
+        winSizeAt = now;
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            java.nio.IntBuffer w = stack.mallocInt(1);
+            java.nio.IntBuffer h = stack.mallocInt(1);
+            java.nio.IntBuffer pw = stack.mallocInt(1);
+            java.nio.IntBuffer ph = stack.mallocInt(1);
+            if (!SDLVideo.SDL_GetWindowSize(inputWindow, w, h)) {
+                return;
+            }
+            SDLVideo.SDL_GetWindowSizeInPixels(inputWindow, pw, ph);
+            if (w.get(0) != winW || h.get(0) != winH || pw.get(0) != pixW || ph.get(0) != pixH) {
+                winW = w.get(0);
+                winH = h.get(0);
+                pixW = pw.get(0);
+                pixH = ph.get(0);
+                trace("[SDL3 TRACE] sdl window size points=" + winW + "x" + winH + " pixels=" + pixW + "x" + pixH);
+            }
+        } catch (Throwable t) {
+            // keep the old values
+        }
+    }
+
+    private static void onCursor(int action, boolean normalized, float x, float y) {
+        if (normalized) {
+            refreshWindowSize();
+            if (winW <= 0 || winH <= 0) {
+                return;
+            }
+            x *= winW;
+            y *= winH;
+        }
+        if (cursorTraces++ < 12) {
+            trace("[SDL3 TRACE] cursor action=" + action + " normalized=" + normalized + " -> " + x + "," + y
+                + " (window " + winW + "x" + winH + ")");
+        }
         float dx;
         float dy;
         switch (action) {
@@ -266,6 +312,9 @@ final class SDL3Bridge {
             case 3: sdlButton = 4; break; // X1
             case 4: sdlButton = 5; break; // X2
             default: return;
+        }
+        if (buttonTraces++ < 12) {
+            trace("[SDL3 TRACE] button glfw=" + glfwButton + " sdl=" + sdlButton + " down=" + down + " at " + curX + "," + curY);
         }
         int mask = 1 << (sdlButton - 1);
         buttonState = down ? (buttonState | mask) : (buttonState & ~mask);

@@ -589,7 +589,13 @@ JNIEXPORT void JNICALL Java_org_lwjgl_glfw_CallbackBridge_nativeSendCursorEnter(
 */
 void CallbackBridge_nativeSendCursorPos(char event, CGFloat x, CGFloat y) {
     if (AmethystSDL3InputActive()) {
-        // SDL mouse coordinates are window points, amethyst hands us pixels
+        if (!isGrabbing && windowWidth > 0 && windowHeight > 0) {
+            // absolute position: send it as a 0..1 fraction of the game window, java scales it to
+            // whatever size SDL reports for its window (b=1 means normalized)
+            AmethystSDL3ForwardInput(AM_SDL_INPUT_CURSOR, event, 1, 0, 0, (float)(x / windowWidth), (float)(y / windowHeight));
+            return;
+        }
+        // grabbed: camera movement, plain points are fine
         CGFloat scale = UIScreen.mainScreen.scale;
         AmethystSDL3ForwardInput(AM_SDL_INPUT_CURSOR, event, 0, 0, 0, (float)(x / scale), (float)(y / scale));
         return;
