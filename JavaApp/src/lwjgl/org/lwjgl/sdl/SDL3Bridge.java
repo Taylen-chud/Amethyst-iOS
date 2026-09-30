@@ -93,6 +93,7 @@ final class SDL3Bridge {
     private static int cursorTraces, buttonTraces;
     private static int winW, winH, pixW, pixH;
     private static long winSizeAt;
+    private static int reportedW, reportedH;
     private static int pushOk, pushFail;
     private static final int[] polled = new int[0x1400];
     private static long lastSummary = System.nanoTime();
@@ -243,9 +244,27 @@ final class SDL3Bridge {
                 pixW = pw.get(0);
                 pixH = ph.get(0);
                 trace("[SDL3 TRACE] sdl window size points=" + winW + "x" + winH + " pixels=" + pixW + "x" + pixH);
+                pushWindowResized(winW, winH);
             }
         } catch (Throwable t) {
             // keep the old values
+        }
+    }
+
+    // minecraft keeps its own copy of the window size (starts as the 854x480 launch default) and only
+    // updates it on SDL_EVENT_WINDOW_RESIZED. iOS never sends one because the window is created at
+    // screen size, so without this every mouse position is scaled against the wrong size
+    private static void pushWindowResized(int w, int h) {
+        if (w <= 0 || h <= 0 || (w == reportedW && h == reportedH)) {
+            return;
+        }
+        reportedW = w;
+        reportedH = h;
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            SDL_Event ev = SDL_Event.calloc(stack);
+            ev.window().set(SDLEvents.SDL_EVENT_WINDOW_RESIZED, 0L, inputWindowId, w, h);
+            boolean ok = SDLEvents.SDL_PushEvent(ev);
+            trace("[SDL3 TRACE] pushed WINDOW_RESIZED " + w + "x" + h + " ok=" + ok);
         }
     }
 
