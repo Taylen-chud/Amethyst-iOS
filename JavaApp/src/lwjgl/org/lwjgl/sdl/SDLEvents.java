@@ -182,7 +182,7 @@ public class SDLEvents {
       long __functionAddress = SDLEvents.Functions.PollEvent;
       boolean got = JNI.invokePZ(event, __functionAddress);
       if (got && event != 0L) {
-         SDL3Bridge.polledEvent(MemoryUtil.memGetInt(event));
+         SDL3Bridge.polledEvent(event);
       }
       return got;
    }
@@ -196,7 +196,7 @@ public class SDLEvents {
       long __functionAddress = SDLEvents.Functions.WaitEvent;
       boolean got = JNI.invokePZ(event, __functionAddress);
       if (got && event != 0L) {
-         SDL3Bridge.polledEvent(MemoryUtil.memGetInt(event));
+         SDL3Bridge.polledEvent(event);
       }
       return got;
    }
@@ -210,7 +210,7 @@ public class SDLEvents {
       long __functionAddress = SDLEvents.Functions.WaitEventTimeout;
       boolean got = JNI.invokePZ(event, timeoutMS, __functionAddress);
       if (got && event != 0L) {
-         SDL3Bridge.polledEvent(MemoryUtil.memGetInt(event));
+         SDL3Bridge.polledEvent(event);
       }
       return got;
    }

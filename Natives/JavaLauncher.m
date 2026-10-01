@@ -418,7 +418,10 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     }
     margv[++margc] = [NSString stringWithFormat:@"-Djava.library.path=%@", javaLibraryPath].UTF8String;
 
-    // Controlify (SDL3 controller mod) can't find SDL on its own on 26.3, hand it the bundled dylib
+    // video.resolution (percent) for the SDL path, java shrinks the pixel size it reports to minecraft
+    margv[++margc] = [NSString stringWithFormat:@"-Damethyst.resolutionScale=%.3f", getPrefFloat(@"video.resolution") / 100.0].UTF8String;
+
+    // Controlify can't find SDL on its own on 26.3, hand it the bundled dylib
     if (lwjglNativeSubfolder) {
         NSString *sdlDylibPath = [[frameworksPath stringByAppendingPathComponent:lwjglNativeSubfolder] stringByAppendingPathComponent:@"libSDL3.dylib"];
         if ([fm fileExistsAtPath:sdlDylibPath]) {

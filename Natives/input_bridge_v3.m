@@ -595,9 +595,9 @@ void CallbackBridge_nativeSendCursorPos(char event, CGFloat x, CGFloat y) {
             AmethystSDL3ForwardInput(AM_SDL_INPUT_CURSOR, event, 1, 0, 0, (float)(x / windowWidth), (float)(y / windowHeight));
             return;
         }
-        // grabbed: camera movement, plain points are fine
-        CGFloat scale = UIScreen.mainScreen.scale;
-        AmethystSDL3ForwardInput(AM_SDL_INPUT_CURSOR, event, 0, 0, 0, (float)(x / scale), (float)(y / scale));
+        // grabbed (camera): send the raw pixel deltas, same units the old GLFW path gave minecraft.
+        // dividing by the screen scale made the camera ~3x slower than before
+        AmethystSDL3ForwardInput(AM_SDL_INPUT_CURSOR, event, 0, 0, 0, (float)x, (float)y);
         return;
     }
     if (!GLFW_invoke_CursorPos || !isInputReady) return;

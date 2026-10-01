@@ -400,7 +400,8 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePF(window, __functionAddress);
+      float density = JNI.invokePF(window, __functionAddress);
+      return density > 0.0f ? density * SDL3Bridge.resolutionScale() : density;
    }
 
    public static float SDL_GetWindowDisplayScale(@NativeType("SDL_Window *") long window) {
@@ -799,7 +800,12 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePPPZ(window, w, h, __functionAddress);
+      boolean ok = JNI.invokePPPZ(window, w, h, __functionAddress);
+      if (ok && w != 0L && h != 0L) {
+         MemoryUtil.memPutInt(w, SDL3Bridge.scalePixels(MemoryUtil.memGetInt(w)));
+         MemoryUtil.memPutInt(h, SDL3Bridge.scalePixels(MemoryUtil.memGetInt(h)));
+      }
+      return ok;
    }
 
    @NativeType("bool")
@@ -1294,7 +1300,10 @@ public class SDLVideo {
          Checks.check(window);
       }
 
+      SDL3Bridge.armExitWatchdog("SDL_DestroyWindow");
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_DestroyWindow BEGIN");
       SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_DestroyWindow END");
    }
 
    @NativeType("bool")

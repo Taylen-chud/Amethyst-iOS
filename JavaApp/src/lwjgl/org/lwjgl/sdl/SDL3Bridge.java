@@ -251,9 +251,12 @@ final class SDL3Bridge {
         }
     }
 
+<<<<<<< HEAD
     // minecraft keeps its own copy of the window size (starts as the 854x480 launch default) and only
     // updates it on SDL_EVENT_WINDOW_RESIZED. iOS never sends one because the window is created at
     // screen size, so without this every mouse position is scaled against the wrong size
+=======
+>>>>>>> 6fd30a9 (WIP: Bugfix: SDL3Bridge and SDLEvents improvements)
     private static void pushWindowResized(int w, int h) {
         if (w <= 0 || h <= 0 || (w == reportedW && h == reportedH)) {
             return;
@@ -415,8 +418,87 @@ final class SDL3Bridge {
         }
     }
 
+    // video.resolution from the launcher settings (0.25 = 25%), passed in as -Damethyst.resolutionScale
+    private static float resScale = -1f;
+
+    static float resolutionScale() {
+        if (resScale < 0f) {
+            float s = 1f;
+            try {
+                s = Float.parseFloat(System.getProperty("amethyst.resolutionScale", "1.0"));
+            } catch (Throwable ignored) {
+            }
+            if (!(s > 0.05f)) {
+                s = 1f;
+            }
+            resScale = Math.min(s, 1f);
+            trace("[SDL3 TRACE] resolution scale " + resScale);
+        }
+        return resScale;
+    }
+
+    static int scalePixels(int v) {
+        float s = resolutionScale();
+        return s >= 0.999f ? v : Math.max(1, Math.round(v * s));
+    }
+
+    // minecraft sizes its swapchain from SDL_GetWindowSizeInPixels / the pixel-size-changed event,
+    // so shrinking what SDL reports there is what makes the resolution setting work (the metal
+    // layer then scales the smaller image up to the screen)
+    static void scaleWindowPixelEvent(long event) {
+        if (resolutionScale() >= 0.999f) {
+            return;
+        }
+        int w = MemoryUtil.memGetInt(event + SDL_WindowEvent.DATA1);
+        int h = MemoryUtil.memGetInt(event + SDL_WindowEvent.DATA2);
+        MemoryUtil.memPutInt(event + SDL_WindowEvent.DATA1, scalePixels(w));
+        MemoryUtil.memPutInt(event + SDL_WindowEvent.DATA2, scalePixels(h));
+    }
+
+    private static boolean exitArmed;
+
+    // after the window is destroyed there is nothing left to wait for. if the normal shutdown
+    // path hangs (it does on ios), force the jvm out so amethyst gets its exit() and goes home
+    static synchronized void armExitWatchdog(String why) {
+        if (exitArmed) {
+            return;
+        }
+        exitArmed = true;
+        trace("[SDL3 TRACE] shutdown: " + why + ", exit watchdog armed");
+        Thread watchdog = new Thread(new Runnable() {
+            public void run() {
+                try {
+                    Thread.sleep(5000L);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                trace("[SDL3 TRACE] shutdown still not finished after 5s, calling System.exit(0)");
+                Thread hard = new Thread(new Runnable() {
+                    public void run() {
+                        try {
+                            Thread.sleep(4000L);
+                        } catch (InterruptedException e) {
+                            return;
+                        }
+                        trace("[SDL3 TRACE] System.exit(0) did not finish either, halting");
+                        Runtime.getRuntime().halt(0);
+                    }
+                }, "SDL3 halt watchdog");
+                hard.setDaemon(true);
+                hard.start();
+                System.exit(0);
+            }
+        }, "SDL3 exit watchdog");
+        watchdog.setDaemon(true);
+        watchdog.start();
+    }
+
     // called for every event minecraft pulls out of SDL (PollEvent/WaitEvent*)
-    static void polledEvent(int type) {
+    static void polledEvent(long event) {
+        int type = MemoryUtil.memGetInt(event);
+        if (type == SDLEvents.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
+            scaleWindowPixelEvent(event);
+        }
         if (type < 0 || type >= polled.length) {
             return;
         }

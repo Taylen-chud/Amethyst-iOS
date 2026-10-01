@@ -52,7 +52,9 @@ public class SDLInit {
 
    public static void SDL_QuitSubSystem(@NativeType("SDL_InitFlags") int flags) {
       long __functionAddress = SDLInit.Functions.QuitSubSystem;
-      JNI.invokeV(flags, __functionAddress);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_QuitSubSystem(" + flags + ") BEGIN");
+      SDL3Bridge.invokeOnMain(__functionAddress, flags, 0L, 0L, 0L);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_QuitSubSystem END");
    }
 
    @NativeType("SDL_InitFlags")
@@ -63,7 +65,10 @@ public class SDLInit {
 
    public static void SDL_Quit() {
       long __functionAddress = SDLInit.Functions.Quit;
-      JNI.invokeV(__functionAddress);
+      SDL3Bridge.armExitWatchdog("SDL_Quit");
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_Quit BEGIN");
+      SDL3Bridge.invokeOnMain(__functionAddress, 0L, 0L, 0L, 0L);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_Quit END");
    }
 
    @NativeType("bool")
