@@ -251,12 +251,9 @@ final class SDL3Bridge {
         }
     }
 
-<<<<<<< HEAD
     // minecraft keeps its own copy of the window size (starts as the 854x480 launch default) and only
     // updates it on SDL_EVENT_WINDOW_RESIZED. iOS never sends one because the window is created at
     // screen size, so without this every mouse position is scaled against the wrong size
-=======
->>>>>>> 6fd30a9 (WIP: Bugfix: SDL3Bridge and SDLEvents improvements)
     private static void pushWindowResized(int w, int h) {
         if (w <= 0 || h <= 0 || (w == reportedW && h == reportedH)) {
             return;
