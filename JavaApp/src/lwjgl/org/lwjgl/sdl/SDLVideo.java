@@ -794,6 +794,11 @@ public class SDLVideo {
       return nSDL_GetWindowBordersSize(window, MemoryUtil.memAddressSafe(top), MemoryUtil.memAddressSafe(left), MemoryUtil.memAddressSafe(bottom), MemoryUtil.memAddressSafe(right));
    }
 
+   // the real pixel size, without the resolution scale that nSDL_GetWindowSizeInPixels applies
+   public static boolean rawWindowSizeInPixels(long window, long w, long h) {
+      return JNI.invokePPPZ(window, w, h, SDLVideo.Functions.GetWindowSizeInPixels);
+   }
+
    public static boolean nSDL_GetWindowSizeInPixels(long window, long w, long h) {
       long __functionAddress = SDLVideo.Functions.GetWindowSizeInPixels;
       if (Checks.CHECKS) {

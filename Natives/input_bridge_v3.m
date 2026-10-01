@@ -713,6 +713,9 @@ void CallbackBridge_nativeSendMouseButton(int button, int action, int mods) {
 void CallbackBridge_nativeSendScreenSize(int width, int height) {
     windowWidth = width;
     windowHeight = height;
+
+    // SDL path: lets java pick up a resolution change made while the game is running
+    AmethystSDL3ForwardInput(AM_SDL_INPUT_SCREEN, width, height, 0, 0, 0, 0);
     
     if (isInputReady) {
         if (GLFW_invoke_FramebufferSize) {

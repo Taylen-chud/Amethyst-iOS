@@ -13,7 +13,8 @@ enum {
     AM_SDL_INPUT_BUTTON = 1, // a=GLFW button, b=action
     AM_SDL_INPUT_KEY    = 2, // a=GLFW key, b=scancode, c=action, d=GLFW mods
     AM_SDL_INPUT_CHAR   = 3, // a=codepoint
-    AM_SDL_INPUT_SCROLL = 4  // f1/f2 = x/y offset
+    AM_SDL_INPUT_SCROLL = 4, // f1/f2 = x/y offset
+    AM_SDL_INPUT_SCREEN = 5  // a/b = amethyst's render size in pixels (already resolution-scaled)
 };
 bool AmethystSDL3InputActive(void);
 void AmethystSDL3ForwardInput(int kind, int a, int b, int c, int d, float f1, float f2);

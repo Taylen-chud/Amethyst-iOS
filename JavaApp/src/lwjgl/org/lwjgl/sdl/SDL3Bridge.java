@@ -69,6 +69,7 @@ final class SDL3Bridge {
     private static final int INPUT_KEY = 2;
     private static final int INPUT_CHAR = 3;
     private static final int INPUT_SCROLL = 4;
+    private static final int INPUT_SCREEN = 5;
 
     private static final int ACTION_DOWN = 0;
     private static final int ACTION_UP = 1;
@@ -210,6 +211,9 @@ final class SDL3Bridge {
                 case INPUT_SCROLL:
                     onScroll(f1, f2);
                     break;
+                case INPUT_SCREEN:
+                    onScreenSize(a, b);
+                    break;
                 default:
                     break;
             }
@@ -265,6 +269,39 @@ final class SDL3Bridge {
             ev.window().set(SDLEvents.SDL_EVENT_WINDOW_RESIZED, 0L, inputWindowId, w, h);
             boolean ok = SDLEvents.SDL_PushEvent(ev);
             trace("[SDL3 TRACE] pushed WINDOW_RESIZED " + w + "x" + h + " ok=" + ok);
+        }
+    }
+
+    private static void onScreenSize(int amethystW, int amethystH) {
+        if (amethystW <= 0 || amethystH <= 0) {
+            return;
+        }
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            java.nio.IntBuffer rw = stack.mallocInt(1);
+            java.nio.IntBuffer rh = stack.mallocInt(1);
+            if (!SDLVideo.rawWindowSizeInPixels(inputWindow, MemoryUtil.memAddress(rw), MemoryUtil.memAddress(rh))) {
+                return;
+            }
+            int rawW = rw.get(0);
+            int rawH = rh.get(0);
+            if (rawW <= 0 || rawH <= 0) {
+                return;
+            }
+            float newScale = Math.max(0.05f, Math.min(1f, (float) amethystW / (float) rawW));
+            if (Math.abs(newScale - resolutionScale()) < 0.004f) {
+                return;
+            }
+            trace("[SDL3 TRACE] resolution scale " + resScale + " -> " + newScale + " (amethyst " + amethystW + "x" + amethystH + ", raw " + rawW + "x" + rawH + ")");
+            resScale = newScale;
+            winW = 0;
+
+            // the polled-event hook scales this by the new value, so push the raw size
+            SDL_Event ev = SDL_Event.calloc(stack);
+            ev.window().set(SDLEvents.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED, 0L, inputWindowId, rawW, rawH);
+            boolean ok = SDLEvents.SDL_PushEvent(ev);
+            trace("[SDL3 TRACE] pushed PIXEL_SIZE_CHANGED " + rawW + "x" + rawH + " ok=" + ok);
+        } catch (Throwable t) {
+            t.printStackTrace();
         }
     }
 
