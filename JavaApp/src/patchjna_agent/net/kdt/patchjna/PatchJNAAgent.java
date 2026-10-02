@@ -14,9 +14,15 @@ public class PatchJNAAgent implements ClassFileTransformer {
     // minecraft's mac-only helper, it loads cocoa through ca.weblite.objc and that dies on ios
     private static final String MACOS_UTIL = "com/mojang/blaze3d/platform/MacosUtil";
 
+    private static final String SDL_FFM_EVENTS = "dev/isxander/sdl/ffm/SdlFfmEvents";
+    private static final String SDL_FFM_SUPPORT = "dev/isxander/sdl/ffm/SdlFfmSupport";
+
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
     ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
         byte[] transformeredByteCode = classfileBuffer;
+        if (className == null) {
+            return transformeredByteCode;
+        }
         if (className.equals("com/sun/jna/Platform")) {
             System.out.println("PatchJNAAgent: Replacing class");
             try {
@@ -30,6 +36,16 @@ public class PatchJNAAgent implements ClassFileTransformer {
         } else if (MACOS_UTIL.equals(className)) {
             try {
                 byte[] patched = CocoaStubber.stubCocoaMethods(className, classfileBuffer);
+                if (patched != null) {
+                    transformeredByteCode = patched;
+                }
+            } catch (Throwable t) {
+                System.out.println("PatchJNAAgent: failed to patch " + className + ", leaving it unmodified");
+                t.printStackTrace();
+            }
+        } else if (SDL_FFM_EVENTS.equals(className) && !"false".equals(System.getProperty("amethyst.noUpcalls"))) {
+            try {
+                byte[] patched = CocoaStubber.stubUpcallMethods(className, classfileBuffer);
                 if (patched != null) {
                     transformeredByteCode = patched;
                 }
@@ -51,15 +67,28 @@ public class PatchJNAAgent implements ClassFileTransformer {
         private static final String[] BLOCKED_PREFIXES = {"ca/weblite/objc/", "ca/weblite/nativeutils/"};
 
         private final byte[] cf;
+        private final String[] prefixes;
+        private final String callClass;
+        private final String callName;
+        private final String label;
         private int[] tag;
         private int[] off;
 
-        private CocoaStubber(byte[] cf) {
+        private CocoaStubber(byte[] cf, String[] prefixes, String callClass, String callName, String label) {
             this.cf = cf;
+            this.prefixes = prefixes;
+            this.callClass = callClass;
+            this.callName = callName;
+            this.label = label;
         }
 
         static byte[] stubCocoaMethods(String className, byte[] classBytes) throws IOException {
-            return new CocoaStubber(classBytes).run(className);
+            return new CocoaStubber(classBytes, BLOCKED_PREFIXES, null, null, "ca.weblite.objc").run(className);
+        }
+
+        // stubs every method that calls <SDL_FFM_SUPPORT>.callback, i.e. every one that creates an upcall stub
+        static byte[] stubUpcallMethods(String className, byte[] classBytes) throws IOException {
+            return new CocoaStubber(classBytes, new String[0], SDL_FFM_SUPPORT, "callback", "FFM upcall").run(className);
         }
 
         private int u1(int p) {
@@ -144,14 +173,8 @@ public class PatchJNAAgent implements ClassFileTransformer {
 
                 boolean stub = false;
                 if (codePos >= 0 && !"<init>".equals(name)) {
-                    
-                    boolean iosMacosUtilNoOp =
-                        "com/mojang/blaze3d/platform/MacosUtil".equals(className)
-                        && "setWindowColorSpaceForOpenGLBecauseGLFWDoesnt".equals(name);
-
                     int codeStart = codePos + 14;
-                    stub = iosMacosUtilNoOp
-                        || findBlockedReference(codeStart, codeStart + u4(codePos + 10)) != null;
+                    stub = findBlockedReference(codeStart, codeStart + u4(codePos + 10)) != null;
                 }
 
                 if (!stub) {
@@ -184,11 +207,11 @@ public class PatchJNAAgent implements ClassFileTransformer {
             out.flush();
 
             if (stubbed.isEmpty()) {
-                System.out.println("PatchJNAAgent: " + className + " has no ca.weblite.objc references, left unmodified");
+                System.out.println("PatchJNAAgent: " + className + " has no " + label + " references, left unmodified");
                 return null;
             }
             System.out.println("PatchJNAAgent: " + className + " - stubbed " + stubbed.size()
-                + " Cocoa-dependent method(s): " + stubbed);
+                + " " + label + "-dependent method(s): " + stubbed);
             return bytes.toByteArray();
         }
 
@@ -272,9 +295,15 @@ public class PatchJNAAgent implements ClassFileTransformer {
                     element = element.substring(1);
                 }
             }
-            for (String prefix : BLOCKED_PREFIXES) {
+            for (String prefix : prefixes) {
                 if (element.startsWith(prefix)) {
                     return name;
+                }
+            }
+            if (callName != null && (tag[idx] == 10 || tag[idx] == 11) && callClass.equals(name)) {
+                int nameAndType = u2(off[idx] + 2);
+                if (callName.equals(utf8(u2(off[nameAndType])))) {
+                    return name + "." + callName;
                 }
             }
             return null;
