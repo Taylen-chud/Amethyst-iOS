@@ -203,7 +203,7 @@ final class SDL3Bridge {
                     onButton(a, b != 0);
                     break;
                 case INPUT_KEY:
-                    onKey(a, b, c != 0, d);
+                    onKey(a, b, c, d);
                     break;
                 case INPUT_CHAR:
                     onChar(a);
@@ -272,6 +272,9 @@ final class SDL3Bridge {
         }
     }
 
+    // amethyst re-sends its render size (physical size x video.resolution) whenever the resolution
+    // setting changes, also while in game. work out the new scale from it and tell minecraft the
+    // framebuffer changed so it rebuilds its swapchain
     private static void onScreenSize(int amethystW, int amethystH) {
         if (amethystW <= 0 || amethystH <= 0) {
             return;
@@ -394,7 +397,9 @@ final class SDL3Bridge {
         }
     }
 
-    private static void onKey(int glfwKey, int glfwScancode, boolean down, int glfwMods) {
+    private static void onKey(int glfwKey, int glfwScancode, int glfwAction, int glfwMods) {
+        boolean down = glfwAction != 0;
+        boolean repeat = glfwAction == 2; // GLFW_REPEAT, minecraft reads this as a held key
         if (glfwKey < 0 || glfwKey >= SCANCODES.length) {
             return;
         }
@@ -408,7 +413,7 @@ final class SDL3Bridge {
             ev.key().set(
                 down ? SDLEvents.SDL_EVENT_KEY_DOWN : SDLEvents.SDL_EVENT_KEY_UP,
                 0L, inputWindowId, 0, scancode, keycodeFor(glfwKey, scancode),
-                (short) sdlMods(glfwMods), (short) 0, down, false);
+                (short) sdlMods(glfwMods), (short) 0, down, repeat);
             push(ev);
         }
     }

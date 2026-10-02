@@ -70,13 +70,12 @@ static void AMRunSyncOnMain(void (^block)(void)) {
     dispatch_sync(dispatch_get_main_queue(), block);
 }
 
-/*
- * SDL's UIKit backend creates an SDL_uikitview first and later replaces it
- * with SDL_uikitmetalview for Vulkan.
- *
- * Keep the SDL view inside Amethyst's real window hierarchy so UIKit input
- * continues to target the active application window.
- */
+
+static void AMApplyPixelFilter(UIView *view) {
+    view.layer.magnificationFilter = kCAFilterNearest;
+    view.layer.minificationFilter = kCAFilterNearest;
+}
+
 static void AMEmbedSDLViewOnMain(void) {
     GameSurfaceView *host = [SurfaceViewController surface];
 
@@ -121,6 +120,7 @@ static void AMEmbedSDLViewOnMain(void) {
     if (sdlView.superview == host) {
         sdlView.hidden = NO;
         sdlView.userInteractionEnabled = NO; // Interaction stays off so touchView handles inputs
+        AMApplyPixelFilter(sdlView);
         gSDLInstalled = YES;
 
         NSLog(@"[SDL3 EMBED] SDL view already embedded");
@@ -164,6 +164,7 @@ static void AMEmbedSDLViewOnMain(void) {
     window.hidden = YES;
     window.userInteractionEnabled = NO;
 
+    AMApplyPixelFilter(sdlView);
     gSDLInstalled = YES;
 
     NSLog(@"[SDL3 EMBED] SUCCESS: %@ embedded into GameSurfaceView",
@@ -294,12 +295,31 @@ static void AMSDL3SetMainReady(void) {
     });
 }
 
+static void AMSDL3SetMainReadyForControlify(void) {
+    AMRunSyncOnMain(^{
+        void *handle = dlopen("@executable_path/Frameworks/lwjgl34/libSDL3_controlify.dylib", RTLD_NOW | RTLD_LOCAL);
+        if (handle == NULL) {
+            NSLog(@"[SDL3] no private SDL copy for Controlify (libSDL3_controlify.dylib), controller mods will not work");
+            return;
+        }
+
+        void (*setMainReady)(void) = (void (*)(void))dlsym(handle, "SDL_SetMainReady");
+        if (setMainReady != NULL) {
+            setMainReady();
+            NSLog(@"[SDL3] SDL_SetMainReady called for the Controlify SDL copy");
+        } else {
+            NSLog(@"[SDL3] SDL_SetMainReady missing in the Controlify SDL copy");
+        }
+    });
+}
+
 void AmethystSDL3Prepare(void) {
     NSLog(@"[SDL3 TRACE] nativePrepare BEGIN main=%d",
           [NSThread isMainThread]);
 
     AMInstallUIKitObservers();
     AMSDL3SetMainReady();
+    AMSDL3SetMainReadyForControlify();
 
     /*
      * Keep SDL from installing its own home-indicator behavior over
