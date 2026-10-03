@@ -250,7 +250,7 @@ help:
 	echo '    make dsym                           Generate debug symbol files'
 	echo '    make clean                          Cleans build directories'
 	echo '    make check                          Dump all variables for checking'
-
+	
 check:
 	$(foreach v, \
 		$(shell echo "$(filter-out METHOD_% .% MAKEFILE_LIST MAKEFLAGS CURDIR,$(.VARIABLES))" | tr ' ' '\n' | sort), \
@@ -276,7 +276,6 @@ native: dep_mg
 		..
 
 	cmake --build $(WORKINGDIR) --config $(CMAKE_BUILD_TYPE) -j$(JOBS)
-	#	--target awt_headless awt_xawt libOSMesaOverride.dylib tinygl4angle AngelAuraAmethyst
 	rm $(WORKINGDIR)/libawt_headless.dylib
 	echo '[Amethyst v$(VERSION)] native - end'
 
@@ -352,6 +351,7 @@ dep_mobilegl:
 		-DCMAKE_C_FLAGS="-arch arm64" \
 		-DCMAKE_CXX_FLAGS="-arch arm64" \
 		-DMOBILEGL_IOS=ON \
+		-DMOBILEGL_BUILD_DISAGGREGATED=ON \
 		-DMOBILEGL_BUILD_TEST=OFF \
 		-DMOBILEGL_BUILD_BENCHMARK=OFF \
 		-DMOBILEGL_BUILD_TRACE_REPLAY=OFF \
@@ -463,7 +463,7 @@ deploy:
 			else \
 				open $(OUTPUTDIR)/net.kdt.pojavlauncher.slimmed-$(VERSION)-$(PLATFORM_NAME).ipa; \
 			fi; \
-		fi; \
+		fi \
 	else \
 		echo 'Device not supported for deploy recipe.'; \
 	fi
@@ -502,7 +502,5 @@ clean:
 	rm -rf JavaApp/build
 	rm -rf $(OUTPUTDIR)
 	echo '[Amethyst v$(VERSION)] clean - end'
-
-		
 
 .PHONY: all clean check native java jre package dsym deploy help
