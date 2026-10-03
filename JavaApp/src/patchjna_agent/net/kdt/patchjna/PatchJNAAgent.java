@@ -17,6 +17,29 @@ public class PatchJNAAgent implements ClassFileTransformer {
     private static final String SDL_FFM_EVENTS = "dev/isxander/sdl/ffm/SdlFfmEvents";
     private static final String SDL_FFM_SUPPORT = "dev/isxander/sdl/ffm/SdlFfmSupport";
 
+    private static final String LWJGL_GL = "org/lwjgl/opengl/GL";
+    private static boolean glLoadLogged;
+
+    private static void logGlLoad() {
+        if (glLoadLogged) {
+            return;
+        }
+        glLoadLogged = true;
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("PatchJNAAgent: org.lwjgl.opengl.GL is being loaded (explicitInit=")
+              .append(System.getProperty("org.lwjgl.opengl.explicitInit"))
+              .append(", libname=").append(System.getProperty("org.lwjgl.opengl.libname"))
+              .append(") from:");
+            StackTraceElement[] st = new Throwable().getStackTrace();
+            for (int i = 0; i < st.length && i < 40; i++) {
+                sb.append("\n    at ").append(st[i]);
+            }
+            System.out.println(sb);
+        } catch (Throwable ignored) {
+        }
+    }
+
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
     ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
         byte[] transformeredByteCode = classfileBuffer;
@@ -25,6 +48,9 @@ public class PatchJNAAgent implements ClassFileTransformer {
         }
         if (SDL_FFM_EVENTS.equals(className)) {
             System.setProperty("amethyst.controlify", "true");
+        }
+        if (LWJGL_GL.equals(className)) {
+            logGlLoad();
         }
         if (className.equals("com/sun/jna/Platform")) {
             System.out.println("PatchJNAAgent: Replacing class");
