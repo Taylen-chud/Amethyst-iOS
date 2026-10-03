@@ -421,6 +421,13 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     // video.resolution (percent) for the SDL path, java shrinks the pixel size it reports to minecraft
     margv[++margc] = [NSString stringWithFormat:@"-Damethyst.resolutionScale=%.3f", getPrefFloat(@"video.resolution") / 100.0].UTF8String;
 
+    // FFM upcalls (callbacks from native code into java) crash this JVM in UpcallStub::create.
+    // Controlify checks this and skips the one upcall it makes (its SDL event filter).
+    margv[++margc] = "-Damethyst.noUpcalls=true";
+
+    // Controlify (SDL3 controller mod) loads its own SDL through FFM. It must get a PRIVATE copy of the
+    // dylib: it installs an event filter that drops every non-joystick event, and on the same copy
+    // Minecraft uses that would kill all keyboard/mouse/window input. The Makefile makes the copy.
     if (lwjglNativeSubfolder) {
         NSString *sdlDylibPath = [[frameworksPath stringByAppendingPathComponent:lwjglNativeSubfolder] stringByAppendingPathComponent:@"libSDL3_controlify.dylib"];
         if ([fm fileExistsAtPath:sdlDylibPath]) {
@@ -445,6 +452,14 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             glLibName = RENDERER_NAME_MTL_ANGLE;
         }
         margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%s", glLibName].UTF8String;
+    }
+
+    // lwjgl 3.4 (minecraft 26.x): LWJGL's GL class loads the gl library in its static init unless this is set,
+    // then minecraft's own GL.create() in the opengl backend dies with "OpenGL library already loaded" and
+    // the game falls back to vulkan (no iris). only for 3.4 since older versions rely on the auto load.
+    // putting -Dorg.lwjgl.opengl.explicitInit=false in custom jvm flags turns it off again (those come later)
+    if ([lwjglFolder hasPrefix:@"lwjgl-3.4"]) {
+        margv[++margc] = "-Dorg.lwjgl.opengl.explicitInit=true";
     }
 
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
