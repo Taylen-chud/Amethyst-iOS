@@ -1335,6 +1335,10 @@ public class SDLVideo {
 
    public static boolean nSDL_GL_LoadLibrary(long path) {
       long __functionAddress = SDLVideo.Functions.GL_LoadLibrary;
+      if (path != 0L && !SDL3Config.GL_KEEP_LOAD_PATH) {
+         SDL3Bridge.warn("SDL_GL_LoadLibrary: ignoring the library path, ios only loads the default driver");
+         path = 0L;
+      }
       return JNI.invokePZ(path, __functionAddress);
    }
 
