@@ -14,12 +14,12 @@ TARGETS := $(filter-out $(OUTPUTDIR)/lwjgl.jar,$(TARGETS:$(SOURCEDIR)/%=$(OUTPUT
 # Add all jars to classpath and allow compiling with private API.
 # This remains the normal classpath for the existing launcher and
 # LWJGL 3.3.3 sources.
-JCFLAGS := -cp "$(subst $() $(),:,$(wildcard $(SOURCEDIR)/*/):$(wildcard libs/*/*.jar))" -XDignore.symbol.file
+JCFLAGS := -cp "$(subst $() $(),:,$(wildcard $(SOURCEDIR)/*/):$(wildcard libs/*/*.jar))" -XDignore.symbol.file -implicit:none
 
 # SDL3/LWJGL 3.4.1 must compile against the 3.4.1 LWJGL core.
 # Do NOT include libs/lwjgl-3.3.3 here, otherwise the older
 # org.lwjgl.system.Configuration/JNI classes can shadow the 3.4.1 APIs.
-SDL_JCFLAGS := -cp "$(subst $() $(),:,$(wildcard $(SOURCEDIR)/*/):$(wildcard libs/lwjgl-3.4.1/*.jar))" -XDignore.symbol.file
+SDL_JCFLAGS := -cp "$(subst $() $(),:,$(wildcard $(SOURCEDIR)/*/):$(wildcard libs/lwjgl-3.4.1/*.jar))" -XDignore.symbol.file -implicit:none
 
 all: $(TARGETS) $(OUTPUTDIR)/lwjgl-3.3.3.jar $(OUTPUTDIR)/lwjgl-3.4.1.jar
 
