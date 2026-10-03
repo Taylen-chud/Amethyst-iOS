@@ -7,6 +7,7 @@ final class SDL3Config {
     static final boolean TRACE = flag("amethyst.sdl.trace", false);
     static final boolean BACKGROUND_PAUSE = flag("amethyst.sdl.backgroundPause", true);
     static final boolean GL_KEEP_LOAD_PATH = flag("amethyst.sdl.glKeepLoadPath", false);
+    static final boolean GL_SDL_PROC = flag("amethyst.sdl.glSdlProc", false);
     static final boolean NATIVE_GAMEPAD = flag("amethyst.nativeGamepad", false);
 
     private static boolean flag(String name, boolean fallback) {

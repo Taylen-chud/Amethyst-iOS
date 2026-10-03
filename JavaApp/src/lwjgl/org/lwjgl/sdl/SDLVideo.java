@@ -1370,6 +1370,10 @@ public class SDLVideo {
 
    public static long nSDL_GL_GetProcAddress(long proc) {
       long __functionAddress = SDLVideo.Functions.GL_GetProcAddress;
+      long lwjglAddress = SDL3GL.lookup(proc);
+      if (lwjglAddress != 0L) {
+         return lwjglAddress;
+      }
       return JNI.invokePP(proc, __functionAddress);
    }
 
@@ -1498,13 +1502,19 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      return JNI.invokePP(window, __functionAddress);
+      long context = JNI.invokePP(window, __functionAddress);
+      SDL3GL.once("createContext", "SDL_GL_CreateContext(window=0x" + Long.toHexString(window) + ") -> 0x"
+         + Long.toHexString(context) + (context == 0L ? " error: " + SDL3Bridge.lastError() : ""));
+      return context;
    }
 
    @NativeType("bool")
    public static boolean SDL_GL_MakeCurrent(@NativeType("SDL_Window *") long window, @NativeType("SDL_GLContext") long context) {
       long __functionAddress = SDLVideo.Functions.GL_MakeCurrent;
-      return JNI.invokePPZ(window, context, __functionAddress);
+      boolean made = JNI.invokePPZ(window, context, __functionAddress);
+      SDL3GL.once("makeCurrent." + made, "SDL_GL_MakeCurrent(0x" + Long.toHexString(window) + ", 0x"
+         + Long.toHexString(context) + ") -> " + made + (made ? "" : " error: " + SDL3Bridge.lastError()));
+      return made;
    }
 
    @NativeType("SDL_Window *")
@@ -1577,6 +1587,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
+      SDL3GL.once("swapWindow", "SDL_GL_SwapWindow is being called (first frame)");
       return JNI.invokePZ(window, __functionAddress);
    }
 
