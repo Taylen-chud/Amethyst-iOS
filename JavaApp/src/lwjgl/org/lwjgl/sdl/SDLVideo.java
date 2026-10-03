@@ -505,11 +505,13 @@ public class SDLVideo {
 
    public static long nSDL_CreateWindow(long title, int w, int h, long flags) {
       long __functionAddress = SDLVideo.Functions.CreateWindow;
-      System.out.println("[SDL3 TRACE] SDL_CreateWindow BEGIN " + w + "x" + h + " flags=" + flags);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindow BEGIN " + w + "x" + h + " flags=" + flags);
       long window = SDL3Bridge.nativeCreateWindow(__functionAddress, title, w, h, flags);
-      System.out.println("[SDL3 TRACE] SDL_CreateWindow END window=" + window);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindow END window=" + window);
       if (window != 0L) {
          SDL3Bridge.attachWindow(window);
+      } else {
+         SDL3Bridge.warn("SDL_CreateWindow " + w + "x" + h + " failed: " + SDL3Bridge.mainThreadError());
       }
       return window;
    }
@@ -553,11 +555,13 @@ public class SDLVideo {
    @NativeType("SDL_Window *")
    public static long SDL_CreateWindowWithProperties(@NativeType("SDL_PropertiesID") int props) {
       long __functionAddress = SDLVideo.Functions.CreateWindowWithProperties;
-      System.out.println("[SDL3 TRACE] SDL_CreateWindowWithProperties BEGIN props=" + props);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindowWithProperties BEGIN props=" + props);
       long window = SDL3Bridge.nativeCreateWindowWithProperties(__functionAddress, props);
-      System.out.println("[SDL3 TRACE] SDL_CreateWindowWithProperties END window=" + window);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindowWithProperties END window=" + window);
       if (window != 0L) {
          SDL3Bridge.attachWindow(window);
+      } else {
+         SDL3Bridge.warn("SDL_CreateWindowWithProperties failed: " + SDL3Bridge.mainThreadError());
       }
       return window;
    }

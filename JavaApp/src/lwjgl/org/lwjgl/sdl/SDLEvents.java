@@ -144,6 +144,7 @@ public class SDLEvents {
 
    public static void SDL_PumpEvents() {
       long __functionAddress = SDLEvents.Functions.PumpEvents;
+      SDL3Lifecycle.awaitForeground();
       JNI.invokeV(__functionAddress);
    }
 
@@ -180,6 +181,7 @@ public class SDLEvents {
 
    public static boolean nSDL_PollEvent(long event) {
       long __functionAddress = SDLEvents.Functions.PollEvent;
+      SDL3Lifecycle.awaitForeground();
       boolean got = JNI.invokePZ(event, __functionAddress);
       if (got && event != 0L) {
          SDL3Bridge.polledEvent(event);
@@ -194,6 +196,7 @@ public class SDLEvents {
 
    public static boolean nSDL_WaitEvent(long event) {
       long __functionAddress = SDLEvents.Functions.WaitEvent;
+      SDL3Lifecycle.awaitForeground();
       boolean got = JNI.invokePZ(event, __functionAddress);
       if (got && event != 0L) {
          SDL3Bridge.polledEvent(event);
@@ -208,6 +211,7 @@ public class SDLEvents {
 
    public static boolean nSDL_WaitEventTimeout(long event, int timeoutMS) {
       long __functionAddress = SDLEvents.Functions.WaitEventTimeout;
+      SDL3Lifecycle.awaitForeground();
       boolean got = JNI.invokePZ(event, timeoutMS, __functionAddress);
       if (got && event != 0L) {
          SDL3Bridge.polledEvent(event);

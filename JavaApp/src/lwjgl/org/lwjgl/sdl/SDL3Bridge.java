@@ -12,11 +12,52 @@ final class SDL3Bridge {
     // here) so use fd 2 directly, that one ends up in latestlog.txt
     private static final java.io.FileOutputStream RAW_ERR = new java.io.FileOutputStream(java.io.FileDescriptor.err);
 
-    static void trace(String line) {
+    private static void raw(String line) {
         try {
             RAW_ERR.write((line + "\n").getBytes("UTF-8"));
         } catch (Throwable ignored) {
         }
+    }
+
+    // verbose, only with -Damethyst.sdl.trace=true
+    static void trace(String line) {
+        if (SDL3Config.TRACE) {
+            raw(line);
+        }
+    }
+
+    // things that went wrong, always logged
+    static void warn(String line) {
+        raw("[SDL3 WARN] " + line);
+    }
+
+    // SDL errors are per thread and the calls that matter run on the ios main thread, so native
+    // keeps a copy of the last error it saw there
+    static String mainThreadError() {
+        try {
+            String e = nativeLastMainError();
+            return e == null || e.isEmpty() ? "no SDL error recorded" : e;
+        } catch (Throwable t) {
+            return "unavailable";
+        }
+    }
+
+    // error of the calling thread
+    static String lastError() {
+        try {
+            String e = SDLError.SDL_GetError();
+            return e == null || e.isEmpty() ? "no SDL error recorded" : e;
+        } catch (Throwable t) {
+            return "unavailable";
+        }
+    }
+
+    static long currentWindow() {
+        return inputWindow;
+    }
+
+    static int currentWindowId() {
+        return inputWindowId;
     }
 
     static native void nativePrepare();
@@ -30,6 +71,7 @@ final class SDL3Bridge {
     static native void nativeRegisterInput();
     static native void nativeSetGrabbing(boolean grabbing);
     static native void nativeSetControllerPassthrough(boolean passthrough);
+    static native String nativeLastMainError();
 
     // runs an SDL function on the iOS main thread. integer/pointer args only, returns raw x0
     static long invokeOnMain(long functionAddress, long a0, long a1, long a2, long a3) {
@@ -85,13 +127,14 @@ final class SDL3Bridge {
 
     private static final int[] SCANCODES = new int[349];
 
-    private static long inputWindow;
-    private static int inputWindowId;
+    private static volatile long inputWindow;
+    private static volatile int inputWindowId;
     private static boolean registered;
     private static volatile boolean grabbed;
     private static float curX, curY, lastX, lastY;
     private static int buttonState;
     private static int inputCount;
+    private static int inputErrors;
     private static int cursorTraces, buttonTraces;
     private static int winW, winH, pixW, pixH;
     private static long winSizeAt;
@@ -219,7 +262,9 @@ final class SDL3Bridge {
                     break;
             }
         } catch (Throwable t) {
-            t.printStackTrace();
+            if (inputErrors++ < 5) {
+                warn("input event kind=" + kind + " failed: " + t);
+            }
         }
         if (++inputCount <= 12) {
             trace("[SDL3 TRACE] input kind=" + kind + " a=" + a + " b=" + b + " c=" + c + " f=" + f1 + "," + f2);
@@ -305,7 +350,7 @@ final class SDL3Bridge {
             boolean ok = SDLEvents.SDL_PushEvent(ev);
             trace("[SDL3 TRACE] pushed PIXEL_SIZE_CHANGED " + rawW + "x" + rawH + " ok=" + ok);
         } catch (Throwable t) {
-            t.printStackTrace();
+            warn("resolution change failed: " + t);
         }
     }
 
@@ -454,12 +499,12 @@ final class SDL3Bridge {
         if (ok) {
             pushOk++;
         } else if (pushFail++ < 5) {
-            trace("[SDL3 TRACE] SDL_PushEvent failed: " + SDLError.SDL_GetError());
+            warn("SDL_PushEvent failed: " + lastError());
         }
     }
 
     // video.resolution from the launcher settings (0.25 = 25%), passed in as -Damethyst.resolutionScale
-    private static float resScale = -1f;
+    private static volatile float resScale = -1f;
 
     static float resolutionScale() {
         if (resScale < 0f) {
@@ -533,7 +578,6 @@ final class SDL3Bridge {
         watchdog.start();
     }
 
-    // called for every event minecraft pulls out of SDL (PollEvent/WaitEvent*)
     private static volatile boolean controllerPassthroughSent;
 
     // controlify reads the controller itself, so amethyst's own gamepad -> key/mouse translation has to
@@ -543,19 +587,40 @@ final class SDL3Bridge {
             return;
         }
         controllerPassthroughSent = true;
-        if (Boolean.getBoolean("amethyst.nativeGamepad")) {
+        if (SDL3Config.NATIVE_GAMEPAD) {
             return;
         }
-        nativeSetControllerPassthrough(true);
-        trace("[SDL3 TRACE] controlify detected, amethyst gamepad translation off");
+        try {
+            nativeSetControllerPassthrough(true);
+            trace("[SDL3 TRACE] controlify detected, amethyst gamepad translation off");
+        } catch (Throwable t) {
+            warn("could not switch off amethyst's gamepad mapping: " + t);
+        }
     }
 
+    // called for every event minecraft pulls out of SDL (PollEvent/WaitEvent*)
+    private static int polledCalls;
+
     static void polledEvent(long event) {
-        checkControllerPassthrough();
-        int type = MemoryUtil.memGetInt(event);
-        if (type == SDLEvents.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
-            scaleWindowPixelEvent(event);
+        try {
+            if ((polledCalls++ & 0xFF) == 0) {
+                checkControllerPassthrough();
+            }
+            int type = MemoryUtil.memGetInt(event);
+            if (type == SDLEvents.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
+                scaleWindowPixelEvent(event);
+            }
+            if (SDL3Config.TRACE) {
+                polledStats(type);
+            }
+        } catch (Throwable t) {
+            if (inputErrors++ < 5) {
+                warn("polled event hook failed: " + t);
+            }
         }
+    }
+
+    private static void polledStats(int type) {
         if (type < 0 || type >= polled.length) {
             return;
         }

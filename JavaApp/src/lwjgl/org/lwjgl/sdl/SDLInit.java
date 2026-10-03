@@ -35,18 +35,24 @@ public class SDLInit {
    @NativeType("bool")
    public static boolean SDL_Init(@NativeType("SDL_InitFlags") int flags) {
       long __functionAddress = SDLInit.Functions.Init;
-      System.out.println("[SDL3 TRACE] SDL_Init BEGIN flags=" + flags);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_Init BEGIN flags=" + flags);
       boolean result = SDL3Bridge.nativeInit(__functionAddress, flags);
-      System.out.println("[SDL3 TRACE] SDL_Init END result=" + result);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_Init END result=" + result);
+      if (!result) {
+         SDL3Bridge.warn("SDL_Init(" + flags + ") failed: " + SDL3Bridge.mainThreadError());
+      }
       return result;
    }
 
    @NativeType("bool")
    public static boolean SDL_InitSubSystem(@NativeType("SDL_InitFlags") int flags) {
       long __functionAddress = SDLInit.Functions.InitSubSystem;
-      System.out.println("[SDL3 TRACE] SDL_InitSubSystem BEGIN flags=" + flags);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_InitSubSystem BEGIN flags=" + flags);
       boolean result = SDL3Bridge.nativeInitSubSystem(__functionAddress, flags);
-      System.out.println("[SDL3 TRACE] SDL_InitSubSystem END result=" + result);
+      SDL3Bridge.trace("[SDL3 TRACE] SDL_InitSubSystem END result=" + result);
+      if (!result) {
+         SDL3Bridge.warn("SDL_InitSubSystem(" + flags + ") failed: " + SDL3Bridge.mainThreadError());
+      }
       return result;
    }
 

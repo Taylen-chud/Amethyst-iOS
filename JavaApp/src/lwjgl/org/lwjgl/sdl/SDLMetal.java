@@ -22,6 +22,8 @@ public class SDLMetal {
       SDL3Bridge.trace("[SDL3 TRACE] SDL_Metal_CreateView END view=" + view);
       if (view != 0L) {
          SDL3Bridge.attachWindow(window);
+      } else {
+         SDL3Bridge.warn("SDL_Metal_CreateView failed: " + SDL3Bridge.mainThreadError());
       }
       return view;
    }

@@ -3,6 +3,8 @@
 #include <dlfcn.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+#include <os/lock.h>
 #include <objc/runtime.h>
 #include "jni.h"
 
@@ -71,10 +73,80 @@ static void AMRunSyncOnMain(void (^block)(void)) {
     dispatch_sync(dispatch_get_main_queue(), block);
 }
 
+#define AM_MAIN_CALL_TIMEOUT_SECONDS 20
+
+static const char *(*sSDLGetError)(void) = NULL;
+static void (*sSDLClearError)(void) = NULL;
+static char sMainError[512];
+static os_unfair_lock sMainErrorLock = OS_UNFAIR_LOCK_INIT;
+
+static void AMNoteSDLFunction(uint64_t functionAddress) {
+    if (sSDLGetError != NULL || functionAddress == 0) return;
+
+    Dl_info info;
+    if (dladdr((const void *)(uintptr_t)functionAddress, &info) == 0 || info.dli_fname == NULL) return;
+
+    void *handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD);
+    if (handle == NULL) return;
+
+    sSDLClearError = (void (*)(void))dlsym(handle, "SDL_ClearError");
+    sSDLGetError = (const char *(*)(void))dlsym(handle, "SDL_GetError");
+    dlclose(handle);
+}
+
+static void AMBeginMainCall(uint64_t functionAddress) {
+    AMNoteSDLFunction(functionAddress);
+
+    os_unfair_lock_lock(&sMainErrorLock);
+    sMainError[0] = '\0';
+    os_unfair_lock_unlock(&sMainErrorLock);
+
+    if (sSDLClearError != NULL) sSDLClearError();
+}
+
+static void AMEndMainCall(void) {
+    if (sSDLGetError == NULL) return;
+
+    const char *error = sSDLGetError();
+    if (error == NULL || error[0] == '\0') return;
+
+    os_unfair_lock_lock(&sMainErrorLock);
+    strlcpy(sMainError, error, sizeof(sMainError));
+    os_unfair_lock_unlock(&sMainErrorLock);
+}
+
+
+ // ios stops letting an app submit gpu work in the background, so the Java side holds the game
+ // thread while this is set (SDL3Lifecycle).
+
+static volatile bool sAppBackground = false;
+
 
 static void AMApplyPixelFilter(UIView *view) {
     view.layer.magnificationFilter = kCAFilterNearest;
     view.layer.minificationFilter = kCAFilterNearest;
+}
+
+
+// MoltenVK compares its swapchain size with the layer's bounds * contentsScale. With the
+// resolution setting below 100% those differ, so this logs what the layer really looks like.
+
+static void AMLogSDLViewGeometry(const char *when) {
+    UIView *view = gSDLView;
+    if (view == nil) return;
+
+    CGSize drawable = CGSizeZero;
+    @try {
+        NSValue *value = [view.layer valueForKey:@"drawableSize"];
+        if ([value isKindOfClass:NSValue.class]) drawable = value.CGSizeValue;
+    } @catch (NSException *exception) {
+    }
+
+    NSLog(@"[SDL3 EMBED] %s: bounds=%.1fx%.1f contentsScale=%.2f drawableSize=%.0fx%.0f",
+          when,
+          view.bounds.size.width, view.bounds.size.height,
+          view.layer.contentsScale,
+          drawable.width, drawable.height);
 }
 
 static void AMEmbedSDLViewOnMain(void) {
@@ -170,6 +242,13 @@ static void AMEmbedSDLViewOnMain(void) {
 
     NSLog(@"[SDL3 EMBED] SUCCESS: %@ embedded into GameSurfaceView",
           NSStringFromClass(sdlView.class));
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        AMLogSDLViewGeometry("1s after embed");
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 6 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        AMLogSDLViewGeometry("6s after embed");
+    });
 }
 
 /*
@@ -246,6 +325,29 @@ static void AMInstallUIKitObservers(void) {
         AMUIKitWindowDidBecomeKey(note);
     }];
 
+    [center addObserverForName:UIApplicationDidEnterBackgroundNotification
+                        object:nil
+                         queue:[NSOperationQueue mainQueue]
+                    usingBlock:^(NSNotification *note) {
+        sAppBackground = true;
+        NSLog(@"[SDL3] app entered the background");
+    }];
+
+    [center addObserverForName:UIApplicationWillEnterForegroundNotification
+                        object:nil
+                         queue:[NSOperationQueue mainQueue]
+                    usingBlock:^(NSNotification *note) {
+        sAppBackground = false;
+        NSLog(@"[SDL3] app is returning to the foreground");
+    }];
+
+    [center addObserverForName:UIApplicationDidBecomeActiveNotification
+                        object:nil
+                         queue:[NSOperationQueue mainQueue]
+                    usingBlock:^(NSNotification *note) {
+        sAppBackground = false;
+    }];
+
     NSLog(@"[SDL3 EMBED] UIKit window observers installed");
 }
 
@@ -319,8 +421,17 @@ void AmethystSDL3Prepare(void) {
           [NSThread isMainThread]);
 
     AMInstallUIKitObservers();
+    AMRunSyncOnMain(^{
+        sAppBackground = UIApplication.sharedApplication.applicationState == UIApplicationStateBackground;
+    });
     AMSDL3SetMainReady();
     AMSDL3SetMainReadyForControlify();
+
+    
+    // SDL turns the phone's accelerometer into a fake joystick by default, which controller mods
+    // then list as a gamepad and which keeps CoreMotion running for nothing.
+    
+    setenv("SDL_ACCELEROMETER_AS_JOYSTICK", "0", 0);
 
     /*
      * Keep SDL from installing its own home-indicator behavior over
@@ -393,7 +504,9 @@ static BOOL AMInvokeBoolOnMain(long long functionAddress, int flags) {
         BOOL (*fn)(int) =
             (BOOL (*)(int))(uintptr_t)functionAddress;
 
+        AMBeginMainCall((uint64_t)functionAddress);
         result = fn(flags);
+        AMEndMainCall();
     });
 
     return result;
@@ -440,10 +553,12 @@ Java_org_lwjgl_sdl_SDL3Bridge_nativeCreateWindow(JNIEnv *env, jclass clazz,
             (void *(*)(const char *, int, int, uint64_t))
                 (uintptr_t)functionAddress;
 
+        AMBeginMainCall((uint64_t)functionAddress);
         window = fn((const char *)(uintptr_t)title,
                     (int)w,
                     (int)h,
                     (uint64_t)flags);
+        AMEndMainCall();
     });
 
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -466,7 +581,9 @@ Java_org_lwjgl_sdl_SDL3Bridge_nativeCreateWindowWithProperties(
         void *(*fn)(uint32_t) =
             (void *(*)(uint32_t))(uintptr_t)functionAddress;
 
+        AMBeginMainCall((uint64_t)functionAddress);
         window = fn((uint32_t)props);
+        AMEndMainCall();
     });
 
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -562,20 +679,55 @@ Java_org_lwjgl_sdl_SDL3Bridge_nativeInvokeOnMain(JNIEnv *env,
     if (functionAddress == 0)
         return 0;
 
+    uint64_t (*fn)(uint64_t, uint64_t, uint64_t, uint64_t) =
+        (uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t))
+            (uintptr_t)functionAddress;
+
+    if ([NSThread isMainThread]) {
+        AMBeginMainCall((uint64_t)functionAddress);
+        uint64_t direct = fn((uint64_t)a0, (uint64_t)a1, (uint64_t)a2, (uint64_t)a3);
+        AMEndMainCall();
+        return (jlong)direct;
+    }
+    
     __block uint64_t result = 0;
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
 
-    AMRunSyncOnMain(^{
-        uint64_t (*fn)(uint64_t, uint64_t, uint64_t, uint64_t) =
-            (uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t))
-                (uintptr_t)functionAddress;
-
-        result = fn((uint64_t)a0,
-                    (uint64_t)a1,
-                    (uint64_t)a2,
-                    (uint64_t)a3);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        AMBeginMainCall((uint64_t)functionAddress);
+        result = fn((uint64_t)a0, (uint64_t)a1, (uint64_t)a2, (uint64_t)a3);
+        AMEndMainCall();
+        dispatch_semaphore_signal(done);
     });
 
+    dispatch_time_t limit = dispatch_time(DISPATCH_TIME_NOW,
+                                          (int64_t)AM_MAIN_CALL_TIMEOUT_SECONDS * (int64_t)NSEC_PER_SEC);
+    if (dispatch_semaphore_wait(done, limit) != 0) {
+        NSLog(@"[SDL3] main thread call to %p did not finish in %ds, giving up on it",
+              (void *)(uintptr_t)functionAddress, AM_MAIN_CALL_TIMEOUT_SECONDS);
+        return 0;
+    }
+
     return (jlong)result;
+}
+
+JNIEXPORT jstring JNICALL
+Java_org_lwjgl_sdl_SDL3Bridge_nativeLastMainError(JNIEnv *env, jclass clazz) {
+    (void)clazz;
+
+    char copy[sizeof(sMainError)];
+    os_unfair_lock_lock(&sMainErrorLock);
+    strlcpy(copy, sMainError, sizeof(copy));
+    os_unfair_lock_unlock(&sMainErrorLock);
+
+    return (*env)->NewStringUTF(env, copy);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_org_lwjgl_sdl_SDL3Lifecycle_nativeIsBackground(JNIEnv *env, jclass clazz) {
+    (void)env;
+    (void)clazz;
+    return sAppBackground ? JNI_TRUE : JNI_FALSE;
 }
 
 /*

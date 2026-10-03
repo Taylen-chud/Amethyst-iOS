@@ -95,6 +95,8 @@ public class SDLVulkan {
       if (result) {
          // SDL's metal view exists now, make sure it gets moved under amethyst's controls
          SDL3Bridge.attachWindow(window);
+      } else {
+         SDL3Bridge.warn("SDL_Vulkan_CreateSurface failed: " + SDL3Bridge.mainThreadError());
       }
       return result;
    }
