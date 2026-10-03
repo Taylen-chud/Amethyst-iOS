@@ -333,13 +333,7 @@ dep_mobilegl:
 	if [ -d "$(MOBILEGL_SOURCE_DIR)/3rdparty/glslang" ]; then \
 		cd $(MOBILEGL_SOURCE_DIR)/3rdparty/glslang && python3 update_glslang_sources.py; \
 	fi
-	mkdir -p $(MOBILEGL_SOURCE_DIR)/MobileGL/MG_Util/Compat
-	cp $(SOURCEDIR)/Natives/libcxx_hash_shim.cpp $(MOBILEGL_SOURCE_DIR)/MobileGL/MG_Util/Compat/libcxx_hash_shim.cpp
-	python3 $(SOURCEDIR)/Natives/patch_mobilegl_ios_visibility.py $(MOBILEGL_SOURCE_DIR)
-	python3 $(SOURCEDIR)/Natives/patch_mobilegl_ios_resolution.py $(MOBILEGL_SOURCE_DIR)
-	python3 $(SOURCEDIR)/Natives/patch_mobilegl_hash_shim.py $(MOBILEGL_SOURCE_DIR)
-	python3 $(SOURCEDIR)/Natives/patch_mobilegl_enable_availability.py $(MOBILEGL_SOURCE_DIR)
-	python3 $(SOURCEDIR)/Natives/patch_disaggregated.py $(MOBILEGL_SOURCE_DIR)
+	python3 $(SOURCEDIR)/Natives/patch_mobilegl.py $(MOBILEGL_SOURCE_DIR)
 	mkdir -p $(WORKINGDIR)/mobilegl
 	cd $(WORKINGDIR)/mobilegl && cmake \
 		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
@@ -360,7 +354,7 @@ dep_mobilegl:
 		-DMOBILEGL_VULKAN_LIBRARY="$(MOLTENVK_LIBRARY)" \
 		$(MOBILEGL_SOURCE_DIR)
 
-	cmake --build $(WORKINGDIR)/mobilegl --config $(CMAKE_BUILD_TYPE) -j$(JOBS) --target MobileGL
+	cmake --build $(WORKINGDIR)/mobilegl --config $(CMAKE_BUILD_TYPE) -j$(JOBS) --target MobileGL -- -k
 	install_name_tool -change @rpath/MoltenVK.framework/MoltenVK @rpath/libMoltenVK.dylib $(WORKINGDIR)/mobilegl/libMobileGL.dylib
 	if otool -l $(WORKINGDIR)/mobilegl/libMobileGL.dylib | grep -q 'path $(SOURCEDIR)/Natives/resources/Frameworks '; then \
 		install_name_tool -delete_rpath $(SOURCEDIR)/Natives/resources/Frameworks $(WORKINGDIR)/mobilegl/libMobileGL.dylib; \
@@ -398,6 +392,9 @@ payload: native dep_mg dep_mobilegl java jre assets
 		for f in $(WORKINGDIR)/AngelAuraAmethyst.app/Frameworks/lwjgl33/*.dylib; do \
 			install_name_tool -id "@rpath/lwjgl33/$$(basename "$$f")" "$$f" || exit 1; \
 		done; \
+	fi
+	if [ -f $(WORKINGDIR)/AngelAuraAmethyst.app/Frameworks/lwjgl34/libSDL3.dylib ]; then \
+		cp $(WORKINGDIR)/AngelAuraAmethyst.app/Frameworks/lwjgl34/libSDL3.dylib $(WORKINGDIR)/AngelAuraAmethyst.app/Frameworks/lwjgl34/libSDL3_controlify.dylib || exit 1; \
 	fi
 	if [ -d $(WORKINGDIR)/AngelAuraAmethyst.app/Frameworks/lwjgl34 ]; then \
 		for f in $(WORKINGDIR)/AngelAuraAmethyst.app/Frameworks/lwjgl34/*.dylib; do \

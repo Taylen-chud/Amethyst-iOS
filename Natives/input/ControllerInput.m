@@ -17,6 +17,8 @@
 #define DIRECTION_SOUTH_EAST 7
 #define MOUSE_MAX_ACCELERATION 2
 
+volatile bool AMControllerPassthrough = false;
+
 CFAbsoluteTime lastFrameTime;
 CGFloat lastXValue; // lastHorizontalValue
 CGFloat lastYValue; // lastVerticalValue
@@ -40,7 +42,10 @@ BOOL leftShiftHeld;
 }
 
 + (void)sendKeyEvent:(int)controllerKeycode pressed:(BOOL)pressed {
-    int keycode;
+    if (AMControllerPassthrough) {
+        return;
+    }
+    int keycode = GLFW_KEY_UNKNOWN;
     __block NSMutableDictionary *mapping;
     if (isGrabbing) {
         mapping = gameMap;
@@ -141,6 +146,11 @@ BOOL leftShiftHeld;
     };
 
     gamepad.leftThumbstick.valueChangedHandler = ^(GCControllerDirectionPad * _Nonnull dpad, float xValue, float yValue) {
+        if (AMControllerPassthrough) {
+            lastXValue = 0;
+            lastYValue = 0;
+            return;
+        }
         if (!isGrabbing) {
             // Update virtual mouse position
             lastXValue = xValue;
@@ -179,6 +189,9 @@ BOOL leftShiftHeld;
         lastLThumbDirection = direction;
     };
     gamepad.rightThumbstick.valueChangedHandler = ^(GCControllerDirectionPad * _Nonnull dpad, float xValue, float yValue) {
+        if (AMControllerPassthrough) {
+            return;
+        }
         if (isGrabbing) {
             lastXValue = xValue;
             lastYValue = yValue;
@@ -196,6 +209,12 @@ BOOL leftShiftHeld;
  * Send the new mouse position, computing the delta
  */
 + (void)tick {
+    if (AMControllerPassthrough) {
+        lastXValue = 0;
+        lastYValue = 0;
+        lastFrameTime = 0;
+        return;
+    }
     // There isn't a convenient way to get ns, use ms at this point
     CGFloat frameTime = CACurrentMediaTime();
     // GameController automatically performs deadzone calculations

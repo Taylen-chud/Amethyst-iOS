@@ -29,6 +29,7 @@ final class SDL3Bridge {
     static native long nativeInvokeOnMain(long functionAddress, long a0, long a1, long a2, long a3);
     static native void nativeRegisterInput();
     static native void nativeSetGrabbing(boolean grabbing);
+    static native void nativeSetControllerPassthrough(boolean passthrough);
 
     // runs an SDL function on the iOS main thread. integer/pointer args only, returns raw x0
     static long invokeOnMain(long functionAddress, long a0, long a1, long a2, long a3) {
@@ -533,7 +534,24 @@ final class SDL3Bridge {
     }
 
     // called for every event minecraft pulls out of SDL (PollEvent/WaitEvent*)
+    private static volatile boolean controllerPassthroughSent;
+
+    // controlify reads the controller itself, so amethyst's own gamepad -> key/mouse translation has to
+    // stay out of the way or the two keep flipping controlify between keyboard and controller mode
+    private static void checkControllerPassthrough() {
+        if (controllerPassthroughSent || !Boolean.getBoolean("amethyst.controlify")) {
+            return;
+        }
+        controllerPassthroughSent = true;
+        if (Boolean.getBoolean("amethyst.nativeGamepad")) {
+            return;
+        }
+        nativeSetControllerPassthrough(true);
+        trace("[SDL3 TRACE] controlify detected, amethyst gamepad translation off");
+    }
+
     static void polledEvent(long event) {
+        checkControllerPassthrough();
         int type = MemoryUtil.memGetInt(event);
         if (type == SDLEvents.SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
             scaleWindowPixelEvent(event);

@@ -23,6 +23,9 @@ public class PatchJNAAgent implements ClassFileTransformer {
         if (className == null) {
             return transformeredByteCode;
         }
+        if (SDL_FFM_EVENTS.equals(className)) {
+            System.setProperty("amethyst.controlify", "true");
+        }
         if (className.equals("com/sun/jna/Platform")) {
             System.out.println("PatchJNAAgent: Replacing class");
             try {

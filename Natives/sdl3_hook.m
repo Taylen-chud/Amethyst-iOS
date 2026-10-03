@@ -8,6 +8,7 @@
 
 #import "GameSurfaceView.h"
 #import "SurfaceViewController.h"
+#import "utils.h"
 
 static UIWindow *gSDLWindow = nil;
 static UIView *gSDLView = nil;
@@ -535,6 +536,16 @@ JNIEXPORT void JNICALL
 Java_org_lwjgl_sdl_SDL3Bridge_nativeSetGrabbing(JNIEnv *env, jclass clazz, jboolean grabbing) {
     NSLog(@"[SDL3 TRACE] setGrabbing %d", (int)grabbing);
     Java_org_lwjgl_glfw_CallbackBridge_nativeSetGrabbing(env, clazz, grabbing, 0.0f, 0.0f);
+}
+
+extern volatile bool AMControllerPassthrough;
+
+JNIEXPORT void JNICALL
+Java_org_lwjgl_sdl_SDL3Bridge_nativeSetControllerPassthrough(JNIEnv *env, jclass clazz, jboolean passthrough) {
+    (void)env;
+    (void)clazz;
+    AMControllerPassthrough = passthrough;
+    NSLog(@"[SDL3] controller passthrough %d", (int)passthrough);
 }
 
 JNIEXPORT jlong JNICALL
