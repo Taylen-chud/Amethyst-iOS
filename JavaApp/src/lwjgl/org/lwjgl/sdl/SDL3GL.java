@@ -14,10 +14,10 @@ final class SDL3GL {
     private static volatile boolean broken;
     private static final ConcurrentHashMap<String, Boolean> seen = new ConcurrentHashMap<>();
 
-    // address of a gl function in the library LWJGL loaded for opengl, or 0 to let SDL answer
-    static long lookup(long namePtr) {
-        if (namePtr == 0L || broken || SDL3Config.GL_SDL_PROC) {
-            return 0L;
+    // the function provider of the gl library LWJGL loaded (libMobileGL), null if it isn't there
+    static FunctionProvider provider() {
+        if (broken) {
+            return null;
         }
         try {
             Method m = getProvider;
@@ -26,11 +26,26 @@ final class SDL3GL {
                 getProvider = m;
             }
             Object provider = m.invoke(null);
-            if (!(provider instanceof FunctionProvider)) {
+            return provider instanceof FunctionProvider ? (FunctionProvider) provider : null;
+        } catch (Throwable t) {
+            broken = true;
+            SDL3Bridge.warn("gl lookups through LWJGL are off: " + t);
+            return null;
+        }
+    }
+
+    // address of a gl function in the library LWJGL loaded for opengl, or 0 to let SDL answer
+    static long lookup(long namePtr) {
+        if (namePtr == 0L || broken || SDL3Config.GL_SDL_PROC) {
+            return 0L;
+        }
+        try {
+            FunctionProvider provider = provider();
+            if (provider == null) {
                 return 0L;
             }
             String name = MemoryUtil.memUTF8(namePtr);
-            long address = ((FunctionProvider) provider).getFunctionAddress(name);
+            long address = provider.getFunctionAddress(name);
             if (address != 0L && "glGetError".equals(name)) {
                 once("proc.glGetError", "SDL_GL_GetProcAddress(glGetError) answered from the LWJGL gl library");
             }

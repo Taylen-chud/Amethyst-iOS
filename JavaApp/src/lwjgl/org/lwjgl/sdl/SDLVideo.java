@@ -505,6 +505,7 @@ public class SDLVideo {
 
    public static long nSDL_CreateWindow(long title, int w, int h, long flags) {
       long __functionAddress = SDLVideo.Functions.CreateWindow;
+      flags = SDL3GLContext.windowFlags(flags);
       SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindow BEGIN " + w + "x" + h + " flags=" + flags);
       long window = SDL3Bridge.nativeCreateWindow(__functionAddress, title, w, h, flags);
       SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindow END window=" + window);
@@ -555,6 +556,7 @@ public class SDLVideo {
    @NativeType("SDL_Window *")
    public static long SDL_CreateWindowWithProperties(@NativeType("SDL_PropertiesID") int props) {
       long __functionAddress = SDLVideo.Functions.CreateWindowWithProperties;
+      SDL3GLContext.windowProps(props);
       SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindowWithProperties BEGIN props=" + props);
       long window = SDL3Bridge.nativeCreateWindowWithProperties(__functionAddress, props);
       SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindowWithProperties END window=" + window);
@@ -1472,12 +1474,14 @@ public class SDLVideo {
 
    public static void SDL_GL_ResetAttributes() {
       long __functionAddress = SDLVideo.Functions.GL_ResetAttributes;
+      SDL3GLContext.resetAttributes();
       JNI.invokeV(__functionAddress);
    }
 
    @NativeType("bool")
    public static boolean SDL_GL_SetAttribute(@NativeType("SDL_GLAttr") int attr, int value) {
       long __functionAddress = SDLVideo.Functions.GL_SetAttribute;
+      SDL3GLContext.setAttribute(attr, value);
       return JNI.invokeZ(attr, value, __functionAddress);
    }
 
@@ -1502,7 +1506,7 @@ public class SDLVideo {
          Checks.check(window);
       }
 
-      long context = JNI.invokePP(window, __functionAddress);
+      long context = SDL3GLContext.active() ? SDL3GLContext.createContext(window) : JNI.invokePP(window, __functionAddress);
       SDL3GL.once("createContext", "SDL_GL_CreateContext(window=0x" + Long.toHexString(window) + ") -> 0x"
          + Long.toHexString(context) + (context == 0L ? " error: " + SDL3Bridge.lastError() : ""));
       return context;
@@ -1511,7 +1515,7 @@ public class SDLVideo {
    @NativeType("bool")
    public static boolean SDL_GL_MakeCurrent(@NativeType("SDL_Window *") long window, @NativeType("SDL_GLContext") long context) {
       long __functionAddress = SDLVideo.Functions.GL_MakeCurrent;
-      boolean made = JNI.invokePPZ(window, context, __functionAddress);
+      boolean made = SDL3GLContext.active() ? SDL3GLContext.makeCurrent(window, context) : JNI.invokePPZ(window, context, __functionAddress);
       SDL3GL.once("makeCurrent." + made, "SDL_GL_MakeCurrent(0x" + Long.toHexString(window) + ", 0x"
          + Long.toHexString(context) + ") -> " + made + (made ? "" : " error: " + SDL3Bridge.lastError()));
       return made;
@@ -1520,12 +1524,18 @@ public class SDLVideo {
    @NativeType("SDL_Window *")
    public static long SDL_GL_GetCurrentWindow() {
       long __functionAddress = SDLVideo.Functions.GL_GetCurrentWindow;
+      if (SDL3GLContext.active()) {
+         return SDL3GLContext.currentWindow();
+      }
       return JNI.invokeP(__functionAddress);
    }
 
    @NativeType("SDL_GLContext")
    public static long SDL_GL_GetCurrentContext() {
       long __functionAddress = SDLVideo.Functions.GL_GetCurrentContext;
+      if (SDL3GLContext.active()) {
+         return SDL3GLContext.currentContext();
+      }
       return JNI.invokeP(__functionAddress);
    }
 
@@ -1563,11 +1573,17 @@ public class SDLVideo {
    @NativeType("bool")
    public static boolean SDL_GL_SetSwapInterval(int interval) {
       long __functionAddress = SDLVideo.Functions.GL_SetSwapInterval;
+      if (SDL3GLContext.active()) {
+         return SDL3GLContext.setSwapInterval(interval);
+      }
       return JNI.invokeZ(interval, __functionAddress);
    }
 
    public static boolean nSDL_GL_GetSwapInterval(long interval) {
       long __functionAddress = SDLVideo.Functions.GL_GetSwapInterval;
+      if (SDL3GLContext.active()) {
+         return SDL3GLContext.getSwapInterval(interval);
+      }
       return JNI.invokePZ(interval, __functionAddress);
    }
 
@@ -1588,6 +1604,9 @@ public class SDLVideo {
       }
 
       SDL3GL.once("swapWindow", "SDL_GL_SwapWindow is being called (first frame)");
+      if (SDL3GLContext.active()) {
+         return SDL3GLContext.swap(window);
+      }
       return JNI.invokePZ(window, __functionAddress);
    }
 
@@ -1598,6 +1617,9 @@ public class SDLVideo {
          Checks.check(context);
       }
 
+      if (SDL3GLContext.active()) {
+         return SDL3GLContext.destroyContext(context);
+      }
       return JNI.invokePZ(context, __functionAddress);
    }
 
