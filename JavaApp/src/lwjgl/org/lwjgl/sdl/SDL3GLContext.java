@@ -538,6 +538,26 @@ final class SDL3GLContext {
         destroyWindow(w);
     }
 
+    // the window is about to be destroyed for real, its surface and metal view go first
+    static void windowGone(long window) {
+        if (!eglReady) {
+            return;
+        }
+        synchronized (lock) {
+            Win w = windows.get(window);
+            if (w == null) {
+                return;
+            }
+            long[] cur = current.get();
+            if (cur[0] == window) {
+                JNI.invokePPPPI(dpy, 0L, 0L, 0L, fnMakeCurrent);
+                cur[0] = 0L;
+                cur[1] = 0L;
+            }
+            destroyWindow(w);
+        }
+    }
+
     // SDL_SetError with the message as the format string, no varargs. ios arm64 passes varargs on the stack so '%' is escaped instead
     private static void setError(String message) {
         try {

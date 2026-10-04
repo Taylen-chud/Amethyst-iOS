@@ -506,10 +506,19 @@ public class SDLVideo {
    public static long nSDL_CreateWindow(long title, int w, int h, long flags) {
       long __functionAddress = SDLVideo.Functions.CreateWindow;
       flags = SDL3GLContext.windowFlags(flags);
+      long existing = SDL3Windows.reuse(flags);
+      if (existing != 0L) {
+         SDL3Bridge.warn("SDL_CreateWindow " + w + "x" + h + ": ios allows one window, reusing 0x" + Long.toHexString(existing));
+         if ((flags & SDL_WINDOW_HIDDEN) == 0L) {
+            SDL_ShowWindow(existing);
+         }
+         return existing;
+      }
       SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindow BEGIN " + w + "x" + h + " flags=" + flags);
       long window = SDL3Bridge.nativeCreateWindow(__functionAddress, title, w, h, flags);
       SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindow END window=" + window);
       if (window != 0L) {
+         SDL3Windows.created(window);
          SDL3Bridge.attachWindow(window);
       } else {
          SDL3Bridge.warn("SDL_CreateWindow " + w + "x" + h + " failed: " + SDL3Bridge.mainThreadError());
@@ -556,11 +565,18 @@ public class SDLVideo {
    @NativeType("SDL_Window *")
    public static long SDL_CreateWindowWithProperties(@NativeType("SDL_PropertiesID") int props) {
       long __functionAddress = SDLVideo.Functions.CreateWindowWithProperties;
+      long existing = SDL3Windows.reuse(SDLProperties.SDL_GetNumberProperty(props, SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, 0L)
+         | (SDLProperties.SDL_GetBooleanProperty(props, SDL_PROP_WINDOW_CREATE_VULKAN_BOOLEAN, false) ? SDL_WINDOW_VULKAN : 0L));
+      if (existing != 0L) {
+         SDL3Bridge.warn("SDL_CreateWindowWithProperties: ios allows one window, reusing 0x" + Long.toHexString(existing));
+         return existing;
+      }
       SDL3GLContext.windowProps(props);
       SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindowWithProperties BEGIN props=" + props);
       long window = SDL3Bridge.nativeCreateWindowWithProperties(__functionAddress, props);
       SDL3Bridge.trace("[SDL3 TRACE] SDL_CreateWindowWithProperties END window=" + window);
       if (window != 0L) {
+         SDL3Windows.created(window);
          SDL3Bridge.attachWindow(window);
       } else {
          SDL3Bridge.warn("SDL_CreateWindowWithProperties failed: " + SDL3Bridge.mainThreadError());
@@ -1311,6 +1327,11 @@ public class SDLVideo {
          Checks.check(window);
       }
 
+      if (!SDL3Windows.release(window)) {
+         SDL3GL.once("window.shared." + window, "SDL_DestroyWindow(0x" + Long.toHexString(window) + ") skipped, the window is still in use");
+         return;
+      }
+      SDL3GLContext.windowGone(window);
       SDL3Bridge.armExitWatchdog("SDL_DestroyWindow");
       SDL3Bridge.trace("[SDL3 TRACE] SDL_DestroyWindow BEGIN");
       SDL3Bridge.invokeOnMain(__functionAddress, window, 0L, 0L, 0L);
@@ -1337,6 +1358,10 @@ public class SDLVideo {
 
    public static boolean nSDL_GL_LoadLibrary(long path) {
       long __functionAddress = SDLVideo.Functions.GL_LoadLibrary;
+      // minecraft's opengl backend hands SDL the path of the gl library lwjgl found. ios SDL never
+      // takes a path here (it refuses with "iOS GL Load Library just here for compatibility", or
+      // "OpenGL library already loaded" once something loaded the driver) and minecraft gets its gl
+      // functions from lwjgl anyway, so load the default driver instead
       if (path != 0L && !SDL3Config.GL_KEEP_LOAD_PATH) {
          SDL3Bridge.warn("SDL_GL_LoadLibrary: ignoring the library path, ios only loads the default driver");
          path = 0L;
