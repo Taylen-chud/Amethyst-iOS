@@ -112,7 +112,9 @@ public class PatchJNAAgent implements ClassFileTransformer {
         }
 
         static byte[] stubCocoaMethods(String className, byte[] classBytes) throws IOException {
-            return new CocoaStubber(classBytes, BLOCKED_PREFIXES, null, null, "ca.weblite.objc").run(className);
+            // getNsWindow itself gets stubbed (it loads cocoa) and then returns null instead of an Optional, so
+            // anything that calls it dies with an NPE (26.2: setWindowColorSpaceForOpenGLBecauseGLFWDoesnt). those callers are stubbed too
+            return new CocoaStubber(classBytes, BLOCKED_PREFIXES, MACOS_UTIL, "getNsWindow", "ca.weblite.objc").run(className);
         }
 
         // stubs every method that calls <SDL_FFM_SUPPORT>.callback, i.e. every one that creates an upcall stub
