@@ -311,34 +311,6 @@ def texture_emit_cast(root):
     new = "static_cast<Uint64>(reinterpret_cast<std::uintptr_t>(shadow)) +"
     return replace_once(target, old, new, new, "texture_emit", required=False)
 
-
-def server_spawn_environ(root):
-    target = root / "MobileGL/MG_Remote/Server/ServerSpawn.cpp"
-    if not target.is_file():
-        return SKIPPED
-    text = read(target)
-    if "MGL_ENVIRON" in text:
-        print("[server_spawn] already applied")
-        return SKIPPED
-    use_old = "for (char** e = ::environ;"
-    anchor = "namespace MobileGL::MG_Remote::Server {"
-    if text.count(use_old) != 1 or text.count(anchor) < 1:
-        print("[server_spawn] environ use not found, probably changed upstream")
-        return WARNED
-    shim = (
-        "#if defined(__APPLE__)\n"
-        "#include <crt_externs.h>\n"
-        "#define MGL_ENVIRON (*_NSGetEnviron())\n"
-        "#else\n"
-        "#define MGL_ENVIRON ::environ\n"
-        "#endif\n\n"
-    )
-    text = text.replace(anchor, shim + anchor, 1).replace(use_old, "for (char** e = MGL_ENVIRON;", 1)
-    write(target, text)
-    print("[server_spawn] applied")
-    return APPLIED
-
-
 STEPS = [
     ("ios_visibility", ios_visibility, True),
     ("ios_resolution", ios_resolution, True),
