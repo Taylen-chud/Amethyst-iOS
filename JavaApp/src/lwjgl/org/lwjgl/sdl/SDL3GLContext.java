@@ -36,7 +36,8 @@ final class SDL3GLContext {
 
     private static final long SDL_WINDOW_OPENGL = 0x2L;
     private static final long SDL_WINDOW_METAL = 0x20000000L;
-    private static final int SIZE_CHECK_EVERY = 30;
+    private static final long SDL_WINDOW_HIGH_PIXEL_DENSITY = 0x2000L;
+    private static final int SIZE_CHECK_EVERY = 15;
 
     // what minecraft asked for through SDL_GL_SetAttribute, -1 is not set
     private static final int[] attrs = new int[32];
@@ -101,7 +102,7 @@ final class SDL3GLContext {
     static long windowFlags(long flags) {
         if ((flags & SDL_WINDOW_OPENGL) != 0L && active()) {
             SDL3GL.once("window.flags", "window asked for SDL_WINDOW_OPENGL, creating it as SDL_WINDOW_METAL for MobileGL");
-            return (flags & ~SDL_WINDOW_OPENGL) | SDL_WINDOW_METAL;
+            return (flags & ~SDL_WINDOW_OPENGL) | SDL_WINDOW_METAL | SDL_WINDOW_HIGH_PIXEL_DENSITY;
         }
         return flags;
     }
@@ -120,6 +121,7 @@ final class SDL3GLContext {
             SDL3GL.once("window.props", "window properties asked for opengl, creating it as metal for MobileGL");
             SDLProperties.SDL_SetBooleanProperty(props, SDLVideo.SDL_PROP_WINDOW_CREATE_OPENGL_BOOLEAN, false);
             SDLProperties.SDL_SetBooleanProperty(props, SDLVideo.SDL_PROP_WINDOW_CREATE_METAL_BOOLEAN, true);
+            SDLProperties.SDL_SetBooleanProperty(props, SDLVideo.SDL_PROP_WINDOW_CREATE_HIGH_PIXEL_DENSITY_BOOLEAN, true);
             if (flags != 0L) {
                 SDLProperties.SDL_SetNumberProperty(props, SDLVideo.SDL_PROP_WINDOW_CREATE_FLAGS_NUMBER, flags & ~SDL_WINDOW_OPENGL);
             }
@@ -308,6 +310,7 @@ final class SDL3GLContext {
         w.surface = surface;
         w.surfaceConfig = config;
         SDL3GL.once("surface", "gl surface created " + w.w + "x" + w.h);
+        syncLayer(w);
         return true;
     }
 
@@ -323,28 +326,24 @@ final class SDL3GLContext {
         windows.remove(w.window);
     }
 
-    // the window changed size (rotation, resolution scale), the surface has to be made again at the new size
-    private static void checkSize(Win w, Ctx c, long[] cur) {
-        int oldW = w.w;
-        int oldH = w.h;
+    private static boolean layerSizingBroken;
+
+    private static native void nativeSetDrawableSize(long layer, int w, int h);
+
+    private static void syncLayer(Win w) {
+        if (layerSizingBroken) {
+            return;
+        }
         windowSize(w);
-        if (w.w == oldW && w.h == oldH) {
-            return;
+        try {
+            nativeSetDrawableSize(w.layer, w.w, w.h);
+        } catch (UnsatisfiedLinkError e) {
+            layerSizingBroken = true;
+            SDL3Bridge.warn("the resolution setting can't be applied to the gl layer, sdl3_gl_layer.m isn't in the build");
+        } catch (Throwable t) {
+            layerSizingBroken = true;
+            SDL3Bridge.warn("layer sizing failed: " + t);
         }
-        long old = w.surface;
-        long fresh = createSurface(w, w.surfaceConfig);
-        if (fresh == 0L) {
-            SDL3Bridge.warn("could not make a " + w.w + "x" + w.h + " gl surface, keeping the old one: " + eglError());
-            w.w = oldW;
-            w.h = oldH;
-            return;
-        }
-        w.surface = fresh;
-        if (c != null) {
-            JNI.invokePPPPI(dpy, fresh, fresh, c.egl, fnMakeCurrent);
-        }
-        JNI.invokePPI(dpy, old, fnDestroySurface);
-        SDL3Bridge.warn("gl surface resized to " + w.w + "x" + w.h);
     }
 
     // ---------- SDL_GL_* ----------
@@ -463,18 +462,13 @@ final class SDL3GLContext {
 
     static boolean swap(long window) {
         Win w;
-        Ctx c = null;
-        long[] cur = current.get();
         synchronized (lock) {
             w = windows.get(window);
             if (w == null || w.surface == 0L) {
                 return false;
             }
             if (++swaps % SIZE_CHECK_EVERY == 0) {
-                if (cur[1] != 0L && cur[0] == window) {
-                    c = contexts.get(cur[1]);
-                }
-                checkSize(w, c, cur);
+                syncLayer(w);
             }
         }
         return JNI.invokePPI(dpy, w.surface, fnSwapBuffers) != 0;
