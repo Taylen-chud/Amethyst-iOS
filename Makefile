@@ -322,7 +322,7 @@ dep_mg:
 		-DCMAKE_OSX_ARCHITECTURES=arm64 \
 		-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
 		-DCMAKE_C_FLAGS="-arch arm64" \
-		-DCMAKE_PROJECT_INCLUDE=$(SOURCEDIR)/Natives/mobileglues_ame/ame_overrides.cmake \
+		-DCMAKE_PROJECT_INCLUDE=$(SOURCEDIR)/Natives/ame_overrides.cmake \
 		$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/
 
 	cmake --build $(WORKINGDIR)/mobileglues --config RelWithDebInfo -j$(JOBS) --target mobileglues
