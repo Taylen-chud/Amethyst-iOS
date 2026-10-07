@@ -312,7 +312,6 @@ jre: native
 
 dep_mg:
 	echo '[Amethyst v$(VERSION)] dep_mg - start'
-	python3 $(SOURCEDIR)/Natives/patch_mobileglues.py $(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/ || true
 	mkdir -p $(WORKINGDIR)/mobileglues
 	cd $(WORKINGDIR)/mobileglues && cmake \
 		-DMACOS="1" \
@@ -323,6 +322,7 @@ dep_mg:
 		-DCMAKE_OSX_ARCHITECTURES=arm64 \
 		-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
 		-DCMAKE_C_FLAGS="-arch arm64" \
+		-DCMAKE_PROJECT_INCLUDE=$(SOURCEDIR)/Natives/mobileglues_ame/ame_overrides.cmake \
 		$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/
 
 	cmake --build $(WORKINGDIR)/mobileglues --config RelWithDebInfo -j$(JOBS) --target mobileglues
