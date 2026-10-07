@@ -445,6 +445,21 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     //margv[++margc] = "-Dorg.lwjgl.util.NoChecks=true";
     margv[++margc] = "-Dlog4j2.formatMsgNoLookups=true";
 
+    // minecraft runs with no log4j config here so everything under ERROR vanishes, give it a plain console one
+    {
+        NSString *logCfg = [NSString stringWithFormat:@"%s/log4j2-ame.xml", getenv("AME_HOME")];
+        NSString *xml = @"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<Configuration status=\"WARN\">\n"
+            "<Appenders><Console name=\"Console\" target=\"SYSTEM_OUT\" direct=\"true\">\n"
+            "<PatternLayout pattern=\"[%d{HH:mm:ss}] [%t/%level] (%logger{1}) %msg{nolookups}%n\"/>\n"
+            "</Console></Appenders>\n"
+            "<Loggers><Root level=\"info\"><AppenderRef ref=\"Console\"/></Root></Loggers>\n"
+            "</Configuration>\n";
+        if ([xml writeToFile:logCfg atomically:YES encoding:NSUTF8StringEncoding error:nil]) {
+            margv[++margc] = [NSString stringWithFormat:@"-Dlog4j.configurationFile=%@", logCfg].UTF8String;
+        }
+    }
+
     // Preset OpenGL libname
     const char *glLibName = getenv("AME_RENDERER");
     if (glLibName) {

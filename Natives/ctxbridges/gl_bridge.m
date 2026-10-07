@@ -13,6 +13,10 @@
 static EGLDisplay g_EglDisplay;
 static egl_library handle;
 
+<<<<<<< HEAD
+=======
+// swap stall watchdog, only logs. if frames stop it prints where the render thread is sitting
+>>>>>>> 352359fe (Debug)
 static volatile int g_swapCount;
 static volatile int g_inSwap;
 static volatile mach_port_t g_renderThread;
@@ -52,6 +56,10 @@ static void gl_diag_frame(int swaps) {
             NSLog(@"EGLBridge: gl error 0x%x (swap %d)", err, swaps);
         }
     }
+<<<<<<< HEAD
+=======
+    if (swaps == 120 || swaps == 600) gl_diag_readback(swaps);
+>>>>>>> 352359fe (Debug)
     if (swaps >= 60 && clear && clearColor && scissor && enable && disable && bindFb && colorMask) {
         bindFb(0x8D40, 0);          // GL_FRAMEBUFFER, the window
         colorMask(1, 1, 1, 1);
@@ -61,6 +69,70 @@ static void gl_diag_frame(int swaps) {
         clear(0x4000);              // GL_COLOR_BUFFER_BIT
         disable(0x0C11);
     }
+}
+
+static int g_surfW = 1, g_surfH = 1;
+
+// reads a few pixels from whatever is bound for reading and logs them
+static void gl_diag_probe(void *lib, const char *tag) {
+    typedef void (*fn_readPixels)(int, int, int, int, unsigned, unsigned, void *);
+    fn_readPixels readPixels = (fn_readPixels)dlsym(lib, "glReadPixels");
+    if (!readPixels) return;
+    int pts[5][2] = {{g_surfW / 2, g_surfH / 2}, {g_surfW / 4, g_surfH / 2}, {g_surfW * 3 / 4, g_surfH / 2},
+                     {g_surfW / 2, g_surfH / 4}, {g_surfW / 2, g_surfH * 3 / 4}};
+    char buf[160]; int n = 0;
+    for (int i = 0; i < 5; i++) {
+        unsigned char px[4] = {1, 2, 3, 4};
+        readPixels(pts[i][0], pts[i][1], 1, 1, 0x1908, 0x1401, px);
+        n += snprintf(buf + n, sizeof(buf) - n, " %02x%02x%02x%02x", px[0], px[1], px[2], px[3]);
+    }
+    NSLog(@"EGLBridge: pixels %s:%s", tag, buf);
+}
+
+// logs what the window and every framebuffer object minecraft made currently hold,
+// so we can tell if its own render target has the picture and only the present is broken
+static void gl_diag_readback(int swaps) {
+    typedef void (*fn_getInteger)(unsigned, int *);
+    typedef unsigned char (*fn_isFb)(unsigned);
+    typedef unsigned (*fn_checkFb)(unsigned);
+    typedef void (*fn_bindFb)(unsigned, unsigned);
+    typedef void (*fn_readBuffer)(unsigned);
+    typedef void (*fn_attachParam)(unsigned, unsigned, unsigned, int *);
+    fn_getInteger getInteger = (fn_getInteger)dlsym(g_glLib, "glGetIntegerv");
+    fn_isFb isFb = (fn_isFb)dlsym(g_glLib, "glIsFramebuffer");
+    fn_checkFb checkFb = (fn_checkFb)dlsym(g_glLib, "glCheckFramebufferStatus");
+    fn_bindFb bindFb = (fn_bindFb)dlsym(g_glLib, "glBindFramebuffer");
+    fn_readBuffer readBuffer = (fn_readBuffer)dlsym(g_glLib, "glReadBuffer");
+    fn_attachParam attachParam = (fn_attachParam)dlsym(g_glLib, "glGetFramebufferAttachmentParameteriv");
+    if (!getInteger || !isFb || !checkFb || !bindFb || !readBuffer || !attachParam) {
+        NSLog(@"EGLBridge: readback functions missing");
+        return;
+    }
+    int drawFb = -1, readFb = -1, vp[4] = {0}, sc[4] = {0};
+    getInteger(0x8CA6, &drawFb);
+    getInteger(0x8CAA, &readFb);
+    getInteger(0x0BA2, vp);        // GL_VIEWPORT
+    getInteger(0x0C10, sc);        // GL_SCISSOR_BOX
+    NSLog(@"EGLBridge: swap %d state: drawFb %d readFb %d viewport %d,%d %dx%d scissor %d,%d %dx%d",
+        swaps, drawFb, readFb, vp[0], vp[1], vp[2], vp[3], sc[0], sc[1], sc[2], sc[3]);
+
+    bindFb(0x8CA8, 0);
+    gl_diag_probe(g_glLib, "window");
+    for (unsigned id = 1; id <= 24; id++) {
+        if (!isFb(id)) continue;
+        bindFb(0x8CA8, id);
+        unsigned status = checkFb(0x8CA8);
+        int type = 0, name = 0;
+        attachParam(0x8CA8, 0x8CE0, 0x8CD0, &type);
+        attachParam(0x8CA8, 0x8CE0, 0x8CD1, &name);
+        NSLog(@"EGLBridge: fbo %u status 0x%x color0 type 0x%x name %d", id, status, type, name);
+        if (status == 0x8CD5 && type) {
+            readBuffer(0x8CE0);
+            char tag[24]; snprintf(tag, sizeof(tag), "fbo %u", id);
+            gl_diag_probe(g_glLib, tag);
+        }
+    }
+    bindFb(0x8CA8, readFb > 0 ? (unsigned)readFb : 0);
 }
 
 static BOOL gl_safe_read(uintptr_t addr, void *out, size_t len) {
@@ -263,6 +335,8 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
         drawableSize = CGSizeMake(layer.bounds.size.width * layer.contentsScale,
                                   layer.bounds.size.height * layer.contentsScale);
     }
+    g_surfW = (int)MAX(1.0, round(drawableSize.width));
+    g_surfH = (int)MAX(1.0, round(drawableSize.height));
     const EGLint mobileGLSurfaceAttribs[] = {
         EGL_WIDTH, (EGLint)MAX(1.0, round(drawableSize.width)),
         EGL_HEIGHT, (EGLint)MAX(1.0, round(drawableSize.height)),
