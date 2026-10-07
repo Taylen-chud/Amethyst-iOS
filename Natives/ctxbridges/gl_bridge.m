@@ -13,10 +13,6 @@
 static EGLDisplay g_EglDisplay;
 static egl_library handle;
 
-<<<<<<< HEAD
-=======
-// swap stall watchdog, only logs. if frames stop it prints where the render thread is sitting
->>>>>>> 352359fe (Debug)
 static volatile int g_swapCount;
 static volatile int g_inSwap;
 static volatile mach_port_t g_renderThread;
@@ -56,10 +52,6 @@ static void gl_diag_frame(int swaps) {
             NSLog(@"EGLBridge: gl error 0x%x (swap %d)", err, swaps);
         }
     }
-<<<<<<< HEAD
-=======
-    if (swaps == 120 || swaps == 600) gl_diag_readback(swaps);
->>>>>>> 352359fe (Debug)
     if (swaps >= 60 && clear && clearColor && scissor && enable && disable && bindFb && colorMask) {
         bindFb(0x8D40, 0);          // GL_FRAMEBUFFER, the window
         colorMask(1, 1, 1, 1);
