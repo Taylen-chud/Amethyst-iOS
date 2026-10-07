@@ -172,20 +172,12 @@ void TGlslangToSpvTraverser::convertSwizzle(const glslang::TIntermAggregate& nod
     return replace_once(target, old, new, "using component 0", "glslang", required=False)
 
 
-def texture_emit_cast(root):
-    target = root / "MobileGL/MG_Impl/Pipe/TextureEmit.h"
-    old = "reinterpret_cast<Uint64>(reinterpret_cast<std::uintptr_t>(shadow)) +"
-    new = "static_cast<Uint64>(reinterpret_cast<std::uintptr_t>(shadow)) +"
-    return replace_once(target, old, new, new, "texture_emit", required=False)
-
-
 STEPS = [
     ("ios_visibility", ios_visibility, True),
     ("ios_resolution", ios_resolution, True),
     ("hash_shim", hash_shim, True),
     ("enable_availability", enable_availability, True),
     ("glslang", glslang, False),
-    ("texture_emit", texture_emit_cast, False),
 ]
 
 

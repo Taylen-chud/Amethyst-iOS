@@ -15,6 +15,10 @@ static BaseAuthenticator *current = nil;
     return current;
 }
 
++ (NSDictionary *)tokenDataOfProfile:(NSString *)profile {
+    return nil; // only microsoft accounts have token data, MicrosoftAuthenticator overrides this
+}
+
 + (void)setCurrent:(BaseAuthenticator *)auth {
     current = auth;
 }

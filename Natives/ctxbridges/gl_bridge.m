@@ -20,6 +20,8 @@ static volatile mach_port_t g_renderThread;
 // diagnostics for the black screen: lib the gl functions come from, set when egl is loaded
 static void *g_glLib;
 
+static void gl_diag_readback(int swaps);
+
 static void gl_diag_frame(int swaps) {
     if (!g_glLib || swaps < 5) return;
     typedef void (*fn_clearColor)(float, float, float, float);

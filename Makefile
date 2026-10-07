@@ -349,7 +349,7 @@ dep_mobilegl:
 		-DCMAKE_OSX_ARCHITECTURES=arm64 \
 		-DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
 		-DCMAKE_C_FLAGS="-arch arm64" \
-		-DCMAKE_CXX_FLAGS="-arch arm64" \
+		-DCMAKE_CXX_FLAGS="-arch arm64 -Wno-nullability-completeness -Wno-ignored-reference-qualifiers" \
 		-DMOBILEGL_IOS=ON \
 		-DMOBILEGL_BUILD_TEST=OFF \
 		-DMOBILEGL_BUILD_BENCHMARK=OFF \
