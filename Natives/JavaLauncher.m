@@ -457,6 +457,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             "</Configuration>\n";
         if ([xml writeToFile:logCfg atomically:YES encoding:NSUTF8StringEncoding error:nil]) {
             margv[++margc] = [NSString stringWithFormat:@"-Dlog4j.configurationFile=%@", logCfg].UTF8String;
+            margv[++margc] = [NSString stringWithFormat:@"-Damethyst.log4jConfig=%@", logCfg].UTF8String;
         }
     }
 

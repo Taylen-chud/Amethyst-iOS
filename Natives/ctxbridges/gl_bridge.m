@@ -52,6 +52,7 @@ static void gl_diag_frame(int swaps) {
             NSLog(@"EGLBridge: gl error 0x%x (swap %d)", err, swaps);
         }
     }
+    if (swaps == 120 || swaps == 600) gl_diag_readback(swaps);
     if (swaps >= 60 && clear && clearColor && scissor && enable && disable && bindFb && colorMask) {
         bindFb(0x8D40, 0);          // GL_FRAMEBUFFER, the window
         colorMask(1, 1, 1, 1);
