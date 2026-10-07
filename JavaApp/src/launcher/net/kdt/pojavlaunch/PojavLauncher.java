@@ -88,9 +88,8 @@ public class PojavLauncher {
                 configPath = Tools.DIR_GAME_NEW + "/" + version.logging.client.file.id;
             }
             if (!new File(configPath).isFile()) {
-                // the config the version asks for isn't on disk and log4j then goes silent, use the launcher's one
+                // missing config makes log4j go silent
                 String fallback = System.getProperty("amethyst.log4jConfig");
-                System.out.println("log4j config " + configPath + " is missing, falling back to " + fallback);
                 if (fallback != null) configPath = fallback;
             }
             System.setProperty("log4j.configurationFile", configPath);
