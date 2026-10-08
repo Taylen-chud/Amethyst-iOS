@@ -12,6 +12,8 @@ function(ame_apply_overrides mg_src ame_dir)
         COMPILE_DEFINITIONS "glFramebufferTexture=ame_orig_glFramebufferTexture")
     set_property(SOURCE "${mg_src}/gl/gl_native.cpp" APPEND PROPERTY
         COMPILE_DEFINITIONS "glClientWaitSync=ame_orig_glClientWaitSync")
+    set_property(SOURCE "${mg_src}/glx/lookup.cpp" APPEND PROPERTY
+        COMPILE_DEFINITIONS "dlsym=ame_dlsym")
 endfunction()
 
 # defer so the target exists, EVAL so the paths are fixed now

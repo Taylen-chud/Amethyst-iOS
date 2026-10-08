@@ -1,4 +1,6 @@
 #include <GL/gl.h>
+#include <dlfcn.h>
+#include <stdint.h>
 
 #include "gl/framebuffer.h"
 #include "gl/mg.h"
@@ -43,4 +45,18 @@ extern "C" GLAPI GLAPIENTRY void glFramebufferTexture(GLenum target, GLenum atta
 extern "C" GLAPI GLAPIENTRY GLenum glClientWaitSync(GLsync sync, GLbitfield flags, GLuint64 timeout)
 {
     return ame_orig_glClientWaitSync(sync, flags | GL_SYNC_FLUSH_COMMANDS_BIT, timeout);
+}
+
+// glXGetProcAddress looks names up with RTLD_NEXT, which skips this library and returns ANGLE's own functions.
+// LWJGL 3.4+ resolves GL through eglGetProcAddress, so the game would bypass MobileGlues completely
+extern "C" void *ame_dlsym(void *handle, const char *name)
+{
+    static void *self = [] {
+        Dl_info info;
+        return dladdr((void *)&ame_dlsym, &info) ? dlopen(info.dli_fname, RTLD_NOLOAD | RTLD_NOW) : nullptr;
+    }();
+    if (self != nullptr && handle == (void *)(~(uintptr_t)0)) {
+        handle = self;
+    }
+    return dlsym(handle, name);
 }
