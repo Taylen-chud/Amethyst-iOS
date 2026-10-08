@@ -309,6 +309,15 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         NSLog(@"[JavaLauncher] RENDERER is set to %@\n", renderer);
         setenv("AME_RENDERER", renderer.UTF8String, 1);
 
+        // Apply Zink-specific environment variables if Zink renderer is selected
+        if ([renderer hasPrefix:@"libOSMesa"]) {
+            [ZinkConfig applyZinkEnvironmentFromPreferences];
+            NSString *configSummary = [ZinkConfig activeConfigSummary];
+            NSLog(@"[ZinkConfig] ========== Zink Renderer Active (Mesa 25) ==========");
+            NSLog(@"[ZinkConfig] %@", configSummary);
+            setenv("ZINK_ACTIVE_CONFIG", configSummary.UTF8String, 1);
+        }
+
        
         NSUInteger consecutiveRendererFailures = [RendererCrashTracker consecutiveFailuresForRenderer:renderer];
         if (consecutiveRendererFailures >= 2) {
