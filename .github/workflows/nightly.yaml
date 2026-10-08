@@ -13,7 +13,7 @@ permissions:
   contents: write   # needed so the release/tag step can push a release
 
 env:
-  MARKETING_VERSION: "1.2.0"
+  MARKETING_VERSION: "1.2.1"
 
 jobs:
   build:
@@ -116,30 +116,21 @@ jobs:
           tag: nightly
           name: "Nightly"
           body: |
-            ⚠️ EXPERIMENTAL ⚠️ Nightly build for commit ${{ github.sha }}.
-
-            Nightly builds are extremely experimental builds only meant to be used by developers and beta testers. They often contain bugs and experimental features. Use at your own risk!
+            Nightly build for commit ${{ github.sha }}.
+            Nightly builds are experimental builds only meant to be used by beta testers. They often contain bugs and experimental features. Use at your own risk!
 
             ## Build Info
-
             Built at (UTC): ${{ steps.vars.outputs.built_at }}
             Built at (UTC date): ${{ steps.vars.outputs.built_date }}
             Commit SHA: ${{ github.sha }}
             Version: ${{ steps.vars.outputs.version }}
 
             ## What's Changed:
-
             ${{ steps.changelog.outputs.changelog }}
-
             ${{ steps.changelog.outputs.range_note }}
-          artifacts: >-
-            artifacts/org.angelauramc.amethyst-*-${{ matrix.platform_name }}.ipa,
-            artifacts/org.angelauramc.amethyst-*-${{ matrix.platform_name }}-trollstore.tipa,
-            artifacts/org.angelauramc.amethyst.slimmed-*-${{ matrix.platform_name }}.ipa,
-            artifacts/org.angelauramc.amethyst.slimmed-*-${{ matrix.platform_name }}-trollstore.tipa,
-            artifacts/AngelAuraAmethyst.dSYM.zip
+          artifacts: "artifacts/org.angelauramc.amethyst-*-${{ matrix.platform_name }}.ipa,artifacts/org.angelauramc.amethyst-*-${{ matrix.platform_name }}-trollstore.tipa,artifacts/org.angelauramc.amethyst.slimmed-*-${{ matrix.platform_name }}.ipa,artifacts/org.angelauramc.amethyst.slimmed-*-${{ matrix.platform_name }}-trollstore.tipa,artifacts/AngelAuraAmethyst.dSYM.zip"
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
           prerelease: true
-          makeLatest: false
+          makeLatest: "false"
