@@ -23,6 +23,7 @@
 #import "PLLogOutputView.h"
 #import "PLProfiles.h"
 #import "RendererCrashTracker.h"
+#import "ZinkConfig.h"
 
 #define fm NSFileManager.defaultManager
 
