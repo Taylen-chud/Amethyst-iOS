@@ -5,6 +5,7 @@
 
 void AmethystSDL3Prepare(void);
 void AmethystSDL3Loaded(void);
+void AmethystSDL3ApplyResolutionScale(void);
 
 // input forwarding: once the SDL window exists, touch/keyboard/control events go to
 // SDL3Bridge.onInput() (-> SDL_PushEvent) instead of the GLFW callbacks

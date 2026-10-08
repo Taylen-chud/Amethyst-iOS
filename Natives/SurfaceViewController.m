@@ -17,6 +17,7 @@
 #import "MinecraftResourceUtils.h"
 #import "PLProfiles.h"
 #import "SurfaceViewController.h"
+#import "sdl3_hook.h"
 #import "TrackedTextField.h"
 #import "UIKit+hook.h"
 #import "ios_uikit_bridge.h"
@@ -374,7 +375,10 @@ static GameSurfaceView* pojavWindow;
     }
 
     resolutionScale = getPrefFloat(@"video.resolution") / 100.0;
-    self.surfaceView.layer.contentsScale = self.screenScale;
+    // ANGLE sizes its drawable from bounds * contentsScale and ignores drawableSize
+    const char *renderer = getenv("AME_RENDERER");
+    BOOL angleBacked = renderer != NULL && (!strcmp(renderer, RENDERER_NAME_MOBILEGLUES) || !strcmp(renderer, RENDERER_NAME_MTL_ANGLE));
+    self.surfaceView.layer.contentsScale = angleBacked ? self.screenScale * resolutionScale : self.screenScale;
 
     physicalWidth = roundf(self.surfaceView.frame.size.width * self.screenScale);
     physicalHeight = roundf(self.surfaceView.frame.size.height * self.screenScale);
@@ -395,6 +399,8 @@ static GameSurfaceView* pojavWindow;
         ((CAMetalLayer *)self.surfaceView.layer).drawableSize =
             CGSizeMake(MAX(windowWidth, 1), MAX(windowHeight, 1));
     }
+
+    AmethystSDL3ApplyResolutionScale();
 
     // Tell Minecraft/MobileGL about the internal render resolution.
     CallbackBridge_nativeSendScreenSize(windowWidth, windowHeight);

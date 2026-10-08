@@ -1,6 +1,8 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <QuartzCore/CAMetalLayer.h>
 #include <dlfcn.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -138,6 +140,26 @@ static void AMApplyPixelFilter(UIView *view) {
     view.layer.minificationFilter = kCAFilterNearest;
 }
 
+// MoltenVK and ANGLE size their drawable from bounds * contentsScale, so the resolution setting has to live in the scale
+void AmethystSDL3ApplyResolutionScale(void) {
+    UIView *view = gSDLView;
+    const char *renderer = getenv("AME_RENDERER");
+    // MobileGL sizes its own surface
+    if (view == nil || (renderer != NULL && !strcmp(renderer, RENDERER_NAME_MOBILEGL))) return;
+
+    CGFloat base = view.window.screen.scale;
+    if (base <= 0) base = UIScreen.mainScreen.scale;
+    CGFloat scale = base * (resolutionScale > 0 ? resolutionScale : 1.0);
+    if (fabs(view.layer.contentsScale - scale) < 0.001) return;
+
+    view.layer.contentsScale = scale;
+    if ([view.layer isKindOfClass:CAMetalLayer.class] && view.bounds.size.width > 0 && view.bounds.size.height > 0) {
+        ((CAMetalLayer *)view.layer).drawableSize =
+            CGSizeMake(MAX(round(view.bounds.size.width * scale), 1), MAX(round(view.bounds.size.height * scale), 1));
+    }
+    [view setNeedsLayout];
+}
+
 
 // MoltenVK compares its swapchain size with the layer's bounds * contentsScale. With the
 // resolution setting below 100% those differ, so this logs what the layer really looks like.
@@ -205,6 +227,7 @@ static void AMEmbedSDLViewOnMain(void) {
         sdlView.hidden = NO;
         sdlView.userInteractionEnabled = NO; // Interaction stays off so touchView handles inputs
         AMApplyPixelFilter(sdlView);
+        AmethystSDL3ApplyResolutionScale();
         gSDLInstalled = YES;
 
         AMTrace(@"[SDL3 EMBED] SDL view already embedded");
@@ -249,6 +272,7 @@ static void AMEmbedSDLViewOnMain(void) {
     window.userInteractionEnabled = NO;
 
     AMApplyPixelFilter(sdlView);
+    AmethystSDL3ApplyResolutionScale();
     gSDLInstalled = YES;
 
     NSLog(@"[SDL3 EMBED] SUCCESS: %@ embedded into GameSurfaceView",
