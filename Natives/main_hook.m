@@ -6,8 +6,11 @@
 #import "mach_excServer.h"
 
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <libgen.h>
 #include <pthread.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include "external/fishhook/fishhook.h"
 
 mach_port_t excPort;
@@ -67,7 +70,62 @@ void hooked_exit(int code) {
     orig_exit(code);
 }
 
+// mcopt's macOS libmcmetal won't load on iOS, hand it the one we bundle
+static int mcmetalOK(const char *theirs, const char *ours, char *missing, size_t cap) {
+    const char *m[2] = {0};
+    size_t n[2] = {0};
+    const char *paths[2] = {theirs, ours};
+    int ok = 1;
+    for (int k = 0; k < 2; k++) {
+        int fd = open(paths[k], O_RDONLY);
+        struct stat st;
+        if (fd < 0 || fstat(fd, &st) || st.st_size <= 0) { ok = 0; if (fd >= 0) close(fd); continue; }
+        void *p = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        close(fd);
+        if (p == MAP_FAILED) { ok = 0; continue; }
+        m[k] = p; n[k] = st.st_size;
+    }
+    // every _mc_ name in theirs has to be in ours too
+    for (size_t i = 1; ok && i + 4 < n[0]; i++) {
+        if (m[0][i - 1] || memcmp(m[0] + i, "_mc_", 4)) continue;
+        size_t len = strnlen(m[0] + i, n[0] - i);
+        if (i + len >= n[0] || len > 250) { i += len; continue; }
+        char key[256] = {0};
+        memcpy(key + 1, m[0] + i, len);
+        if (!memmem(m[1], n[1], key, len + 2)) { strlcpy(missing, m[0] + i, cap); ok = 0; }
+        i += len;
+    }
+    for (int k = 0; k < 2; k++) if (m[k]) munmap((void *)m[k], n[k]);
+    return ok;
+}
+
+static const char *mcmetalPath(const char *path) {
+    if (!path) return NULL;
+    const char *base = strrchr(path, '/');
+    if (strcmp(base ? base + 1 : path, "libmcmetal.dylib")) return NULL;
+
+    static char ours[PATH_MAX];
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        @autoreleasepool {
+            NSString *p = [NSBundle.mainBundle.privateFrameworksPath stringByAppendingPathComponent:@"libmcmetal.dylib"];
+            if (access(p.fileSystemRepresentation, R_OK) == 0) strlcpy(ours, p.fileSystemRepresentation, sizeof(ours));
+        }
+    });
+    if (!ours[0] || !strcmp(path, ours)) return NULL;
+
+    char missing[256] = "";
+    if (!mcmetalOK(path, ours, missing, sizeof(missing))) {
+        NSLog(@"[Amethyst] mcopt: not using bundled libmcmetal, %s", missing[0] ? missing : "couldn't read it");
+        return NULL;
+    }
+    NSLog(@"[Amethyst] mcopt: using bundled libmcmetal for %s", path);
+    return ours;
+}
+
 void* hooked_dlopen(const char* path, int mode) {
+    const char *mc = mcmetalPath(path);
+    if (mc) return orig_dlopen(mc, mode);
     BOOL shouldUseDyldBypass26PPL = NO;
     if (DeviceHasJITFlags(JIT_FLAG_FORCE_MIRRORED)) {
         shouldUseDyldBypass26PPL = hwRedirectOrig[0] && !DeviceHasJITFlags(JIT_FLAG_HAS_TXM);

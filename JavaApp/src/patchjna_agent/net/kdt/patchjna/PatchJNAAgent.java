@@ -14,6 +14,9 @@ public class PatchJNAAgent implements ClassFileTransformer {
     // minecraft's mac-only helper, it loads cocoa through ca.weblite.objc and that dies on ios
     private static final String MACOS_UTIL = "com/mojang/blaze3d/platform/MacosUtil";
 
+    // the ios shaderc build crashes when several threads compile at once, minecraft 26.3 compiles on its worker pool
+    private static final String SHADERC = "org/lwjgl/util/shaderc/Shaderc";
+
     private static final String SDL_FFM_EVENTS = "dev/isxander/sdl/ffm/SdlFfmEvents";
     private static final String SDL_FFM_SUPPORT = "dev/isxander/sdl/ffm/SdlFfmSupport";
 
@@ -46,6 +49,16 @@ public class PatchJNAAgent implements ClassFileTransformer {
                 System.out.println("PatchJNAAgent: failed to patch " + className + ", leaving it unmodified");
                 t.printStackTrace();
             }
+        } else if (SHADERC.equals(className)) {
+            try {
+                byte[] patched = Synchronizer.synchronizeCompileCalls(className, classfileBuffer);
+                if (patched != null) {
+                    transformeredByteCode = patched;
+                }
+            } catch (Throwable t) {
+                System.out.println("PatchJNAAgent: failed to patch " + className + ", leaving it unmodified");
+                t.printStackTrace();
+            }
         } else if (SDL_FFM_EVENTS.equals(className) && !"false".equals(System.getProperty("amethyst.noUpcalls"))) {
             try {
                 byte[] patched = CocoaStubber.stubUpcallMethods(className, classfileBuffer);
@@ -63,6 +76,73 @@ public class PatchJNAAgent implements ClassFileTransformer {
     public static void premain(String args, Instrumentation instrumentation) {
         System.out.println("PatchJNAAgent: premain called");
         instrumentation.addTransformer(new PatchJNAAgent());
+    }
+
+    // sets ACC_SYNCHRONIZED on the static nshaderc_compile_* entry points, so the compiles run one at a time
+    static final class Synchronizer {
+        static byte[] synchronizeCompileCalls(String className, byte[] cf) throws IOException {
+            ByteBuffer buf = ByteBuffer.wrap(cf);
+            if (cf.length < 10 || buf.getInt(0) != 0xCAFEBABE) {
+                throw new IOException("Not a class file");
+            }
+            int cpCount = buf.getShort(8) & 0xFFFF;
+            int[] off = new int[cpCount];
+            int[] tag = new int[cpCount];
+            int p = 10;
+            for (int i = 1; i < cpCount; i++) {
+                tag[i] = cf[p] & 0xFF;
+                off[i] = p + 1;
+                switch (tag[i]) {
+                    case 1: p += 3 + (buf.getShort(p + 1) & 0xFFFF); break;
+                    case 3: case 4: p += 5; break;
+                    case 5: case 6: p += 9; i++; break;
+                    case 7: case 8: case 16: case 19: case 20: p += 3; break;
+                    case 9: case 10: case 11: case 12: case 17: case 18: p += 5; break;
+                    case 15: p += 4; break;
+                    default: throw new IOException("Unknown constant pool tag " + tag[i]);
+                }
+            }
+
+            p += 6;
+            p += 2 + (buf.getShort(p) & 0xFFFF) * 2;
+            int fieldCount = buf.getShort(p) & 0xFFFF;
+            p += 2;
+            for (int f = 0; f < fieldCount; f++) {
+                p += 6;
+                int attrCount = buf.getShort(p) & 0xFFFF;
+                p += 2;
+                for (int a = 0; a < attrCount; a++) {
+                    p += 6 + buf.getInt(p + 2);
+                }
+            }
+
+            byte[] out = cf.clone();
+            List<String> changed = new ArrayList<String>();
+            int methodCount = buf.getShort(p) & 0xFFFF;
+            p += 2;
+            for (int m = 0; m < methodCount; m++) {
+                int access = buf.getShort(p) & 0xFFFF;
+                int nameIdx = buf.getShort(p + 2) & 0xFFFF;
+                int attrCount = buf.getShort(p + 6) & 0xFFFF;
+                String name = new String(cf, off[nameIdx] + 2, buf.getShort(off[nameIdx]) & 0xFFFF, "UTF-8");
+                if (name.startsWith("nshaderc_compile_") && (access & 0x0008) != 0 && (access & 0x0020) == 0) {
+                    access |= 0x0020;
+                    out[p] = (byte) (access >> 8);
+                    out[p + 1] = (byte) access;
+                    changed.add(name);
+                }
+                p += 8;
+                for (int a = 0; a < attrCount; a++) {
+                    p += 6 + buf.getInt(p + 2);
+                }
+            }
+
+            if (changed.isEmpty()) {
+                return null;
+            }
+            System.out.println("PatchJNAAgent: " + className + " - synchronized " + changed);
+            return out;
+        }
     }
 
     // stubs any method that touches ca.weblite.objc (returns 0/null/nothing). rest of the class stays untouched

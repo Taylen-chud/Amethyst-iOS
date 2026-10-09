@@ -370,6 +370,18 @@ dep_mobilegl:
 	cp $(WORKINGDIR)/mobilegl/libMobileGL.dylib $(WORKINGDIR)/libMobileGL.dylib
 	echo '[Amethyst v$(VERSION)] dep_mobilegl - end'
 
+# mcopt's metal lib for ios, main_hook.m swaps it in
+dep_mcmetal:
+	echo '[Amethyst v$(VERSION)] dep_mcmetal - start'
+	mkdir -p $(WORKINGDIR)
+	cd $(SOURCEDIR)/Natives/external/mcmetal && xcrun --sdk iphoneos clang \
+		-fno-objc-arc -O2 -Wall -arch arm64 -isysroot "$(SDKPATH)" -miphoneos-version-min=18.0 \
+		-dynamiclib -install_name @rpath/libmcmetal.dylib \
+		-framework Foundation -framework Metal -framework QuartzCore -framework CoreVideo \
+		-o $(WORKINGDIR)/libmcmetal.dylib \
+		mcmetal.m mclod.m lodseam.m lodmesh.c lodnoise.c rec.m mcown.m mccap.m || exit 1
+	echo '[Amethyst v$(VERSION)] dep_mcmetal - end'
+
 assets:
 	echo '[Amethyst v$(VERSION)] assets - start'
 	if [ '$(IOS)' = '0' ] && [ '$(DETECTPLAT)' = 'Darwin' ]; then \
@@ -385,7 +397,7 @@ assets:
 	fi
 	echo '[Amethyst v$(VERSION)] assets - end'
 
-payload: native dep_mg dep_mobilegl java jre assets
+payload: native dep_mg dep_mobilegl dep_mcmetal java jre assets
 	echo '[Amethyst v$(VERSION)] payload - start'
 	$(call METHOD_DIRCHECK,$(WORKINGDIR)/AngelAuraAmethyst.app/libs)
 	$(call METHOD_DIRCHECK,$(WORKINGDIR)/AngelAuraAmethyst.app/libs_caciocavallo)
