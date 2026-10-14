@@ -154,7 +154,9 @@ void AmethystSDL3ApplyResolutionScale(void) {
     if (fabs(view.layer.contentsScale - scale) < 0.001) return;
 
     view.layer.contentsScale = scale;
-    if ([view.layer isKindOfClass:CAMetalLayer.class] && view.bounds.size.width > 0 && view.bounds.size.height > 0) {
+    // Kosmic Krisp sizes its own drawable, see ame_vulkan_driver_sizes_layer
+    BOOL driverSizes = ame_vulkan_driver_sizes_layer(ame_renderer_from_name(getenv("AME_RENDERER")));
+    if (!driverSizes && [view.layer isKindOfClass:CAMetalLayer.class] && view.bounds.size.width > 0 && view.bounds.size.height > 0) {
         // same rounding MoltenVK uses, so its swapchain is optimal
         uint32_t w, h;
         ame_vk_drawable_extent(view.bounds.size.width, view.bounds.size.height, scale, &w, &h);
@@ -484,15 +486,20 @@ void AmethystSDL3Prepare(void) {
      */
     setenv("SDL_IOS_HIDE_HOME_INDICATOR", "2", 0);
 
-    NSString *moltenVK =
+    // same driver the launcher picked for the game. JavaLauncher sets AME_RENDERER first; if it is
+    // missing this falls back to MoltenVK, the old behaviour
+    ame_renderer_t sdlKind = ame_renderer_from_name(getenv("AME_RENDERER"));
+    NSString *vulkanLib =
         [NSBundle.mainBundle.bundlePath
-            stringByAppendingPathComponent:@"Frameworks/libMoltenVK.dylib"];
+            stringByAppendingPathComponent:
+                [@"Frameworks/" stringByAppendingString:
+                    [NSString stringWithUTF8String:ame_vulkan_library_file(sdlKind)]]];
 
-    if ([[NSFileManager defaultManager] fileExistsAtPath:moltenVK]) {
-        setenv("SDL_VULKAN_LIBRARY", moltenVK.UTF8String, 1);
-        AMTrace(@"[SDL3] SDL_VULKAN_LIBRARY=%@", moltenVK);
+    if ([[NSFileManager defaultManager] fileExistsAtPath:vulkanLib]) {
+        setenv("SDL_VULKAN_LIBRARY", vulkanLib.UTF8String, 1);
+        AMTrace(@"[SDL3] SDL_VULKAN_LIBRARY=%@", vulkanLib);
     } else {
-        NSLog(@"[SDL3] libMoltenVK.dylib not found");
+        NSLog(@"[SDL3] %@ not found", vulkanLib.lastPathComponent);
     }
 
     /*

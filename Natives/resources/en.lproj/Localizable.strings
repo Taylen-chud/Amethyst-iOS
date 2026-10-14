@@ -99,7 +99,9 @@
 "renderer.moltenvk.unavailable.title" = "Vulkan Unavailable";
 "renderer.moltenvk.unavailable.message" = "The MoltenVK renderer could not start on this device: %@. Amethyst switched to Auto for this launch. You can pick another renderer in Settings → Video and Renderer.";
 "renderer.moltenvk.gl_fallback.title" = "Switched to ANGLE";
-"renderer.moltenvk.gl_fallback.message" = "This game asked for OpenGL, which the MoltenVK renderer does not provide. Amethyst is using ANGLE for this launch. To change this, pick a renderer in Settings → Video and Renderer.";
+"renderer.kosmickrisp.unavailable.title" = "Vulkan Unavailable";
+"renderer.kosmickrisp.unavailable.message" = "The Kosmic Krisp renderer could not start on this device: %@. Amethyst switched to Auto for this launch. You can pick another renderer in Settings → Video and Renderer.";
+"renderer.moltenvk.gl_fallback.message" = "This game asked for OpenGL, which the Vulkan renderer does not provide. Amethyst is using ANGLE for this launch. To change this, pick a renderer in Settings → Video and Renderer.";
 "login.option.add" = "Add account";
 "login.option.select" = "Select account";
 "login.option.demo" = "Demo account";
@@ -192,7 +194,8 @@
 "preference.title.renderer.debug.mg" = "MobileGlues (1.17+) - exports OpenGL 4.0,";
 "preference.title.renderer.debug.zink" = "Zink (Mesa 25.0) - exports OpenGL 4.1";
 "preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
-"preference.title.renderer.debug.moltenvk" = "MoltenVK (Vulkan) (26.2+) - exports Vulkan 1.4 EXPERIMENTAL";
+"preference.title.renderer.debug.moltenvk" = "MoltenVK (Vulkan) - for Minecraft 26.2 and later, EXPERIMENTAL";
+"preference.title.renderer.debug.kosmickrisp" = "Kosmic Krisp (Vulkan) (iOS 26+) - for Minecraft 26.2 and later, EXPERIMENTAL";
 
 "preference.detail.renderer" = "Change the OpenGL render engine to use. Zink is temporarily disabled on iOS 16 and later to diagnose issues.";
 

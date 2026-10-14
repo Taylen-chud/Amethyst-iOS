@@ -407,7 +407,8 @@ static GameSurfaceView* pojavWindow;
         windowHeight = h;
     }
 
-    if ([self.surfaceView.layer isKindOfClass:CAMetalLayer.class]) {
+    // the Vulkan driver owns drawableSize for Kosmic Krisp, only MoltenVK and ANGLE get it from here
+    if ([self.surfaceView.layer isKindOfClass:CAMetalLayer.class] && !ame_vulkan_driver_sizes_layer(renderer)) {
         ((CAMetalLayer *)self.surfaceView.layer).drawableSize =
             CGSizeMake(MAX(windowWidth, 1), MAX(windowHeight, 1));
     }

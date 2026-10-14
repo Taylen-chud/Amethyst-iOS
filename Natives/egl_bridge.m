@@ -60,8 +60,8 @@ int pojavInitOpenGL() {
         setenv("AME_RENDERER", name, 1);
     }
 
-    // MoltenVK has no GL of its own, a game that wants one runs on ANGLE
-    if (kind == AME_RENDERER_MOLTENVK) {
+    // the Vulkan drivers have no GL of their own, a game that wants one runs on ANGLE
+    if (ame_renderer_is_vulkan_native(kind)) {
         AMVulkanNoteGLFallback();
         kind = AME_RENDERER_ANGLE;
         name = RENDERER_NAME_MTL_ANGLE;

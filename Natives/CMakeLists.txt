@@ -106,6 +106,7 @@ add_executable(AngelAuraAmethyst
   JavaLauncher.m
   LWJGLVersions.m
   MoltenVKConfig.m
+  KosmicKrispConfig.m
   sdl3_hook.m
   sdl3_gl_layer.m
   external/fishhook/fishhook.c

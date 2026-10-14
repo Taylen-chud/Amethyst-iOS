@@ -25,6 +25,7 @@
 #import "MinecraftOptionUtils.h"
 #import "MobileGLConfig.h"
 #import "MoltenVKConfig.h"
+#import "KosmicKrispConfig.h"
 #import "PLLogOutputView.h"
 #import "PLProfiles.h"
 #import "RendererCrashTracker.h"
@@ -244,21 +245,34 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             unsetenv("MOBILEGL_LOG_FILE_PATH");
         }
 
-        if (ame_renderer_is_vulkan_native(ame_renderer_from_name(renderer.UTF8String))) {
-            // env first, MoltenVK reads its config once on the first call into it
-            [MoltenVKConfig applyEnvironmentFromPreferences];
-            NSString *mvkPath = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Frameworks/libMoltenVK.dylib"];
-            ame_vk_preflight_t pf = ame_vk_preflight(mvkPath.UTF8String);
-            if (pf.ok) {
-                NSLog(@"[MoltenVK] Vulkan %u.%u.%u, %@", pf.apiVersion >> 22, (pf.apiVersion >> 12) & 0x3ff, pf.apiVersion & 0xfff,
-                      [MoltenVKConfig activeConfigSummary]);
+        ame_renderer_t vulkanKind = ame_renderer_from_name(renderer.UTF8String);
+        if (ame_renderer_is_vulkan_native(vulkanKind)) {
+            // env first, the driver reads its config once when it is loaded
+            const char *vulkanFile = ame_vulkan_library_file(vulkanKind);
+            NSString *vulkanPath = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:
+                                    [@"Frameworks/" stringByAppendingString:[NSString stringWithUTF8String:vulkanFile]]];
+            if (vulkanKind == AME_RENDERER_KOSMICKRISP) {
+                [KosmicKrispConfig applyEnvironmentFromPreferences];
             } else {
-                NSLog(@"[MoltenVK] preflight failed: %s", pf.error);
+                [MoltenVKConfig applyEnvironmentFromPreferences];
+            }
+
+            ame_vk_preflight_t pf = ame_vk_preflight(vulkanPath.UTF8String);
+            if (pf.ok) {
+                NSLog(@"[Vulkan] %s Vulkan %u.%u.%u, %@", vulkanFile, pf.apiVersion >> 22, (pf.apiVersion >> 12) & 0x3ff, pf.apiVersion & 0xfff,
+                      vulkanKind == AME_RENDERER_KOSMICKRISP ? [KosmicKrispConfig activeConfigSummary]
+                                                             : [MoltenVKConfig activeConfigSummary]);
+            } else {
+                NSLog(@"[Vulkan] %s preflight failed: %s", vulkanFile, pf.error);
                 vulkanUnavailable = YES;
                 renderer = @"auto";
                 setenv("AME_RENDERER", "auto", 1);
-                showDialog(localize(@"renderer.moltenvk.unavailable.title", nil),
-                           [NSString stringWithFormat:localize(@"renderer.moltenvk.unavailable.message", nil), [NSString stringWithUTF8String:pf.error]]);
+                NSString *titleKey = vulkanKind == AME_RENDERER_KOSMICKRISP ? @"renderer.kosmickrisp.unavailable.title"
+                                                                            : @"renderer.moltenvk.unavailable.title";
+                NSString *messageKey = vulkanKind == AME_RENDERER_KOSMICKRISP ? @"renderer.kosmickrisp.unavailable.message"
+                                                                              : @"renderer.moltenvk.unavailable.message";
+                showDialog(localize(titleKey, nil),
+                           [NSString stringWithFormat:localize(messageKey, nil), [NSString stringWithUTF8String:pf.error]]);
             }
         }
 
@@ -405,8 +419,10 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     // read by GLFWVulkan.glfwVulkanSupported, absent means yes
     if (vulkanUnavailable) margv[++margc] = "-Dame.vulkan.available=false";
 
-    // LWJGL's bare libMoltenVK.dylib lookup does not search Frameworks, so give it the bundled path
-    NSString *bundledVulkan = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Frameworks/libMoltenVK.dylib"];
+    // LWJGL's bare dylib lookup does not search Frameworks, so give it the bundled path of the selected driver
+    ame_renderer_t lwjglVulkanKind = ame_renderer_from_name(getenv("AME_RENDERER"));
+    NSString *bundledVulkan = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:
+                               [@"Frameworks/" stringByAppendingString:[NSString stringWithUTF8String:ame_vulkan_library_file(lwjglVulkanKind)]]];
     if ([fm fileExistsAtPath:bundledVulkan]) {
         margv[++margc] = [NSString stringWithFormat:@"-Dame.vulkan.libpath=%@", bundledVulkan].UTF8String;
     }
