@@ -9,8 +9,8 @@
 #define RENDERER_NAME_MOBILEGL "libMobileGL.dylib"
 #define RENDERER_NAME_VK_ZINK "libOSMesa.8.dylib"
 #define RENDERER_NAME_MOLTENVK "libMoltenVK.dylib"
-// Kosmic Krisp: Mesa-based Vulkan-on-Metal driver, bundled in Frameworks like MoltenVK
 #define RENDERER_NAME_KOSMICKRISP "libvulkan.dylib"
+#define RENDERER_FILE_KOSMICKRISP "libame_vulkan.dylib"
 
 typedef enum {
     AME_RENDERER_UNKNOWN,
@@ -72,7 +72,7 @@ static inline bool ame_vulkan_driver_sizes_layer(ame_renderer_t r)
 // bundled file name of the Vulkan driver a renderer loads, MoltenVK for anything else
 static inline const char *ame_vulkan_library_file(ame_renderer_t r)
 {
-    return r == AME_RENDERER_KOSMICKRISP ? RENDERER_NAME_KOSMICKRISP : RENDERER_NAME_MOLTENVK;
+    return r == AME_RENDERER_KOSMICKRISP ? RENDERER_FILE_KOSMICKRISP : RENDERER_NAME_MOLTENVK;
 }
 
 static inline bool isMobileGLRenderer(const char *renderer)

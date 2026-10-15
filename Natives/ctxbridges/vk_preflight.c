@@ -38,6 +38,11 @@ ame_vk_preflight_t ame_vk_preflight(const char *dylibPath) {
         fail(&r, "the library is not MoltenVK, entry points are missing", NULL);
         return r;
     }
+    // LWJGL calls this at startup and refuses to load the library without it
+    if (!dlsym(lib, "vkEnumerateInstanceLayerProperties")) {
+        fail(&r, "vkEnumerateInstanceLayerProperties is missing, the driver needs a loader shim", NULL);
+        return r;
+    }
 
     if (enumVersion(&r.apiVersion) != 0) {
         fail(&r, "vkEnumerateInstanceVersion failed", NULL);
