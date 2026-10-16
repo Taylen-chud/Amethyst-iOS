@@ -28,7 +28,6 @@
 #import "KosmicKrispConfig.h"
 #import "PLLogOutputView.h"
 #import "PLProfiles.h"
-#import "RendererCrashTracker.h"
 #import "ZinkConfig.h"
 
 #define fm NSFileManager.defaultManager
@@ -203,7 +202,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
                                                                        versionId:launchTarget[@"id"]];
         lwjgl = lwjglPick.version;
         if (lwjglPick.warning) {
-            showDialog(localize(@"Warning", nil), lwjglPick.warning);
+            NSLog(@"[LWJGL] %@", lwjglPick.warning);
         }
 
         // Setup AME_RENDERER
@@ -221,22 +220,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         }
 
        
-        NSUInteger consecutiveRendererFailures = [RendererCrashTracker consecutiveFailuresForRenderer:renderer];
-        if (consecutiveRendererFailures >= 2) {
-            NSString *message = [NSString stringWithFormat:localize(@"renderer.crash_fallback.message", nil),
-                                  (unsigned long)consecutiveRendererFailures, renderer];
-            showDialog(localize(@"renderer.crash_fallback.title", nil), message);
-        }
-        [RendererCrashTracker recordLaunchAttemptForRenderer:renderer];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [RendererCrashTracker markLaunchStableForRenderer:renderer];
-        });
-
-        if (getPrefBool(@"debug.debug_verbose_graphics_logging")) {
-            setenv("MVK_CONFIG_LOG_LEVEL", "4", 1);
-            setenv("MVK_DEBUG", "1", 1);
-        }
-
         if (isMobileGLRenderer(renderer.UTF8String)) {
             [MobileGLConfig applyEnvironmentFromPreferences];
             NSLog(@"[MobileGLConfig] %@", [MobileGLConfig activeConfigSummary]);
@@ -267,12 +250,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
                 vulkanUnavailable = YES;
                 renderer = @"auto";
                 setenv("AME_RENDERER", "auto", 1);
-                NSString *titleKey = vulkanKind == AME_RENDERER_KOSMICKRISP ? @"renderer.kosmickrisp.unavailable.title"
-                                                                            : @"renderer.moltenvk.unavailable.title";
-                NSString *messageKey = vulkanKind == AME_RENDERER_KOSMICKRISP ? @"renderer.kosmickrisp.unavailable.message"
-                                                                              : @"renderer.moltenvk.unavailable.message";
-                showDialog(localize(titleKey, nil),
-                           [NSString stringWithFormat:localize(messageKey, nil), [NSString stringWithUTF8String:pf.error]]);
             }
         }
 

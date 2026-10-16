@@ -18,13 +18,6 @@ extern char **environ;
         setenv("MESA_SHADER_CACHE_DIR", cacheDir.UTF8String, 1);
     }
 
-    // Verbose graphics logging also sends Mesa's own log to a file the user can attach to a bug report
-    if (getPrefBool(@"debug.debug_verbose_graphics_logging") && home.length
-        && ![custom containsString:@"MESA_LOG_FILE="]) {
-        NSString *logFile = [home stringByAppendingPathComponent:@"kosmickrisp_mesa.log"];
-        setenv("MESA_LOG_FILE", logFile.UTF8String, 1);
-    }
-
     // MESA_VK_ABORT_ON_DEVICE_LOSS is deliberately never set here, it kills the process on
     // device loss and would hide the log we want to read.
 }

@@ -94,14 +94,6 @@
 
 // Login buttons
 "login.menu.sendlogs" = "Send your logs";
-"renderer.crash_fallback.title" = "Repeated Launch Failures";
-"renderer.crash_fallback.message" = "The last %lu launches with %@ didn't finish starting up. If this keeps happening, try switching renderers in Settings → Video and Renderer.";
-"renderer.moltenvk.unavailable.title" = "Vulkan Unavailable";
-"renderer.moltenvk.unavailable.message" = "The MoltenVK renderer could not start on this device: %@. Amethyst switched to Auto for this launch. You can pick another renderer in Settings → Video and Renderer.";
-"renderer.moltenvk.gl_fallback.title" = "Switched to ANGLE";
-"renderer.kosmickrisp.unavailable.title" = "Vulkan Unavailable";
-"renderer.kosmickrisp.unavailable.message" = "The Kosmic Krisp renderer could not start on this device: %@. Amethyst switched to Auto for this launch. You can pick another renderer in Settings → Video and Renderer.";
-"renderer.moltenvk.gl_fallback.message" = "This game asked for OpenGL, which the Vulkan renderer does not provide. Amethyst is using ANGLE for this launch. To change this, pick a renderer in Settings → Video and Renderer.";
 "login.option.add" = "Add account";
 "login.option.select" = "Select account";
 "login.option.demo" = "Demo account";
@@ -195,7 +187,7 @@
 "preference.title.renderer.debug.zink" = "Zink (Mesa 25.0) - exports OpenGL 4.1";
 "preference.title.renderer.debug.mobilegl" = "MobileGL Vulkan (1.17+) - exports OpenGL 4.6, EXPERIMENTAL";
 "preference.title.renderer.debug.moltenvk" = "MoltenVK (Vulkan) - for Minecraft 26.2 and later, EXPERIMENTAL";
-"preference.title.renderer.debug.kosmickrisp" = "Kosmic Krisp (Vulkan) (iOS 26+) - for Minecraft 26.2 and later, EXPERIMENTAL";
+"preference.title.renderer.debug.kosmickrisp" = "Kosmic Krisp (Vulkan) - for Minecraft 26.2 and later, EXPERIMENTAL";
 
 "preference.detail.renderer" = "Change the OpenGL render engine to use. Zink is temporarily disabled on iOS 16 and later to diagnose issues.";
 
@@ -286,8 +278,6 @@
 "preference.title.custom_env" = "Environment variables";
 "preference.detail.custom_env" = "This option is under construction. Create and edit custom_env.txt in the meantime.";
 
-"preference.title.debug_verbose_graphics_logging" = "Verbose graphics logging";
-"preference.detail.debug_verbose_graphics_logging" = "Adds detailed MoltenVK/Vulkan output to latestlog.txt.";
 "preference.title.debug_always_attached_jit" = "Keep attached to StikDebug";
 "preference.detail.debug_always_attached_jit" = "Enable this if your mods require loading .dylib at runtime. When this is on, StikDebug's PiP should not be closed during gameplay.";
 "preference.title.debug_skip_wait_jit" = "Skip \"Waiting for JIT\" dialog";

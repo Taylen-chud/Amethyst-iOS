@@ -44,7 +44,5 @@ void AMVulkanNoteGLFallback(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         NSLog(@"[VulkanBridge] game asked for an OpenGL context, falling back to ANGLE");
-        showDialog(localize(@"renderer.moltenvk.gl_fallback.title", nil),
-                   localize(@"renderer.moltenvk.gl_fallback.message", nil));
     });
 }

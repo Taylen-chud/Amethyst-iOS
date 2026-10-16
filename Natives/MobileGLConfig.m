@@ -9,8 +9,6 @@ static NSArray<NSArray<NSString *> *> *envTable(void) {
         @[@"video.mobilegl_fast_shader_load", @"MOBILEGL_ASYNC_OPTIMISTIC_SHADER_STATUS", @"1"],
         @[@"video.mobilegl_buffer_compat", @"MOBILEGL_COHERENT_AS_FLUSH", @"1"],
         @[@"video.mobilegl_relaxed", @"MOBILEGL_RELAXED_SEMANTICS", @"1"],
-        @[@"debug.debug_verbose_graphics_logging", @"MOBILEGL_ENABLE_SPIRV_VALIDATION", @"1"],
-        @[@"debug.debug_verbose_graphics_logging", @"MOBILEGL_LOG_CONSOLE", @"1"],
     ];
 }
 
