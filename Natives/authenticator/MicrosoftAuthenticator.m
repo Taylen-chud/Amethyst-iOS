@@ -185,7 +185,7 @@ typedef void(^XSTSCallback)(NSString *xsts, NSString *uhs);
             [uuid substringWithRange:NSMakeRange(16, 4)],
             [uuid substringWithRange:NSMakeRange(20, 12)]
         ];
-        self.authData[@"profilePicURL"] = [NSString stringWithFormat:@"https://mc-heads.net/head/%@/120", self.authData[@"profileId"]];
+        self.authData[@"profilePicURL"] = [NSString stringWithFormat:@"https://mc-heads.net/head/%@/120", uuid];
         self.authData[@"oldusername"] = self.authData[@"username"];
         self.authData[@"username"] = response[@"name"];
         callback(nil, [self saveChanges]);
