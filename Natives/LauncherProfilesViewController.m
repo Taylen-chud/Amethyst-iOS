@@ -266,25 +266,4 @@ typedef NS_ENUM(NSUInteger, LauncherProfilesTableSection) {
     return UITableViewCellEditingStyleDelete;
 }
 
-- (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath API_AVAILABLE(ios(11.0)) {
-    if (indexPath.section != kProfiles) return nil;
-
-    UIContextualAction *duplicate = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"Duplicate" handler:^(UIContextualAction *action, __kindof UIView *sourceView, void (^completionHandler)(BOOL)) {
-        NSMutableDictionary *profile = [PLProfiles.current.profiles.allValues[indexPath.row] mutableCopy];
-        NSString *baseName = [profile[@"name"] stringByAppendingString:@" Copy"];
-        NSString *name = baseName;
-        NSUInteger copyNumber = 2;
-        while (PLProfiles.current.profiles[name]) {
-            name = [NSString stringWithFormat:@"%@ %lu", baseName, (unsigned long)copyNumber++];
-        }
-        profile[@"name"] = name;
-        PLProfiles.current.profiles[name] = profile;
-        [PLProfiles.current save];
-        [tableView reloadData];
-        completionHandler(YES);
-    }];
-    duplicate.backgroundColor = UIColor.systemBlueColor;
-    return [UISwipeActionsConfiguration configurationWithActions:@[duplicate]];
-}
-
 @end
