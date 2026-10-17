@@ -138,11 +138,15 @@ add_executable(AngelAuraAmethyst
   installer/FabricInstallViewController.m
   installer/ForgeInstallViewController.m
   installer/ModpackInstallViewController.m
+  installer/ModrinthModsViewController.m
   installer/FabricUtils.m
   installer/modpack/ModpackUtils.m
   installer/modpack/ModpackAPI.m
   installer/modpack/CurseForgeAPI.m
   installer/modpack/ModrinthAPI.m
+  installer/modpack/ModrinthSearchFilters.m
+  installer/modpack/InstalledModsManager.m
+  installer/modpack/ModrinthModInstallation.m
 
   input/ControllerInput.m
   input/GyroInput.m

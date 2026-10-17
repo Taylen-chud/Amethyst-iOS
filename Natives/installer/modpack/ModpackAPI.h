@@ -17,5 +17,11 @@
 - (void)downloader:(MinecraftResourceDownloadTask *)downloader submitDownloadTasksFromPackage:(NSString *)packagePath toPath:(NSString *)destPath;
 
 - (id)getEndpoint:(NSString *)endpoint params:(NSDictionary *)params;
+- (id)postEndpoint:(NSString *)endpoint params:(NSDictionary *)params;
+- (NSDictionary<NSString *, NSString *> *)requestHeaders;
+- (NSArray<NSDictionary *> *)categoriesForContentType:(NSString *)type;
+- (NSArray<NSDictionary *> *)versionsForProject:(NSString *)projectID filters:(NSDictionary *)filters;
 
+- (NSDictionary *)projectForID:(NSString *)projectID;
+- (NSDictionary *)versionForID:(NSString *)versionID projectID:(NSString *)projectID;
 @end
