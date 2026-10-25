@@ -477,6 +477,7 @@ final class SDL3Bridge {
         if (scancode == 0) {
             return;
         }
+        syncKeyboardState(scancode, down, glfwMods);
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
             SDL_Event ev = SDL_Event.calloc(stack);
@@ -485,6 +486,24 @@ final class SDL3Bridge {
                 0L, inputWindowId, 0, scancode, keycodeFor(glfwKey, scancode),
                 (short) sdlMods(glfwMods), (short) 0, down, repeat);
             push(ev);
+        }
+    }
+
+    private static ByteBuffer keyState;
+
+    private static void syncKeyboardState(int scancode, boolean down, int glfwMods) {
+        try {
+            if (keyState == null) {
+                keyState = SDLKeyboard.SDL_GetKeyboardState();
+            }
+            if (keyState != null && scancode >= 0 && scancode < keyState.capacity()) {
+                keyState.put(scancode, (byte) (down ? 1 : 0));
+            }
+            SDLKeyboard.SDL_SetModState((short) sdlMods(glfwMods));
+        } catch (Throwable t) {
+            if (inputErrors++ < 5) {
+                warn("could not sync SDL keyboard state: " + t);
+            }
         }
     }
 

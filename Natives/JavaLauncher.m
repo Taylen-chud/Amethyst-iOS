@@ -196,6 +196,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     AMLWJGLVersion *lwjgl = nil;
     BOOL vulkanUnavailable = NO;
     BOOL gameHasVulkanBackend = NO;
+    BOOL lwjglVersionMismatch = NO;
     NSCAssert(launchTarget, @"Unexpected nil launchTarget");
     if ([launchTarget isKindOfClass:NSDictionary.class]) {
         // Get preferred Java version from current profile
@@ -219,6 +220,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
                                                                        versionId:launchTarget[@"id"]];
         lwjgl = lwjglPick.version;
         if (lwjglPick.warning) {
+            lwjglVersionMismatch = YES;
             NSLog(@"[LWJGL] %@", lwjglPick.warning);
         }
 
@@ -439,6 +441,10 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     }
 
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
+    if (lwjglVersionMismatch) {
+        // Sodium refuses to start when the game asks for a newer LWJGL than the bundled one (#48)
+        margv[++margc] = "-Dsodium.checks.issue2561=false";
+    }
     margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", librariesPath].UTF8String;
     if(getPrefBool(@"general.cosmetica")) {
         margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/arc_dns_injector.jar=23.95.137.176", librariesPath].UTF8String;

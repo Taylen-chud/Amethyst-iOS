@@ -71,11 +71,9 @@ public final class Platform {
     /** Current platform architecture. */
     public static final String ARCH;
 
-    private static final List<Class> matchingClasses = new ArrayList<Class>();
     private static Object stackWalker;
     private static Method stackWalkerGetCaller;
-    private static boolean isMacFoundVoiceChatMod;
-    private static int isMacFindRetries = 10;
+    private static final String[] VOICE_CHAT_PACKAGES = { "de.maxhenkel.voicechat.", "su.plo.voice.", "su.plo.slib." };
 
     static {
         osType = MAC;
@@ -100,7 +98,7 @@ public final class Platform {
             stackWalker = cStackWalker.getMethod("getInstance", cStackWalkerOption).invoke(null, RETAIN_CLASS_REFERENCE);
             stackWalkerGetCaller = cStackWalker.getMethod("getCallerClass");
         } catch (Throwable th) {
-            isMacFindRetries = 0;
+            stackWalker = null;
         }
     }
     private Platform() { }
@@ -108,32 +106,23 @@ public final class Platform {
         return osType;
     }
     public static final boolean isMac() {
-        if (isMacFindRetries <= 0) {
+        // Matching by package name instead of loading the mod classes: the old lookup gave up after 10 calls,
+        // which JNA's own startup uses up before a mod is even loaded, and then every mod was told "Mac" (#31)
+        if (stackWalker == null) {
             return true;
-        } else if (!isMacFoundVoiceChatMod) {
-            isMacFindRetries--;
-            try {
-                matchingClasses.add(Class.forName("de.maxhenkel.voicechat.config.ClientConfig"));
-                matchingClasses.add(Class.forName("de.maxhenkel.voicechat.VoicechatClient"));
-                matchingClasses.add(Class.forName("de.maxhenkel.voicechat.voice.client.microphone,MicrophoneManager"));
-                isMacFoundVoiceChatMod = true;
-            } catch (Throwable th) {}
-            try {
-                matchingClasses.add(Class.forName("su.plo.voice.client.audio.device.VoiceDeviceManager"));
-                isMacFoundVoiceChatMod = true;
-            } catch (Throwable th) {}
         }
- 
-        // All voice chat mods calls this thing and straight out disable OpenAL input
-        // so we must trick them into NOT forcefully disabling it
         try {
             Class caller = (Class)stackWalkerGetCaller.invoke(stackWalker);
-            System.out.println("Platform.isMac called from " + caller.getName());
-            return !matchingClasses.contains(caller);
+            String name = caller.getName();
+            for (String prefix : VOICE_CHAT_PACKAGES) {
+                if (name.startsWith(prefix)) {
+                    return false;
+                }
+            }
         } catch (Throwable e) {
-            // We're calling a public method, this should never happen
-            throw new RuntimeException(e);
+            // fall through, behave like a normal Mac
         }
+        return true;
     }
     public static final boolean isAndroid() {
         return osType == ANDROID;
