@@ -55,6 +55,10 @@ else
 CMAKE_BUILD_TYPE := Debug
 endif
 
+# Swift projects require the Xcode generator; the default Unix Makefiles generator
+# fails on GitHub hosted macOS runners with "Swift language not supported".
+CMAKE_GENERATOR ?= $(if $(filter Darwin,$(DETECTPLAT)),Xcode,Unix Makefiles)
+
 
 # Distinguish iOS from macOS, and *OS from others
 ifeq ($(DETECTPLAT),Darwin)
@@ -278,7 +282,7 @@ check:
 native: dep_mg
 	echo '[Amethyst v$(VERSION)] native - start'
 	mkdir -p $(WORKINGDIR)
-	cd $(WORKINGDIR) && cmake \
+	cd $(WORKINGDIR) && cmake -G "$(CMAKE_GENERATOR)" \
 		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
 		-DCMAKE_CROSSCOMPILING=true \
 		-DCMAKE_SYSTEM_NAME=Darwin \
@@ -330,7 +334,7 @@ jre: native
 dep_mg:
 	echo '[Amethyst v$(VERSION)] dep_mg - start'
 	mkdir -p $(WORKINGDIR)/mobileglues
-	cd $(WORKINGDIR)/mobileglues && cmake \
+	cd $(WORKINGDIR)/mobileglues && cmake -G "$(CMAKE_GENERATOR)" \
 		-DMACOS="1" \
 		-DCMAKE_CROSSCOMPILING=true \
 		-DCMAKE_SYSTEM_NAME=Darwin \
@@ -357,7 +361,7 @@ dep_mobilegl:
 	fi
 	python3 $(SOURCEDIR)/Natives/patch_mobilegl.py $(MOBILEGL_SOURCE_DIR)
 	mkdir -p $(WORKINGDIR)/mobilegl
-	cd $(WORKINGDIR)/mobilegl && cmake \
+	cd $(WORKINGDIR)/mobilegl && cmake -G "$(CMAKE_GENERATOR)" \
 		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
 		-DCMAKE_CROSSCOMPILING=true \
 		-DCMAKE_SYSTEM_NAME=Darwin \
@@ -497,8 +501,11 @@ deploy:
 package: payload
 	echo '[Amethyst v$(VERSION)] package - start'
 	if [ '$(TEAMID)' != '-1' ] && [ '$(SIGNING_TEAMID)' != '-1' ] && [ -f '$(PROVISIONING)' ] && [ '$(DETECTPLAT)' = 'Darwin' ]; then \
-		printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n	<key>application-identifier</key>\n	<string>$(TEAMID).org.angelauramc.amethyst</string>\n	<key>com.apple.developer.team-identifier</key>\n	<string>$(TEAMID)</string>\n	<key>get-task-allow</key>\n	<true/>\n	<key>keychain-access-groups</key>\n	<array>\n	<string>$(TEAMID).*</string>\n	<string>com.apple.token</string>\n	</array>\n	<key>com.apple.developer.kernel.extended-virtual-addressing</key>\n	<true/>\n	<key>com.apple.developer.kernel.increased-memory-limit</key>\n	<true/>\n</dict>\n</plist>' > entitlements.codesign.xml; \
-		rm -rf entitlements.codesign.xml; \
+		printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n\t<key>application-identifier</key>\n\t<string>$(TEAMID).org.angelauramc.amethyst</string>\n\t<key>com.apple.developer.team-identifier</key>\n\t<string>$(TEAMID)</string>\n\t<key>keychain-access-groups</key>\n\t<array>\n\t\t<string>$(TEAMID).org.angelauramc.amethyst</string>\n\t</array>\n</plist>\n' > entitlements.codesign.xml; \
+		printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n\t<key>application-identifier</key>\n\t<string>$(TEAMID).org.angelauramc.amethyst</string>\n\t<key>com.apple.developer.team-identifier</key>\n\t<string>$(TEAMID)</string>\n\t<key>keychain-access-groups</key>\n\t<array>\n\t\t<string>$(TEAMID).org.angelauramc.amethyst</string>\n\t</array>\n</plist>\n' > $(OUTPUTDIR)/Payload/AngelAuraAmethyst.app/embedded.mobileprovision; \
+		chmod 644 $(OUTPUTDIR)/Payload/AngelAuraAmethyst.app/embedded.mobileprovision; \
+		chmod 644 entitlements.codesign.xml; \
+		mv entitlements.codesign.xml $(OUTPUTDIR)/Payload/AngelAuraAmethyst.app/embedded.mobileprovision; \
 	else \
 		echo 'Skipped codesigning. If not intentional, check your variables.'; \
 	fi
@@ -507,6 +514,7 @@ package: payload
 	zip --symlinks -r $(OUTPUTDIR)/java_runtimes.zip java_runtimes; \
 	echo '[Amethyst v$(VERSION)] package - end'
 	
+
 dsym: payload
 	echo '[Amethyst v$(VERSION)] dsym - start'
 	dsymutil --arch arm64 $(OUTPUTDIR)/Payload/AngelAuraAmethyst.app/AngelAuraAmethyst; \
