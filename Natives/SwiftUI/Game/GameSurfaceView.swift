@@ -16,7 +16,7 @@ class GameSurfaceView: UIView {
     }
 
     override class var layerClass: AnyClass {
-        let renderer = PLProfiles.resolveKeyForCurrentProfile("renderer") as? String
+        let renderer = PLProfiles.resolveKey(forCurrentProfile: "renderer") as? String
         if let renderer = renderer, ame_renderer_from_name(renderer) == AME_RENDERER_ZINK {
             return CALayer.self
         } else {
