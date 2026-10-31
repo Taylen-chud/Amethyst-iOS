@@ -3,7 +3,6 @@
 #import <sys/sysctl.h>
 #import <UIKit/UIKit.h>
 
-#import "AppDelegate.h"
 #import "customcontrols/CustomControlsUtils.h"
 #import "HostManagerBridge.h"
 #import "JavaLauncher.h"
@@ -302,13 +301,6 @@ int main(int argc, char *argv[]) {
     init_hookFunctions();
     init_hookUIKitConstructor();
 
-     // Track foreground/background state so the render thread can pause while the
-    // app is inactive or in the background. Metal rejects command buffer
-    // submissions from the background
-    // (kIOGPUCommandBufferCallbackErrorBackgroundExecutionNotPermitted), which
-    // MoltenVK converts into VK_ERROR_DEVICE_LOST and which crashes the Zink /
-    // OSMesa renderer. We start foregrounded and let the notifications drive it;
-    // the swap bridges block on pojavWaitForAppForeground() while it's NO.
     pojavSetAppForeground(YES);
     static id resignActiveObserver;
     static id didBecomeActiveObserver;
@@ -353,6 +345,6 @@ int main(int argc, char *argv[]) {
     }
 
     @autoreleasepool {
-        return UIApplicationMain(argc, argv, nil, NSStringFromClass([AppDelegate class]));
+        return UIApplicationMain(argc, argv, nil, @"AppDelegate");
     }
 }

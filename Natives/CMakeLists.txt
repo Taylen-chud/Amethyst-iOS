@@ -1,10 +1,23 @@
 cmake_minimum_required(VERSION 3.6)
-project(AngelAuraAmethyst)
+project(AngelAuraAmethyst LANGUAGES C CXX OBJC OBJCXX Swift)
 
 configure_file(${CMAKE_CURRENT_LIST_DIR}/config.h.in ${CMAKE_CURRENT_LIST_DIR}/config.h)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -target arm64-apple-ios -mcpu=apple-a8 -fcommon -fobjc-arc -ObjC -F'${CMAKE_OSX_SYSROOT}/System/Cryptexes/OS/System/Library/Frameworks'")
 set(CMAKE_C_FLAGS_DEBUG "-funwind-tables -g")
+
+# Swift configuration
+set(CMAKE_Swift_FLAGS "${CMAKE_Swift_FLAGS} -target arm64-apple-ios -Xcc -fobjc-arc -Xcc -ObjC")
+set(CMAKE_Swift_FLAGS_DEBUG "-g")
+set(CMAKE_XCODE_ATTRIBUTE_SWIFT_VERSION "5.9")
+set(CMAKE_XCODE_ATTRIBUTE_SWIFT_OBJC_BRIDGING_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/Amethyst-Bridging-Header.h")
+set(CMAKE_XCODE_ATTRIBUTE_SWIFT_OPTIMIZATION_LEVEL "-Onone")
+
+# Disable code signing for Xcode generator (uses ldid for sideloading instead)
+set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO")
+set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO")
+set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "")
+set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Manual")
 
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux|^GNU$|Android")
   set(GLOBAL_LDFLAGS "-isysroot ${CMAKE_OSX_SYSROOT} -Wl,-syslibroot,${CMAKE_OSX_SYSROOT} -fuse-ld=lld")
@@ -27,6 +40,10 @@ include_directories(
   "external/ballpa1n"
   "external/ballpa1n/wrapped"
   "external/mach"
+  "installer"
+  "installer/modpack"
+  "customcontrols"
+  "input"
 )
 
 # For cacio support library
@@ -82,6 +99,8 @@ add_library(AFNetworking SHARED
   external/AFNetworking/UIKit+AFNetworking/UIImageView+AFNetworking.m
 )
 
+target_compile_options(AFNetworking PRIVATE -fobjc-arc)
+
 target_link_libraries(AFNetworking
   "-framework CoreGraphics"
   "-framework CoreServices"
@@ -96,6 +115,9 @@ add_library(AmethystAccountJNI SHARED
 )
 
 target_link_libraries(AmethystAccountJNI)
+
+# The whole launcher UI is Swift (SwiftUI/**). Everything else in this target is the Obj-C core.
+file(GLOB_RECURSE SWIFT_UI_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/SwiftUI/*.swift")
 
 # Angel Aura Amethyst
 add_executable(AngelAuraAmethyst
@@ -135,10 +157,6 @@ add_executable(AngelAuraAmethyst
   external/ballpa1n/wrapped/HostManagerBridge.m
   external/mach/mach_excServer.c
 
-  installer/FabricInstallViewController.m
-  installer/ForgeInstallViewController.m
-  installer/ModpackInstallViewController.m
-  installer/ModrinthModsViewController.m
   installer/FabricUtils.m
   installer/modpack/ModpackUtils.m
   installer/modpack/ModpackAPI.m
@@ -152,48 +170,27 @@ add_executable(AngelAuraAmethyst
   input/GyroInput.m
   input/KeyboardInput.m
 
-  AccountListViewController.m
-  AppDelegate.m
-  CustomControlsViewController.m
-  CustomControlsViewController+UndoManager.m
-  DownloadProgressViewController.m
-  FileListViewController.m
-  GameSurfaceView.m
-  JavaGUIViewController.m
-  LauncherMenuViewController.m
-  LauncherNavigationController.m
-  LauncherNewsViewController.m
-  LauncherPreferences.m
-  LauncherPreferencesViewController.m
-  LauncherPrefContCfgViewController.m
-  LauncherPrefGameDirViewController.m
-  LauncherPrefManageJREViewController.m
-  LauncherProfileEditorViewController.m
-  LauncherProfilesViewController.m
-  LauncherSplitViewController.m
+  SurfaceGlobals.m
+  TrackedTextField.m
+  AWTInputBridge.m
+  ObjCExceptionCatcher.m
+  JavaRuntimeExtractor.m
+
   MinecraftOptionUtils.m
   MinecraftResourceDownloadTask.m
   MinecraftResourceUtils.m
   MobileGLConfig.m
-  PickTextField.m
-  PLLogOutputView.m
-  PLPickerView.m
+  LauncherPreferences.m
   PLPreferences.m
-  PLPrefTableViewController.m
   PLProfiles.m
   RendererCrashTracker.m
-  SceneDelegate.m
-  SceneExternalDelegate.m
-  SurfaceViewController.m
-  SurfaceViewController+ExternalDisplay.m
-  SurfaceViewController+LogView.m
-  SurfaceViewController+Navigation.m
-  TrackedTextField.m
   egl_bridge.m
   ZinkConfig.m
   input_bridge_v3.m
   ios_uikit_bridge.m
   utils.m
+
+  ${SWIFT_UI_SOURCES}
 )
 
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux|^GNU$|Android")

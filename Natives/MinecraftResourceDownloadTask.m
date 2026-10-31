@@ -265,6 +265,10 @@
 
 #pragma mark - Modpack installation
 
+- (void)startModpackInstall:(id)api detail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion {
+    [self downloadModpackFromAPI:(ModpackAPI *)api detail:modDetail atIndex:selectedVersion];
+}
+
 - (void)downloadModpackFromAPI:(ModpackAPI *)api detail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion {
     [self prepareForDownload];
 

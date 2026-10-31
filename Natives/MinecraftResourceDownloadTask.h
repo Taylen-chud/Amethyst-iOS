@@ -13,5 +13,7 @@
 
 - (void)downloadVersion:(NSDictionary *)version;
 - (void)downloadModpackFromAPI:(ModpackAPI *)api detail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion;
+// Same as above, but takes the API object as `id` so Swift can call it without importing ModpackAPI.h
+- (void)startModpackInstall:(id)api detail:(NSDictionary *)modDetail atIndex:(NSUInteger)selectedVersion;
 
 @end

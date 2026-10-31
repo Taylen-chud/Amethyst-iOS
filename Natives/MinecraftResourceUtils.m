@@ -7,6 +7,9 @@
 #import "ios_uikit_bridge.h"
 #import "utils.h"
 
+// Declared in LauncherVersionLists.h
+NSMutableArray<NSDictionary *> *localVersionList, *remoteVersionList;
+
 @implementation MinecraftResourceUtils
 
 // Handle inheritsFrom

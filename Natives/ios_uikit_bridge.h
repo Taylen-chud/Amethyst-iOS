@@ -13,4 +13,8 @@ void UIKit_launchMinecraftSurfaceVC(UIWindow *window, NSDictionary *metadata);
 void UIKit_returnToSplitView();
 void launchInitialViewController(UIWindow *window);
 
-void AWTInputBridge_sendKey(int keycode);
+// Called from the Swift SceneDelegate / AppDelegate
+void setMainWindow(UIWindow *window);
+void setExternalWindow(UIWindow *window);
+void leaveFatalExitGroup(void);
+

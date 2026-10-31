@@ -1,3 +1,5 @@
+#pragma once
+
 #import <MetalKit/MetalKit.h>
 #import <UIKit/UIKit.h>
 

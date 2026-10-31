@@ -1,15 +1,41 @@
 #import "authenticator/BaseAuthenticator.h"
-#import "AppDelegate.h"
-#import "SceneDelegate.h"
 #import "LauncherNavigationController.h"
 #import "LauncherPreferences.h"
-#import "LauncherSplitViewController.h"
 #import "PLLogOutputView.h"
 #import "SurfaceViewController.h"
 
 #include <objc/runtime.h>
 #include "ios_uikit_bridge.h"
 #include "utils.h"
+
+// LauncherSplitViewController is written in Swift, look it up by its Obj-C runtime name
+static Class LauncherSplitViewControllerClass(void) {
+    return NSClassFromString(@"LauncherSplitViewController");
+}
+
+static UIViewController *newLauncherSplitViewController(void) {
+    return [[LauncherSplitViewControllerClass() alloc] initWithStyle:UISplitViewControllerStyleDoubleColumn];
+}
+
+// Defined in UIKit+hook.m
+extern __weak UIWindow *mainWindow;
+
+extern __weak UIWindow *externalWindow;
+
+void setMainWindow(UIWindow *window) {
+    mainWindow = window;
+}
+
+void setExternalWindow(UIWindow *window) {
+    externalWindow = window;
+}
+
+void leaveFatalExitGroup(void) {
+    if (fatalExitGroup != nil) {
+        dispatch_group_leave(fatalExitGroup);
+        fatalExitGroup = nil;
+    }
+}
 
 void internal_showDialog(NSString* title, NSString* message) {
     NSLog(@"[UI] Dialog shown: %@: %@", title, message);
@@ -131,7 +157,7 @@ void UIKit_returnToSplitView() {
         UIWindow *window = UIWindow.mainWindow;
 
         // Return from JavaGUIViewController
-        if ([window.rootViewController isKindOfClass:LauncherSplitViewController.class]) {
+        if ([window.rootViewController isKindOfClass:LauncherSplitViewControllerClass()]) {
             [currentVC() dismissViewControllerAnimated:YES completion:nil];
             return;
         }
@@ -146,7 +172,7 @@ void UIKit_returnToSplitView() {
                 window.rootViewController = tmpRootVC;
                 tmpRootVC = nil;
             } else {
-                window.rootViewController = [[LauncherSplitViewController alloc] initWithStyle:UISplitViewControllerStyleDoubleColumn];
+                window.rootViewController = newLauncherSplitViewController();
             }
             [window makeKeyAndVisible];
         }];
@@ -154,12 +180,12 @@ void UIKit_returnToSplitView() {
 }
 
 void launchInitialViewController(UIWindow *window) {
-    window.rootViewController = [[LauncherSplitViewController alloc] initWithStyle:UISplitViewControllerStyleDoubleColumn];
+    window.rootViewController = newLauncherSplitViewController();
 #if 0
     if (getPrefBool(@"internal.internal_launch_on_boot")) {
         window.rootViewController = [[SurfaceViewController alloc] init];
     } else {
-        window.rootViewController = [[LauncherSplitViewController alloc] initWithStyle:UISplitViewControllerStyleDoubleColumn];
+        window.rootViewController = newLauncherSplitViewController();
     }
 #endif
 }
