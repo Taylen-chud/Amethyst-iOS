@@ -334,7 +334,7 @@ jre: native
 dep_mg:
 	echo '[Amethyst v$(VERSION)] dep_mg - start'
 	mkdir -p $(WORKINGDIR)/mobileglues
-	cd $(WORKINGDIR)/mobileglues && cmake -G "$(CMAKE_GENERATOR)" \
+	cd $(WORKINGDIR)/mobileglues && cmake -G "Unix Makefiles" \
 		-DMACOS="1" \
 		-DCMAKE_CROSSCOMPILING=true \
 		-DCMAKE_SYSTEM_NAME=Darwin \
@@ -361,7 +361,7 @@ dep_mobilegl:
 	fi
 	python3 $(SOURCEDIR)/Natives/patch_mobilegl.py $(MOBILEGL_SOURCE_DIR)
 	mkdir -p $(WORKINGDIR)/mobilegl
-	cd $(WORKINGDIR)/mobilegl && cmake -G "$(CMAKE_GENERATOR)" \
+	cd $(WORKINGDIR)/mobilegl && cmake -G "Unix Makefiles" \
 		-DCMAKE_BUILD_TYPE=$(CMAKE_BUILD_TYPE) \
 		-DCMAKE_CROSSCOMPILING=true \
 		-DCMAKE_SYSTEM_NAME=Darwin \
