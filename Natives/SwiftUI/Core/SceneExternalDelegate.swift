@@ -16,13 +16,13 @@ class SceneExternalDelegate: UIResponder, UIWindowSceneDelegate {
         setExternalWindow(window)
 
         if SurfaceViewController.isRunning && getPrefBool("video.fullscreen_airplay") {
-            (UIWindow.mainWindow()?.rootViewController as? SurfaceViewController)?.switchToExternalDisplay()
+            (UIWindow.main()?.rootViewController as? SurfaceViewController)?.switchToExternalDisplay()
         }
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
         if SurfaceViewController.isRunning && getPrefBool("video.fullscreen_airplay") {
-            (UIWindow.mainWindow()?.rootViewController as? SurfaceViewController)?.switchToInternalDisplay()
+            (UIWindow.main()?.rootViewController as? SurfaceViewController)?.switchToInternalDisplay()
         }
     }
 }
