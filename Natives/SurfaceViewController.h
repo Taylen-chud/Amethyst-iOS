@@ -1,7 +1,9 @@
 #pragma once
 
 #import <UIKit/UIKit.h>
+#import "UIKit+hook.h"
 
+#import "customcontrols/ControlLayout.h"
 #import "GameSurfaceView.h"
 #import "PLLogOutputView.h"
 #import "SurfaceGlobals.h"
