@@ -3,11 +3,11 @@ project(AngelAuraAmethyst LANGUAGES C CXX OBJC OBJCXX Swift)
 
 configure_file(${CMAKE_CURRENT_LIST_DIR}/config.h.in ${CMAKE_CURRENT_LIST_DIR}/config.h)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -target arm64-apple-ios -mcpu=apple-a8 -fcommon -fobjc-arc -ObjC -F'${CMAKE_OSX_SYSROOT}/System/Cryptexes/OS/System/Library/Frameworks'")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -target arm64-apple-ios14.0 -mcpu=apple-a8 -fcommon -fobjc-arc -ObjC -F'${CMAKE_OSX_SYSROOT}/System/Cryptexes/OS/System/Library/Frameworks'")
 set(CMAKE_C_FLAGS_DEBUG "-funwind-tables -g")
 
 # Swift configuration
-set(CMAKE_Swift_FLAGS "${CMAKE_Swift_FLAGS} -target arm64-apple-ios -Xcc -fobjc-arc -Xcc -ObjC")
+set(CMAKE_Swift_FLAGS "${CMAKE_Swift_FLAGS} -target arm64-apple-ios14.0 -Xcc -fobjc-arc -Xcc -ObjC")
 set(CMAKE_Swift_FLAGS_DEBUG "-g")
 set(CMAKE_XCODE_ATTRIBUTE_SWIFT_VERSION "5.9")
 set(CMAKE_XCODE_ATTRIBUTE_SWIFT_OBJC_BRIDGING_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/Amethyst-Bridging-Header.h")
