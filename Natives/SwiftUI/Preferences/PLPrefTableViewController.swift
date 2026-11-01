@@ -1,6 +1,14 @@
 import UIKit
 import ObjectiveC
 
+// MARK: - Row model
+
+/// One row of a preference table.
+///
+/// Replaces the `NSDictionary` rows of the old Obj-C `PLPrefTableViewController`
+/// (`@"type"`, `@"key"`, `@"icon"`, ...). Every field has a default, so a row only spells out what it uses.
+/// The first row of every section is a header row when `prefSections` is set; it only needs an icon:
+/// `PrefItem(icon: "cube")`.
 struct PrefItem {
     enum Kind {
         case none          // header rows

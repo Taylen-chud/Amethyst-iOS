@@ -1,6 +1,14 @@
 import Foundation
 import UIKit
 
+// Small Swift-side helpers. Everything the Obj-C core already exports
+// (localize, getPrefObject, setPrefObject, getPrefBool, showDialog, openLink,
+// isJITEnabled, getEntitlementValue, setButtonPointerInteraction, ...) comes in
+// through Amethyst-Bridging-Header.h, so it is NOT redeclared here. Redeclaring
+// those with @_silgen_name uses the Swift calling convention, not the C one,
+// and corrupts arguments at runtime.
+
+// MARK: - Localization
 
 /// Single-argument convenience over the Obj-C `localize(key, comment)` in utils.h.
 func localize(_ key: String) -> String {

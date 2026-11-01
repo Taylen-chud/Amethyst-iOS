@@ -1,5 +1,7 @@
 import UIKit
 
+/// Popover that hosts the text field's input view (the picker) on iOS 26 / Mac Catalyst,
+/// where the keyboard-style input view is not shown.
 private class PickViewController: UIViewController {
     weak var textField: UITextField?
 

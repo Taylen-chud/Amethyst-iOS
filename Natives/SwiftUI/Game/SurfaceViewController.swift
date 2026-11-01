@@ -2,6 +2,12 @@ import UIKit
 import AVFoundation
 import GameController
 
+// The in-game screen: the surface the renderer draws into, touch / mouse / keyboard / gamepad input,
+// the on-screen control buttons, the slide-out game menu, the log overlay and the AirPlay switch.
+//
+// Merges SurfaceViewController.m and its Navigation / LogView / ExternalDisplay categories. The Obj-C core
+// reaches this class through SurfaceViewController.h (declarations only), so the Obj-C selectors below
+// must keep their names.
 
 private let MEMORYSTATUS_CMD_SET_JETSAM_TASK_LIMIT: UInt32 = 6
 
@@ -91,7 +97,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
     }
 
     static var isRunning: Bool {
-        return UIWindow.mainWindow()?.rootViewController is SurfaceViewController
+        return UIWindow.main()?.rootViewController is SurfaceViewController
     }
 
     @objc(initWithMetadata:)
@@ -378,7 +384,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
         mousePointerView.frame = virtualMouseFrame
 
         shouldHideControlsFromRecording = getPrefFloat("control.recording_hide") != 0
-        ctrlView.hideViewFromCapture(shouldHideControlsFromRecording)
+        ctrlView.hideView(fromCapture: shouldHideControlsFromRecording)
         ctrlView.frame = getSafeArea(view.frame)
 
         // Update gestures state
@@ -517,7 +523,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
     func loadCustomControls() {
         edgeGesture.isEnabled = true
         swipeableButtons.removeAll()
-        let controlFile = PLProfiles.resolveKeyForCurrentProfile("defaultTouchCtrl") as? String
+        let controlFile = PLProfiles.resolveKey(forCurrentProfile: "defaultTouchCtrl") as? String
         ctrlView.loadControlFile(controlFile)
 
         var menuButton: ControlButton?
@@ -1143,7 +1149,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
         noteLabel.text = localize("game.note.airplay")
         touchView.addSubview(noteLabel)
 
-        let secondWindow = UIWindow.externalWindow()
+        let secondWindow = UIWindow.external()
         secondWindow?.rootViewController = UIViewController()
         secondWindow?.rootViewController?.view.addSubview(surfaceView)
         secondWindow?.rootViewController?.view.addSubview(mousePointerView)
@@ -1156,7 +1162,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
         surfaceView.removeFromSuperview()
         mousePointerView.removeFromSuperview()
 
-        let secondWindow = UIWindow.externalWindow()
+        let secondWindow = UIWindow.external()
         secondWindow?.isHidden = true
 
         touchView.subviews[0].removeFromSuperview()
@@ -1303,7 +1309,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
             }
         }
         vc.getDefaultCtrl = {
-            return (PLProfiles.resolveKeyForCurrentProfile("defaultTouchCtrl") as? String) ?? ""
+            return (PLProfiles.resolveKey(forCurrentProfile: "defaultTouchCtrl") as? String) ?? ""
         }
         present(vc, animated: false, completion: nil)
     }

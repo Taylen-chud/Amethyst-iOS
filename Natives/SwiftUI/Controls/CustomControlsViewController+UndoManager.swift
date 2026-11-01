@@ -1,5 +1,8 @@
 import UIKit
 
+// Undo/redo for the controls editor. Port of CustomControlsViewController+UndoManager.m.
+// The Obj-C version used prepareWithInvocationTarget:, which Swift cannot call, so the same registrations are
+// done with registerUndo(withTarget:handler:).
 
 extension CustomControlsViewController {
     private func list(_ key: String) -> NSMutableArray? {

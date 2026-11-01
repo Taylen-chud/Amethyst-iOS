@@ -12,6 +12,9 @@ class LauncherMenuCustomItem {
         self.action = action
     }
 
+    /// Builds a sidebar entry from a view controller class. The controller is created once and
+    /// kept in `vcArray` so it keeps its state while the user switches between entries.
+    /// Both the Obj-C and the Swift controllers expose `imageName` as a method, so ask by selector.
     static func vcClass(_ vcClass: UIViewController.Type) -> LauncherMenuCustomItem {
         let vc = vcClass.init()
         let selector = NSSelectorFromString("imageName")
@@ -277,8 +280,8 @@ class LauncherMenuViewController: UITableViewController, UIPopoverPresentationCo
     }
 
     func enableJITWithAltKit() {
-        ALTServerManager.sharedManager().startDiscovering()
-        ALTServerManager.sharedManager().autoconnect(completionHandler: { [weak self] connection, error in
+        ALTServerManager.shared().startDiscovering()
+        ALTServerManager.shared().autoconnect(completionHandler: { [weak self] connection, error in
             guard let self = self else { return }
             if let error = error {
                 NSLog("[AltKit] Could not auto-connect to server. %@", (error as NSError).localizedRecoverySuggestion ?? error.localizedDescription)
@@ -290,7 +293,7 @@ class LauncherMenuViewController: UITableViewController, UIPopoverPresentationCo
                 guard let self = self else { return }
                 if success {
                     NSLog("[AltKit] Successfully enabled JIT compilation!")
-                    ALTServerManager.sharedManager().stopDiscovering()
+                    ALTServerManager.shared().stopDiscovering()
                     self.displayProgress(localize("login.jit.enabled"))
                     self.displayProgress(nil)
                 } else {
@@ -362,7 +365,7 @@ class LauncherMenuViewController: UITableViewController, UIPopoverPresentationCo
         }
 
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-        let renderer = PLProfiles.resolveKeyForCurrentProfile("renderer") ?? ""
+        let renderer = PLProfiles.resolveKey(forCurrentProfile: "renderer") ?? ""
         var info = ""
         info += "Amethyst version: \(version)-\(CONFIG_TYPE)\n"
         info += "Commit: \(CONFIG_COMMIT) (\(CONFIG_BRANCH))\n"

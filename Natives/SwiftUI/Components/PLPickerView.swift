@@ -7,6 +7,12 @@ protocol PLPickerViewDelegate: UIPickerViewDelegate {
     func pickerView(_ pickerView: PLPickerView, enumerateImageView imageView: UIImageView, forRow row: Int, forComponent component: Int)
 }
 
+/// UIPickerView that can show an image next to every row.
+///
+/// UIPickerView renders its rows through a private table view and calls
+/// `-tableView:cellForRowAtIndexPath:` on itself. Swift has no way to say `override` for a method that is
+/// not in the public interface, so this class defines the same selector, which replaces the superclass
+/// implementation at runtime, and calls the superclass implementation by hand.
 @objc(PLPickerView)
 @objcMembers
 class PLPickerView: UIPickerView {

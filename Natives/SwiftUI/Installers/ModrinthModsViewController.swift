@@ -1,6 +1,14 @@
 import UIKit
 import ObjectiveC
 
+// Port of ModrinthModsViewController.m (mods / resource packs / shader packs browser), with its helper classes.
+//
+// The content API layer (ModrinthAPI, CurseForgeAPI, ModrinthSearchFilters, ModrinthModInstallation,
+// InstalledModsManager) stays Obj-C. Its selectors are called through the IMP helpers below, with the exact
+// selectors the Obj-C code used, so no Swift import name has to be guessed.
+
+// MARK: - Obj-C selector helpers
+
 private func mrLookup(_ target: AnyObject, _ selector: String) -> (imp: IMP, sel: Selector)? {
     let sel = NSSelectorFromString(selector)
     guard let cls = object_getClass(target), let method = class_getInstanceMethod(cls, sel) else {
@@ -480,7 +488,7 @@ private final class ModrinthVersionsViewController: UITableViewController {
         title = mrString(project["title"])
         tableView.rowHeight = UITableView.automaticDimension
         tableView.estimatedRowHeight = 72
-        NotificationCenter.default.addObserver(self, selector: #selector(profileChanged(_:)), name: PLProfilesDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(profileChanged(_:)), name: .PLProfilesDidChange, object: nil)
         refreshContext()
     }
 
@@ -819,7 +827,7 @@ class ModrinthModsViewController: UITableViewController, UISearchBarDelegate {
         tableView.rowHeight = UITableView.automaticDimension
         tableView.estimatedRowHeight = 80
         NotificationCenter.default.addObserver(self, selector: #selector(providerConfigurationChanged(_:)), name: NSNotification.Name("CurseForgeConfigurationDidChange"), object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(profileChanged(_:)), name: PLProfilesDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(profileChanged(_:)), name: .PLProfilesDidChange, object: nil)
         refreshProfile()
         refreshProviderAvailability()
     }

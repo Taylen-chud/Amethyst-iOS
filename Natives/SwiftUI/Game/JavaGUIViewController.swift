@@ -317,7 +317,7 @@ class JavaGUIViewController: UIViewController, UIGestureRecognizerDelegate, UITe
                                    "${margin}", "${bottom} - ${margin}"))
         controlList.add(makeButton("SEC", Int32(SPECIALBTN_MOUSESEC),
                                    "${margin} * 2 + ${width}", "${bottom} - ${margin}"))
-        ctrlView.loadControlLayout(dict)
+        ctrlView.load(dict)
 
         // Implement a subset of custom controls functionalites enough for few buttons
         for case let button as ControlButton in ctrlView.subviews {

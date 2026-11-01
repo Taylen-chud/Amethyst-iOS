@@ -1,6 +1,13 @@
 import UIKit
 import UniformTypeIdentifiers
 
+// Obj-C code (installers, the JRE manager, preferences) talks to this class through
+// LauncherNavigationController.h and by selector, so every member is exposed and the
+// runtime name has no module prefix.
+//
+// localVersionList / remoteVersionList are C globals shared with MinecraftResourceUtils.m,
+// MinecraftResourceDownloadTask.m and friends (declared in LauncherVersionLists.h), so they are
+// used here directly instead of being copied into Swift properties.
 @objc(LauncherNavigationController)
 @objcMembers
 class LauncherNavigationController: UINavigationController, UIDocumentPickerDelegate, UIPickerViewDataSource, PLPickerViewDelegate, UIPopoverPresentationControllerDelegate {
@@ -74,7 +81,7 @@ class LauncherNavigationController: UINavigationController, UIDocumentPickerDele
         reloadProfileList()
 
         versionTextField.inputView = versionPickerView
-        versionTextField.setupDoneButton(withTarget: self, action: #selector(versionClosePicker))
+        versionTextField.setupDoneButton(target: self, action: #selector(versionClosePicker))
 
         var textFieldContainer: UIView? = nil
         if liquidGlass {
@@ -309,7 +316,7 @@ class LauncherNavigationController: UINavigationController, UIDocumentPickerDele
         let versionId = (profilesDict[versionTextField.text ?? ""] as? NSDictionary)?["lastVersionId"] as? String ?? ""
         var object: NSDictionary? = nil
         if let list = remoteVersionList {
-            for item in list where (item["id"] as? String) == versionId {
+            for case let item as NSDictionary in list where (item["id"] as? String) == versionId {
                 object = item
                 break
             }
@@ -432,7 +439,7 @@ class LauncherNavigationController: UINavigationController, UIDocumentPickerDele
                     self?.progressVC = nil
                 }
             }
-            newTask.startModpackInstall(api, detail: detail, atIndex: index)
+            newTask.startModpackInstall(api, detail: detail, at: index)
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.progressViewMain.observedProgress = newTask.progress
@@ -450,7 +457,7 @@ class LauncherNavigationController: UINavigationController, UIDocumentPickerDele
         let bundleId = Bundle.main.bundleIdentifier ?? ""
 
         if isJITEnabled(false) {
-            ALTServerManager.sharedManager().stopDiscovering()
+            ALTServerManager.shared().stopDiscovering()
             handler()
             return
         } else if hasTrollStoreJIT {
@@ -509,7 +516,7 @@ class LauncherNavigationController: UINavigationController, UIDocumentPickerDele
 
     func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
         profileSelectedAt = row
-        (versionTextField.leftView as? UIImageView)?.image = (pickerView as? PLPickerView)?.imageAtRow(row, column: component)
+        (versionTextField.leftView as? UIImageView)?.image = (pickerView as? PLPickerView)?.image(atRow: row, column: component)
         versionTextField.text = self.pickerView(pickerView, titleForRow: row, forComponent: component)
         PLProfiles.current().setSelectedProfileName(versionTextField.text ?? "")
     }

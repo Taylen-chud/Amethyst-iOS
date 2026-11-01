@@ -1,6 +1,9 @@
 import UIKit
 import ObjectiveC
 
+// WFWorkflowProgressView is a private class of WorkflowUIServices that is loaded with dlopen at runtime.
+// It is never linked, so Swift must never name the type (that would reference a class symbol that does not
+// exist). It is created with NSClassFromString and driven through KVC and selectors.
 
 private let cellProgressContext = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
 private let totalProgressContext = UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1)
@@ -8,7 +11,7 @@ private let totalProgressContext = UnsafeMutableRawPointer.allocate(byteCount: 1
 private var cellAssociationKey: UInt8 = 0       // NSProgress -> UITableViewCell showing it
 private var progressAssociationKey: UInt8 = 0   // UITableViewCell -> NSProgress it shows
 
-
+/// Weak holder, the Obj-C code used OBJC_ASSOCIATION_ASSIGN for the cell -> progress link.
 private final class WeakProgress {
     weak var progress: Progress?
     init(_ progress: Progress) { self.progress = progress }
@@ -41,6 +44,8 @@ class DownloadProgressViewController: UITableViewController {
     var task: MinecraftResourceDownloadTask!
 
     private var fileListCount = 0
+    /// Progress objects this controller is observing, with how many times. Removing an observer that was never
+    /// added throws an Obj-C exception that Swift cannot catch (the original used @try), so keep count.
     private var cellObservations: [(progress: Progress, count: Int)] = []
     private var observingTotal = false
 
