@@ -44,7 +44,7 @@ class LauncherNewsViewController: UIViewController, WKNavigationDelegate {
         webView.load(request)
         view.addSubview(webView)
 
-        if !isJailbroken && getPrefBool("warnings.limited_ram_warn") && (roundf(Float(ProcessInfo.processInfo.physicalMemory) / 0x1000000) < 3900) {
+        if !jailbroken && getPrefBool("warnings.limited_ram_warn") && (roundf(Float(ProcessInfo.processInfo.physicalMemory) / 0x1000000) < 3900) {
             // "This device has a limited amount of memory available."
             showWarningAlert(key: "limited_ram", hasPreference: true, exitWhenCompleted: false)
         }

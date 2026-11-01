@@ -182,7 +182,7 @@ class AccountListViewController: UITableViewController, UIPopoverPresentationCon
                 controller.message = localize("login.error.username.outOfRange")
                 self.present(controller, animated: true)
             } else {
-                let authenticator = LocalAuthenticator(input: username)
+                guard let authenticator = LocalAuthenticator(input: username) else { return }
                 callAuthenticator(authenticator, "loginWithCallback:") { [weak self] _, _ in
                     // The Obj-C code ran this on whatever thread the authenticator called back on
                     self?.whenItemSelected?()
@@ -213,7 +213,7 @@ class AccountListViewController: UITableViewController, UIPopoverPresentationCon
                     self.tableView.isUserInteractionEnabled = false
                     self.addActivityIndicator(to: sender)
                 }
-                let authenticator = MicrosoftAuthenticator(input: code)
+                guard let authenticator = MicrosoftAuthenticator(input: code) else { return }
                 callAuthenticator(authenticator, "loginWithCallback:") { status, success in
                     if let text = status as? String, text == "DEMO", success {
                         showDialog(localize("login.warn.title.demomode"), localize("login.warn.message.demomode"))

@@ -62,7 +62,7 @@ class LauncherPreferencesViewController: PLPrefTableViewController {
                          enableCondition: whenNotInGame),
                 PrefItem(kind: .toggle, key: "debug_logging", icon: "doc.badge.gearshape", hasDetail: true,
                          onToggle: { enabled in
-                             debugLogEnabled = enabled
+                             debugLogOn = enabled
                              NSLog("[Debugging] Debug log enabled: %@", enabled ? "YES" : "NO")
                          }),
                 PrefItem(kind: .pickField, key: "appicon", icon: "paintbrush", hasDetail: true,
@@ -195,7 +195,7 @@ class LauncherPreferencesViewController: PLPrefTableViewController {
                 PrefItem(kind: .toggle, key: "auto_ram", icon: "slider.horizontal.3", hasDetail: true,
                          requestReload: true,
                          enableCondition: whenNotInGame,
-                         warnCondition: { _ in !isJailbroken },
+                         warnCondition: { _ in !jailbroken },
                          warnKey: "auto_ram_warn"),
                 PrefItem(kind: .slider, key: "allocated_memory", icon: "memorychip", hasDetail: true,
                          enableCondition: { !getPrefBool("java.auto_ram") && whenNotInGame() },

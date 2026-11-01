@@ -46,7 +46,7 @@ class PLLogOutputView: UIView, UITableViewDataSource, UITableViewDelegate {
         addSubview(logTableView)
         addSubview(navigationBar)
 
-        canAppendToLog = true
+        logAppendOn = true
         actionStartStopLogOutput()
 
         PLLogOutputView.current = self
@@ -117,9 +117,9 @@ class PLLogOutputView: UIView, UITableViewDataSource, UITableViewDelegate {
     }
 
     @objc func actionStartStopLogOutput() {
-        canAppendToLog = !canAppendToLog
+        logAppendOn = !logAppendOn
         let item = navigationBar.items![0]
-        item.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: canAppendToLog ? .pause : .play,
+        item.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: logAppendOn ? .pause : .play,
                                                  target: self, action: #selector(actionStartStopLogOutput))
     }
 
@@ -185,8 +185,8 @@ class PLLogOutputView: UIView, UITableViewDataSource, UITableViewDelegate {
             navigationBar.items![0].rightBarButtonItems = nil
             navigationBar.items![0].rightBarButtonItem = exitItem
 
-            if canAppendToLog {
-                canAppendToLog = false
+            if logAppendOn {
+                logAppendOn = false
                 fatalErrorOccurred = true
                 return
             }

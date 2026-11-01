@@ -45,9 +45,37 @@ var hasLiquidGlass: Bool {
     return solariumEnabled
 }
 
+// MARK: - BOOL globals
+// C globals declared as `BOOL` import into Swift as `ObjCBool`, not `Bool`. These wrappers give the
+// rest of the Swift code plain Bool access to them (the names are deliberately different from the C ones).
+
+var virtualMouseOn: Bool {
+    get { return virtualMouseEnabled.boolValue }
+    set { virtualMouseEnabled = ObjCBool(newValue) }
+}
+
+var controlsModifiable: Bool {
+    get { return isControlModifiable.boolValue }
+    set { isControlModifiable = ObjCBool(newValue) }
+}
+
+var logAppendOn: Bool {
+    get { return canAppendToLog.boolValue }
+    set { canAppendToLog = ObjCBool(newValue) }
+}
+
+var debugLogOn: Bool {
+    get { return debugLogEnabled.boolValue }
+    set { debugLogEnabled = ObjCBool(newValue) }
+}
+
+var jailbroken: Bool {
+    return isJailbroken.boolValue
+}
+
 /// Obj-C `NSDebugLog(...)` is a macro, so Swift gets a function instead.
 func NSDebugLog(_ message: @autoclosure () -> String) {
-    if debugLogEnabled {
+    if debugLogOn {
         NSLog("%@", message())
     }
 }

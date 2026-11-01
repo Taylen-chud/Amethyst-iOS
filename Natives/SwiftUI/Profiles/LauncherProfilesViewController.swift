@@ -47,7 +47,9 @@ class LauncherProfilesViewController: UITableViewController {
                     self?.actionCreateModpackProfile()
                 }
             ])
-        let item = UIBarButtonItem(barButtonSystemItem: .add, menu: createMenu)
+        // `init(barButtonSystemItem:menu:)` is not available from Swift, so set the menu afterwards
+        let item = UIBarButtonItem(barButtonSystemItem: .add, target: nil, action: nil)
+        item.menu = createMenu
         if #available(iOS 26.0, *) {
             item.sharesBackground = false
         }

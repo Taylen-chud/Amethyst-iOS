@@ -1,5 +1,10 @@
 import UIKit
 
+// Custom controls editor. Port of CustomControlsViewController.m (+UndoManager and CCMenuViewController live in
+// their own files next to this one).
+
+// MARK: - Helpers shared by the controls editor files
+
 extension ControlButton {
     /// `button.properties[key]`
     func prop(_ key: String) -> Any? {
@@ -70,7 +75,7 @@ class CustomControlsViewController: UIViewController, UIGestureRecognizerDelegat
         super.viewDidLoad()
         undoManager?.removeAllActions()
         view.backgroundColor = UIColor(white: 0.2, alpha: 0.5)
-        isControlModifiable = true
+        controlsModifiable = true
 
         setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
         setNeedsUpdateOfHomeIndicatorAutoHidden()
@@ -133,7 +138,7 @@ class CustomControlsViewController: UIViewController, UIGestureRecognizerDelegat
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        isControlModifiable = false
+        controlsModifiable = false
         if let game = presentingViewController as? SurfaceViewController {
             game.loadCustomControls()
         }

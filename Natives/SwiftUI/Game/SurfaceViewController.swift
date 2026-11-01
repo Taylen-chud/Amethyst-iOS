@@ -2,6 +2,7 @@ import UIKit
 import AVFoundation
 import GameController
 
+
 private let MEMORYSTATUS_CMD_SET_JETSAM_TASK_LIMIT: UInt32 = 6
 
 private var currentHotbarSlot: Int32 = -1
@@ -110,7 +111,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        isControlModifiable = false
+        controlsModifiable = false
         isMacCatalystApp = ProcessInfo.processInfo.isMacCatalystApp
         // Load MetalHUD library
         _ = dlopen("/usr/lib/libMTLHud.dylib", 0)
@@ -208,11 +209,11 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
         touchView.addGestureRecognizer(scrollPanGesture)
 
         // Virtual mouse
-        virtualMouseEnabled = getPrefBool("control.virtmouse_enable")
+        virtualMouseOn = getPrefBool("control.virtmouse_enable")
         virtualMouseFrame = CGRect(x: view.frame.size.width / 2, y: view.frame.size.height / 2, width: 18, height: 27)
         mousePointerView = UIImageView(frame: virtualMouseFrame)
         mousePointerView.autoresizingMask = [.flexibleLeftMargin, .flexibleTopMargin, .flexibleRightMargin, .flexibleBottomMargin]
-        mousePointerView.isHidden = !virtualMouseEnabled
+        mousePointerView.isHidden = !virtualMouseOn
         mousePointerView.image = UIImage(named: "MousePointer")
         mousePointerView.isUserInteractionEnabled = false
         touchView.addSubview(mousePointerView)
@@ -242,7 +243,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
             if let mouse = note.object as? GCMouse {
                 self.registerMouseCallbacks(mouse)
             }
-            self.mousePointerView.isHidden = isGrabbing != 0 || !virtualMouseEnabled
+            self.mousePointerView.isHidden = isGrabbing != 0 || !virtualMouseOn
             self.setNeedsUpdateOfPrefersPointerLocked()
         }
         mouseDisconnectCallback = NotificationCenter.default.addObserver(forName: .GCMouseDidDisconnect, object: nil, queue: OperationQueue.main) { [weak self] note in
@@ -275,7 +276,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
                 ControllerInput.registerControllerCallbacks(controller)
             }
             self.mousePointerView.isHidden = isGrabbing != 0
-            virtualMouseEnabled = true
+            virtualMouseOn = true
             if getPrefBool("control.hardware_hide") {
                 self.ctrlView.isHidden = true
             }
@@ -368,8 +369,8 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
 
         mouseSpeed = CGFloat(getPrefFloat("control.mouse_speed") / 100.0)
 
-        virtualMouseEnabled = getPrefBool("control.virtmouse_enable")
-        mousePointerView.isHidden = isGrabbing != 0 || !virtualMouseEnabled
+        virtualMouseOn = getPrefBool("control.virtmouse_enable")
+        mousePointerView.isHidden = isGrabbing != 0 || !virtualMouseOn
 
         // Update virtual mouse scale
         let mouseScale = CGFloat(getPrefFloat("control.mouse_scale") / 100.0)
@@ -490,7 +491,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
             mousePointerView.frame = virtualMouseFrame
         }
         scrollPanGesture.isEnabled = isGrabbing == 0
-        mousePointerView.isHidden = isGrabbing != 0 || !virtualMouseEnabled
+        mousePointerView.isHidden = isGrabbing != 0 || !virtualMouseOn
         setNeedsUpdateOfPrefersPointerLocked()
 
         // Update buttons visibility
@@ -599,7 +600,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
         var screenScale = self.screenScale
         if isGrabbing == 0 {
             screenScale *= CGFloat(resolutionScale)
-            if virtualMouseEnabled {
+            if virtualMouseOn {
                 if event == ACTION_MOVE {
                     virtualMouseFrame.origin.x += (location.x - lastVirtualMousePoint.x) * mouseSpeed
                     virtualMouseFrame.origin.y += (location.y - lastVirtualMousePoint.y) * mouseSpeed
@@ -739,7 +740,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
     }
 
     override var prefersPointerLocked: Bool {
-        return GCMouse.mice().count > 0 && (isGrabbing != 0 || virtualMouseEnabled)
+        return GCMouse.mice().count > 0 && (isGrabbing != 0 || virtualMouseOn)
     }
 
     func registerMouseCallbacks(_ mouse: GCMouse) {
@@ -956,9 +957,9 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
 
                 case SPECIALBTN_VIRTUALMOUSE:
                     if isGrabbing == 0 && held == 0 {
-                        virtualMouseEnabled = !virtualMouseEnabled
-                        mousePointerView.isHidden = !virtualMouseEnabled
-                        setPrefBool("control.virtmouse_enable", virtualMouseEnabled)
+                        virtualMouseOn = !virtualMouseOn
+                        mousePointerView.isHidden = !virtualMouseOn
+                        setPrefBool("control.virtmouse_enable", virtualMouseOn)
                         setNeedsUpdateOfPrefersPointerLocked()
                     }
 
@@ -1080,7 +1081,7 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
 
         for touch in touches {
             if touch.type == .indirectPointer {
-                if isGrabbing == 0 && !virtualMouseEnabled {
+                if isGrabbing == 0 && !virtualMouseOn {
                     let point = touch.location(in: rootView)
                     sendTouchPoint(point, withEvent: ACTION_MOVE)
                 }

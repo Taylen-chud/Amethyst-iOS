@@ -89,7 +89,7 @@ class ModpackInstallViewController: UITableViewController, UISearchResultsUpdati
     /// Private UIKit delegate hook, makes the menu a compact popup
     @objc(_contextMenuInteraction:styleForMenuWithConfiguration:)
     func _contextMenuInteraction(_ interaction: UIContextMenuInteraction, styleForMenuWith configuration: UIContextMenuConfiguration) -> _UIContextMenuStyle? {
-        let style = _UIContextMenuStyle.defaultStyle()
+        let style = _UIContextMenuStyle.default()
         style?.preferredLayout = 3 // _UIContextMenuLayoutCompactMenu
         return style
     }

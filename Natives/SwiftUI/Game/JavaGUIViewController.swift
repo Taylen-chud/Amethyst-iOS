@@ -105,7 +105,7 @@ private class ScrollableSurfaceView: UIScrollView, UIScrollViewDelegate {
 
         virtualMouseFrame = CGRect(x: frame.size.width / 2, y: frame.size.height / 2, width: 18, height: 27)
         mousePointerView.frame = virtualMouseFrame
-        mousePointerView.isHidden = !virtualMouseEnabled
+        mousePointerView.isHidden = !virtualMouseOn
         mousePointerView.image = UIImage(named: "MousePointer")
         contentSurface.addSubview(mousePointerView)
     }
@@ -141,7 +141,7 @@ private class ScrollableSurfaceView: UIScrollView, UIScrollViewDelegate {
             shouldTriggerClick = false
         }
 
-        if virtualMouseEnabled {
+        if virtualMouseOn {
             let prevLocation = touchEvent.previousLocation(in: self)
             // Calculate delta
             location.x = (location.x - prevLocation.x) / zoomScale
@@ -168,7 +168,7 @@ private class ScrollableSurfaceView: UIScrollView, UIScrollViewDelegate {
     }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
-        if virtualMouseEnabled {
+        if virtualMouseOn {
             // Keep virtual mouse in the middle of screen while zooming
             virtualMouseFrame.origin.x = (contentOffset.x + center.x) / zoomScale
             virtualMouseFrame.origin.y = (contentOffset.y + center.y) / zoomScale
@@ -205,7 +205,7 @@ class JavaGUIViewController: UIViewController, UIGestureRecognizerDelegate, UITe
         navigationController?.setNavigationBarHidden(true, animated: false)
         setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
         setNeedsUpdateOfHomeIndicatorAutoHidden()
-        virtualMouseEnabled = getPrefBool("control.virtmouse_enable")
+        virtualMouseOn = getPrefBool("control.virtmouse_enable")
 
         let screenBounds = view.bounds
         let screenScale = UIScreen.main.scale * CGFloat(getPrefFloat("video.resolution")) / 100.0
@@ -434,9 +434,9 @@ class JavaGUIViewController: UIViewController, UIGestureRecognizerDelegate, UITe
 
                 case Int32(SPECIALBTN_VIRTUALMOUSE):
                     if held { break }
-                    virtualMouseEnabled = !virtualMouseEnabled
-                    surfaceScrollView.mousePointerView.isHidden = !virtualMouseEnabled
-                    setPrefBool("control.virtmouse_enable", virtualMouseEnabled)
+                    virtualMouseOn = !virtualMouseOn
+                    surfaceScrollView.mousePointerView.isHidden = !virtualMouseOn
+                    setPrefBool("control.virtmouse_enable", virtualMouseOn)
 
                 case SPECIALBTN_LOGOUTPUT:
                     if held { break }
@@ -463,7 +463,7 @@ class JavaGUIViewController: UIViewController, UIGestureRecognizerDelegate, UITe
         if !surfaceScrollView.shouldTriggerClick { return }
         if sender.state == .recognized {
             let screenScale = UIScreen.main.scale * CGFloat(getPrefFloat("video.resolution")) / 100.0
-            let location = virtualMouseEnabled
+            let location = virtualMouseOn
                 ? surfaceScrollView.virtualMouseFrame.origin
                 : sender.location(in: sender.view)
             let x = location.x * screenScale
