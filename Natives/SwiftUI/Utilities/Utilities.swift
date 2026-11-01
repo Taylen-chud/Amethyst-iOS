@@ -118,7 +118,7 @@ private func loadRemoteImage(_ url: URL?, placeholder: UIImage?, apply: @escapin
     }
     apply(placeholder)
     URLSession.shared.dataTask(with: url) { data, _, _ in
-        guard let data = data, let image = UIImage(data: data) else { return }
+        guard let data = data, let image = UIImage(data: data, scale: UIScreen.main.scale) else { return }
         remoteImageCache.setObject(image, forKey: url as NSURL)
         DispatchQueue.main.async { apply(image) }
     }.resume()

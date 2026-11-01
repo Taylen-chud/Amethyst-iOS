@@ -1322,20 +1322,26 @@ class SurfaceViewController: UIViewController, UITextFieldDelegate, UIGestureRec
     func actionOpenNavigationMenu() {
     }
 
+    /// The Obj-C code messaged a nil `menuView` before it was built, which read as "not hidden". UIKit asks for the
+    /// home indicator / edge gesture state from viewDidLoad, before the menu exists, so do not unwrap it here.
+    private var menuHidden: Bool {
+        return menuView?.isHidden ?? false
+    }
+
     override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge {
-        if !menuView.isHidden {
+        if !menuHidden {
             return []
         }
         return [.bottom, .right]
     }
 
     override var prefersHomeIndicatorAutoHidden: Bool {
-        return menuView.isHidden &&
+        return menuHidden &&
             getPrefBool("debug.debug_hide_home_indicator")
     }
 
     override var prefersStatusBarHidden: Bool {
-        return menuView.isHidden
+        return menuHidden
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {

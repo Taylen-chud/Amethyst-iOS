@@ -432,6 +432,7 @@ class LauncherMenuViewController: UITableViewController, UIPopoverPresentationCo
             selected.vcArray[0].navigationItem.rightBarButtonItem = accountBtnItem
             selected.vcArray[0].navigationItem.leftBarButtonItem = splitViewController?.displayModeButtonItem
             selected.vcArray[0].navigationItem.leftItemsSupplementBackButton = true
+            selected.vcArray[0].navigationItem.hidesBackButton = true
         }
     }
 }

@@ -52,6 +52,7 @@ class LauncherNewsViewController: UIViewController, WKNavigationDelegate {
         navigationItem.leftBarButtonItem = splitViewController?.displayModeButtonItem
         navigationItem.rightBarButtonItem = sidebarViewController()?.drawAccountButton()
         navigationItem.leftItemsSupplementBackButton = true
+        navigationItem.hidesBackButton = true
     }
 
     private func sidebarViewController() -> LauncherMenuViewController? {
