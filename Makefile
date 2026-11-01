@@ -297,7 +297,11 @@ native: dep_mg
 		..
 
 	cmake --build $(WORKINGDIR) --config $(CMAKE_BUILD_TYPE) -j$(JOBS)
-	rm $(WORKINGDIR)/libawt_headless.dylib
+	# The Xcode generator puts products in build/<Config>-iphoneos/, the packaging steps below expect them in build/
+	if [ -d "$(WORKINGDIR)/$(CMAKE_BUILD_TYPE)-iphoneos" ]; then \
+		cp -R "$(WORKINGDIR)/$(CMAKE_BUILD_TYPE)-iphoneos/." "$(WORKINGDIR)/"; \
+	fi
+	rm -f $(WORKINGDIR)/libawt_headless.dylib
 	echo '[Amethyst v$(VERSION)] native - end'
 
 java:
