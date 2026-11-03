@@ -29,7 +29,7 @@ void swizzleUIImageMethod(SEL originalAction, SEL swizzledAction) {
 }
 
 void init_hookUIKitConstructor(void) {
-    UIUserInterfaceIdiom idiom = getPrefBool(@"debug.debug_ipad_ui") ? UIUserInterfaceIdiomPad : UIUserInterfaceIdiomPhone;
+    UIUserInterfaceIdiom idiom = getPrefBool(@"debug.debug_ipad_ui") ? UIUserInterfaceIdiomPad : UIDevice.currentDevice.userInterfaceIdiom;
     [UIDevice.currentDevice _setActiveUserInterfaceIdiom:idiom];
     [UIScreen.mainScreen _setUserInterfaceIdiom:idiom];
     
